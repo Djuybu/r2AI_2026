@@ -1,0 +1,14 @@
+"""
+rag_module/__init__.py
+======================
+Package entry point for the ViFinQA RAG module.
+
+Exposes the top-level search API so a Kaggle notebook can do:
+
+    from rag_module.search_engine import run_hybrid_search
+    results = run_hybrid_search("Lợi nhuận sau thuế của FPT năm 2023")
+"""
+from rag_module.search_engine import run_hybrid_search
+
+__all__ = ["run_hybrid_search"]
+

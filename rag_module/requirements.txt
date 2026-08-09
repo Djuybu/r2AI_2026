@@ -1,0 +1,24 @@
+# ViFinQA RAG Module — Python Dependencies
+# Install with: pip install -r requirements.txt
+#
+# This file covers all three phases:
+#   - Phase 1 (ETL):      beautifulsoup4, lxml, pandas, tqdm
+#   - Phase 2 (Indexing): qdrant-client, sentence-transformers, rank-bm25, pandas, tqdm
+#   - Phase 3 (Search):   qdrant-client, sentence-transformers, rank-bm25, pandas
+
+# --- HTML parsing (ETL phase, strict rule: no regex for HTML) ---
+beautifulsoup4>=4.12.0
+lxml>=5.1.0
+
+# --- Data processing ---
+pandas>=2.1.0
+tqdm>=4.66.0
+
+# --- Vector database (LOCAL DISK MODE — no Docker, no server) ---
+qdrant-client>=1.9.0
+
+# --- Dense embeddings (~470 MB downloaded on first run) ---
+sentence-transformers>=3.0.0
+
+# --- Sparse BM25 retrieval ---
+rank-bm25>=0.2.2
