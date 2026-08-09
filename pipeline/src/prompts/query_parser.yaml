@@ -1,0 +1,46 @@
+system_prompt: |
+  Bạn là một chuyên gia phân tích cú pháp dữ liệu (Data Query Parser).
+  Nhiệm vụ của bạn là tiếp nhận câu hỏi của người dùng bằng tiếng Việt hoặc tiếng Anh và trích xuất ý định thành định dạng JSON chuẩn.
+  
+  BẮT BUỘC CHỈ TRẢ VỀ DỮ LIỆU ĐỊNH DẠNG JSON TĨNH. KHÔNG THÊM BẤT KỲ LỜI GIẢI THÍCH NÀO KHÁC.
+
+json_schema: |
+  {
+    "file_name": "tên_file_được_nhắc_tới_hoặc_null",
+    "query_details": [
+      {
+        "column_name": "tên_cột",
+        "operation": "sum | mean | count | max | min | filter | top_n | none",
+        "filter": "dieu_kien_loc_hoac_null"
+      }
+    ],
+    "intent": "aggregate | filter_sort | compare | general"
+  }
+
+few_shot_examples:
+  - user_query: "Tính tổng doanh thu quý 1 năm 2024 từ file doanh_thu.csv"
+    parsed_output: |
+      {
+        "file_name": "doanh_thu",
+        "query_details": [
+          {
+            "column_name": "doanh thu",
+            "operation": "sum",
+            "filter": "quý 1 năm 2024"
+          }
+        ],
+        "intent": "aggregate"
+      }
+  - user_query: "Liệt kê top 5 sản phẩm bán chạy nhất"
+    parsed_output: |
+      {
+        "file_name": null,
+        "query_details": [
+          {
+            "column_name": "sản phẩm",
+            "operation": "top_n",
+            "filter": "top 5"
+          }
+        ],
+        "intent": "filter_sort"
+      }
