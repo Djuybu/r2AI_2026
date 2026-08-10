@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from typing import Dict, List, Optional
-from src.config import Config, config as default_config
+from pipeline.src.config import Config, config as default_config
 
 
 class VectorSchemaStore:

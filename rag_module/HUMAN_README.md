@@ -39,14 +39,20 @@ the project root (the directory containing `financial_statements/`):
 ```bash
 pip install -r rag_module/requirements.txt
 
-# Full run: ETL + Indexing -- takes roughly 30-60 minutes for 1973 files
+# ETL only (default) -- extract HTML tables → CSV files
 python rag_module/data_pipeline.py
 
-# If processed_data/ CSVs already exist from a previous run, skip ETL:
-python rag_module/data_pipeline.py --skip-etl
+# Full run: ETL + Indexing -- takes roughly 30-60 minutes for 1973 files
+python rag_module/data_pipeline.py --run-indexing
+
+# If processed_data/ CSVs already exist from a previous run, skip ETL and only run indexing:
+python rag_module/data_pipeline.py --skip-etl --run-indexing
 ```
 
-After it finishes you will have:
+> **Note:** By default, only Phase 1 (ETL) runs. You must pass `--run-indexing`
+> to also build the Qdrant vector DB and BM25 index (Phase 2).
+
+After running with `--run-indexing` you will have:
 - `rag_module/qdrant_local_db/` -- Qdrant vector index (roughly 1 GB)
 - `rag_module/bm25_index.pkl`   -- BM25 sparse index (roughly 50 MB)
 

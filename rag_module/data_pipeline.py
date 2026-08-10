@@ -61,18 +61,21 @@ from tqdm import tqdm
 # All paths are RELATIVE to the project root (where you run this script from).
 # Change these to absolute paths if needed.
 
+# =============================================================================
+# PRODUCTION
+# =============================================================================
 # --- Input ---
-BASE_DIR                 = Path(".")                    # project root
-FINANCIAL_STATEMENTS_DIR = BASE_DIR / "financial_statements"
-CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"  # inside rag_module/
+# BASE_DIR                 = Path("./ViFinQA")                    # project root
+# FINANCIAL_STATEMENTS_DIR = BASE_DIR / "financial_statements"
+# CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"  # inside rag_module/
 
 # --- ETL output ---
-PROCESSED_DATA_DIR       = BASE_DIR / "processed_data"
+# PROCESSED_DATA_DIR       = BASE_DIR / "processed_data"
 
 # --- Index output (bundled inside rag_module/ for Kaggle upload) ---
-_MODULE_DIR              = Path(__file__).parent        # rag_module/
-QDRANT_DB_PATH           = _MODULE_DIR / "qdrant_local_db"
-BM25_OUTPUT_PATH         = _MODULE_DIR / "bm25_index.pkl"
+# _MODULE_DIR              = Path(__file__).parent        # rag_module/
+# QDRANT_DB_PATH           = _MODULE_DIR / "qdrant_local_db"
+# BM25_OUTPUT_PATH         = _MODULE_DIR / "bm25_index.pkl"
 
 # --- Kaggle override (uncomment and set your dataset name) ---
 # _KAGGLE_ROOT          = Path("/kaggle/input/your-dataset-name/rag_module")
@@ -81,10 +84,39 @@ BM25_OUTPUT_PATH         = _MODULE_DIR / "bm25_index.pkl"
 # CODE_STOCK_CSV        = _KAGGLE_ROOT / "code_stock.csv"
 
 # --- Qdrant + Embedding ---
-COLLECTION_NAME          = "financial_tables"
+# COLLECTION_NAME          = "financial_tables"
+# EMBEDDING_MODEL_NAME     = "paraphrase-multilingual-MiniLM-L12-v2"
+# VECTOR_DIM               = 384
+# BATCH_SIZE               = 64            # encoding + Qdrant upsert batch size
+
+# =============================================================================
+# TESTING
+# =============================================================================
+
+BASE_DIR                 = Path("./ViFinQA")                    # project root
+FINANCIAL_STATEMENTS_DIR = BASE_DIR / "test_folder"
+CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"  # inside rag_module/
+
+# --- ETL output ---
+PROCESSED_DATA_DIR       = BASE_DIR / "test/processed_data"
+
+# --- Index output (bundled inside rag_module/ for Kaggle upload) ---
+_MODULE_DIR              = Path(__file__).parent        # rag_module/
+QDRANT_DB_PATH           = _MODULE_DIR / "test/qdrant_local_db"
+BM25_OUTPUT_PATH         = _MODULE_DIR / "test/bm25_index.pkl"
+
+# --- Kaggle override (uncomment and set your dataset name) ---
+# _KAGGLE_ROOT          = Path("/kaggle/input/your-dataset-name/rag_module")
+# QDRANT_DB_PATH        = _KAGGLE_ROOT / "qdrant_local_db"
+# BM25_OUTPUT_PATH      = _KAGGLE_ROOT / "bm25_index.pkl"
+# CODE_STOCK_CSV        = _KAGGLE_ROOT / "code_stock.csv"
+
+# --- Qdrant + Embedding ---
+COLLECTION_NAME          = "test_financial_tables"
 EMBEDDING_MODEL_NAME     = "paraphrase-multilingual-MiniLM-L12-v2"
 VECTOR_DIM               = 384
 BATCH_SIZE               = 64            # encoding + Qdrant upsert batch size
+
 
 # --- Metadata column names (must match ETL output exactly) ---
 META_COLS: List[str] = [
@@ -179,14 +211,30 @@ def extract_metadata_from_path(file_path: Path) -> Tuple[str, str, str]:
     """
     Derive (ticker, year, report_type) from the file path.
 
-    Expected structure:
+    Expected structure (production):
         financial_statements/<TICKER>/<YEAR>/<TICKER>_..._<TYPE>/<file>
+    Also handles shorter test layouts where the <TICKER> directory is absent:
+        test_folder/<YEAR>/<TICKER>_..._<TYPE>/<file>
+
+    The ticker is always extracted from the doc-folder name (the directory
+    directly containing the file), which reliably starts with
+    ``<TICKER>_financial_statements_…``.
+
     report_type: 'consolidated' | 'separate' | 'unknown'
     """
-    parts = file_path.parts
-    ticker      = parts[-4] if len(parts) >= 4 else "UNKNOWN"
-    year        = parts[-3] if len(parts) >= 3 else "UNKNOWN"
-    doc_folder  = parts[-2] if len(parts) >= 2 else ""
+    _SKIP_PARTS = {"test", "test_folder"}
+    parts = [p for p in file_path.parts if p.lower() not in _SKIP_PARTS]
+
+    doc_folder = parts[-2] if len(parts) >= 2 else ""
+
+    # Ticker: first segment of the doc-folder name (e.g. "PC1_financial_…" → "PC1")
+    ticker = doc_folder.split("_")[0] if doc_folder else "UNKNOWN"
+
+    # Year: extract the 4-digit number (handles "2015 copy", "2023", etc.)
+    raw_year = parts[-3] if len(parts) >= 3 else "UNKNOWN"
+    year_match = re.search(r"(\d{4})", raw_year)
+    year = year_match.group(1) if year_match else raw_year
+
     report_type = "unknown"
     for kw in ("consolidated", "separate"):
         if kw in doc_folder.lower():
@@ -200,28 +248,100 @@ def extract_metadata_from_path(file_path: Path) -> Tuple[str, str, str]:
 # ---------------------------------------------------------------------------
 
 def _get_preceding_text_lines(tag: Tag, n: int = 5) -> str:
-    """Collect up to n non-empty lines appearing before a <table> tag."""
+    """Collect up to *n* non-empty text lines appearing before a <table> tag.
+
+    Lines are delimited by <br> tags that were inserted during preprocessing.
+    """
     collected: List[str] = []
+    current_parts: List[str] = []
     sibling = tag.previous_sibling
     while sibling is not None and len(collected) < n:
-        if isinstance(sibling, NavigableString):
-            lines = [ln.strip() for ln in str(sibling).splitlines() if ln.strip()]
-            collected = lines[::-1][: n - len(collected)] + collected
+        if isinstance(sibling, Tag) and sibling.name == "br":
+            line = " ".join(current_parts).strip()
+            if line:
+                collected.append(line)
+            current_parts = []
+        elif isinstance(sibling, NavigableString):
+            text = str(sibling).strip()
+            if text:
+                current_parts.insert(0, text)
         sibling = sibling.previous_sibling
-    return "\n".join(collected[-n:])
+    # Remaining text before the first <br> encountered
+    line = " ".join(current_parts).strip()
+    if line and len(collected) < n:
+        collected.append(line)
+    # collected is closest-first; reverse to chronological order
+    collected.reverse()
+    return "\n".join(collected)
+
+
+def clean_line_noise(line: str) -> str:
+    """Strip inline noise (units, templates, page separators) from a line, keeping the rest."""
+    # 1. Strip unit of measurement declarations and everything after them
+    line = re.sub(r"\b(?:đơn\s+vị\s+tính|đvt)\b.*", "", line, flags=re.IGNORECASE)
+    line = re.sub(r"\bđơn\s+vị\b\s*(?::|-|là)\s*\w+.*", "", line, flags=re.IGNORECASE)
+
+    # 2. Strip template headers, publication notes, page separators, dates
+    line = re.sub(
+        r"\b(?:mẫu\s+b\s*\d+.*|ban\s+hành\s+kèm\s+theo.*|ban\s+hành\s+ngày.*|"
+        r"ngày\s+\d{1,2}/\d{1,2}/\d{4}.*|===\s*PAGE.*)",
+        "",
+        line,
+        flags=re.IGNORECASE
+    )
+
+    # Clean up dangling punctuation & outer whitespace
+    line = line.strip()
+    line = re.sub(r"^[-–—\s,\.:;\(\)\[\]]+|[-–—\s,\.:;\(\)\[\]]+$", "", line)
+    return line.strip()
 
 
 def extract_table_name(pre_text: str) -> str:
-    """Heuristically extract a table heading from the preceding context."""
-    if not pre_text:
-        return ""
-    _NOISE = re.compile(
-        r"(===\s*PAGE|Mẫu\s+B|Ban hành|ngày\s+\d|^\d+$|^[\d\.\-\/]+$)",
-        re.IGNORECASE,
+    """Extract a table heading from preceding context using bottom-up scan.
+
+    Starting from the line closest to the table and moving upward:
+    - Inline noise (like unit declarations, templates) is stripped from lines.
+    - If the cleaned line becomes empty or matches generic number/page patterns, it is skipped.
+    - Lines entirely wrapped in parentheses (e.g. ``(Theo phương pháp trực tiếp)``)
+      are collected as trailing suffixes and skipped.
+    - The first remaining (valid) line becomes the main heading; the line
+      directly above it is also cleaned and included if valid.
+    """
+    lines = [ln.strip() for ln in pre_text.splitlines()]
+
+    _PAREN_RE = re.compile(r"^\(.*\)$")
+    _FULL_LINE_NOISE = re.compile(
+        r"^(?:\d+|[\d\.\-\/,\s]+|page.*)$",
+        re.IGNORECASE
     )
-    candidates = [ln.strip() for ln in pre_text.splitlines()
-                  if ln.strip() and not _NOISE.search(ln.strip())]
-    return max(candidates, key=len) if candidates else ""
+
+    suffixes: List[str] = []
+
+    for i in range(len(lines) - 1, -1, -1):
+        raw_line = lines[i]
+        if not raw_line:
+            continue
+
+        cleaned = clean_line_noise(raw_line)
+        if not cleaned or _FULL_LINE_NOISE.match(cleaned):
+            continue
+
+        if _PAREN_RE.match(cleaned):
+            suffixes.append(cleaned)
+            continue
+
+        # Found the valid line — also grab the cleaned line above if meaningful
+        parts: List[str] = []
+        if i > 0:
+            cleaned_prev = clean_line_noise(lines[i - 1])
+            if cleaned_prev and not _FULL_LINE_NOISE.match(cleaned_prev) and not _PAREN_RE.match(cleaned_prev):
+                parts.append(cleaned_prev)
+        parts.append(cleaned)
+        suffixes.reverse()
+        parts.extend(suffixes)
+        return " ".join(parts)
+
+    return ""
 
 
 def extract_unit(pre_text: str) -> str:
@@ -292,6 +412,8 @@ def process_txt_file(
 
     try:
         content = file_path.read_text(encoding="utf-8", errors="replace")
+        # Insert <br> before each newline so BeautifulSoup preserves line breaks
+        content = content.replace("\n", "<br>\n")
     except OSError as exc:
         logger.error("Cannot read %s: %s", file_path, exc)
         return []
@@ -579,6 +701,7 @@ def run_pipeline(
     code_stock_csv: Path = CODE_STOCK_CSV,
     batch_size:     int  = BATCH_SIZE,
     skip_etl:       bool = False,
+    do_indexing:    bool = False,
 ) -> None:
     """Run the complete ETL + Indexing pipeline end to end."""
     logger.info("=" * 64)
@@ -596,12 +719,15 @@ def run_pipeline(
     else:
         logger.info("Skipping ETL phase (--skip-etl flag set).")
 
-    run_indexing(
-        processed_dir=processed_dir,
-        qdrant_db_path=qdrant_db_path,
-        bm25_path=bm25_path,
-        batch_size=batch_size,
-    )
+    if do_indexing:
+        run_indexing(
+            processed_dir=processed_dir,
+            qdrant_db_path=qdrant_db_path,
+            bm25_path=bm25_path,
+            batch_size=batch_size,
+        )
+    else:
+        logger.info("Skipping Indexing phase (use --run-indexing to enable).")
 
 
 # =============================================================================
@@ -623,6 +749,8 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--batch-size",      type=int,  default=BATCH_SIZE)
     p.add_argument("--skip-etl",        action="store_true",
                    help="Skip Phase 1 (ETL) and go straight to indexing.")
+    p.add_argument("--run-indexing",     action="store_true",
+                   help="Also run Phase 2 (Indexing) after ETL.")
     p.add_argument("--log-level",       type=str,  default="INFO",
                    choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     return p.parse_args(argv)
@@ -640,6 +768,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         code_stock_csv=args.code_stock_csv.resolve(),
         batch_size=args.batch_size,
         skip_etl=args.skip_etl,
+        do_indexing=args.run_indexing,
     )
 
 

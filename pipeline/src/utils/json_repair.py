@@ -3,7 +3,7 @@
 import json
 import logging
 from typing import Any, Dict
-import json_repair
+import pipeline.src.utils.json_repair as json_repair
 
 logger = logging.getLogger(__name__)
 

@@ -1,0 +1,72 @@
+# Pipeline plan output
+pipeline/plans/
+
+# Python & Virtual Environments
+.env
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Build & Distribution
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Coverage & Testing
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.tox/
+htmlcov/
+
+# Typing & Linting
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.typecheck/
+
+# Data & Evals
+data/*.csv
+data/*.xlsx
+!data/.gitkeep
+!data/sample_sales.csv
+evals/reports/*.json
+evals/reports/*.html
+!evals/reports/.gitkeep
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*~
+Thumbs.db

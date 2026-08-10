@@ -1,0 +1,11 @@
+date,product_name,category,quantity,revenue,region
+2024-01-15,Laptop Pro 15,Electronics,10,25000000,Miền Bắc
+2024-01-20,Bàn phím cơ,Electronics,25,3750000,Miền Nam
+2024-02-10,Màn hình 4K,Electronics,8,16000000,Miền Bắc
+2024-02-15,Chuột không dây,Electronics,50,5000000,Miền Trung
+2024-03-01,Laptop Pro 15,Electronics,12,30000000,Miền Nam
+2024-03-12,Tai nghe Noise-Canceling,Electronics,15,7500000,Miền Bắc
+2024-04-05,Ghế Ergonomic,Furniture,5,15000000,Miền Nam
+2024-04-18,Bàn đứng tự động,Furniture,3,12000000,Miền Bắc
+2024-05-02,Màn hình 4K,Electronics,10,20000000,Miền Trung
+2024-05-20,Bàn phím cơ,Electronics,30,4500000,Miền Bắc

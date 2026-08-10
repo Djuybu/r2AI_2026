@@ -34,8 +34,8 @@ class Config:
 
     # Paths
     BASE_DIR: Path = Path("/kaggle/working/cocopila") if is_kaggle_environment() else Path(__file__).resolve().parent.parent
-    DATA_DIR: Path = Path(os.getenv("DATA_DIR", "./data"))
-    PROMPTS_DIR: Path = Path(os.getenv("PROMPTS_DIR", "./src/prompts"))
+    DATA_DIR: Path = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
+    PROMPTS_DIR: Path = Path(os.getenv("PROMPTS_DIR", BASE_DIR / "src" / "prompts"))
 
     # Agent Execution Settings
     MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))
