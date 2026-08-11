@@ -31,6 +31,14 @@ kaggle = [
     "vllm>=0.6.0",
 ]
 
+[tool.setuptools]
+packages = ["pipeline.src", "pipeline.src.nodes", "pipeline.src.utils"]
+package-dir = {"pipeline.src" = "."}
+
+[tool.setuptools.package-data]
+"pipeline.src" = ["prompts/*.yaml"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+

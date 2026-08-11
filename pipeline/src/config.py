@@ -41,9 +41,41 @@ class Config:
     MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))
     EXECUTION_TIMEOUT: int = int(os.getenv("EXECUTION_TIMEOUT", "10"))
 
+    def __post_init__(self):
+        """Resolve relative paths dynamically for robustness."""
+        self.DATA_DIR = self._resolve_path("DATA_DIR", self.DATA_DIR)
+        self.PROMPTS_DIR = self._resolve_path("PROMPTS_DIR", self.PROMPTS_DIR)
+
+    def _resolve_path(self, env_var_name: str, default_path: Path) -> Path:
+        val = os.getenv(env_var_name)
+        if not val:
+            return default_path.resolve()
+
+        path = Path(val)
+        if path.is_absolute():
+            return path.resolve()
+
+        # Try CWD
+        cwd_resolved = path.resolve()
+        if cwd_resolved.exists():
+            return cwd_resolved
+
+        # Try relative to BASE_DIR
+        base_resolved = (self.BASE_DIR / path).resolve()
+        if base_resolved.exists():
+            return base_resolved
+
+        # Try relative to BASE_DIR.parent (workspace root)
+        workspace_resolved = (self.BASE_DIR.parent / path).resolve()
+        if workspace_resolved.exists():
+            return workspace_resolved
+
+        return default_path.resolve()
+
     def get_prompt_path(self, filename: str) -> Path:
         """Get absolute path to a prompt template YAML file."""
         return self.PROMPTS_DIR / filename
+
 
 
 # Global default configuration instance

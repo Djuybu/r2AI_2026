@@ -4,9 +4,18 @@ import unittest
 import tempfile
 import shutil
 from unittest.mock import MagicMock, patch
+import pytest
+
+try:
+    import chromadb
+    HAS_CHROMADB = True
+except ImportError:
+    HAS_CHROMADB = False
+
 from pipeline.src.utils.vector_store import VectorSchemaStore
 
 
+@pytest.mark.skipif(not HAS_CHROMADB, reason="chromadb package is not installed")
 class TestVectorSchemaStore(unittest.TestCase):
 
     def setUp(self):

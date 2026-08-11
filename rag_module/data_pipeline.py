@@ -65,57 +65,57 @@ from tqdm import tqdm
 # PRODUCTION
 # =============================================================================
 # --- Input ---
-# BASE_DIR                 = Path("./ViFinQA")                    # project root
-# FINANCIAL_STATEMENTS_DIR = BASE_DIR / "financial_statements"
-# CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"  # inside rag_module/
+BASE_DIR                 = Path("./ViFinQA")                    # project root
+FINANCIAL_STATEMENTS_DIR = BASE_DIR / "financial_statements"
+CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"  # inside rag_module/
 
 # --- ETL output ---
-# PROCESSED_DATA_DIR       = BASE_DIR / "processed_data"
+PROCESSED_DATA_DIR       = BASE_DIR / "processed_data"
 
 # --- Index output (bundled inside rag_module/ for Kaggle upload) ---
-# _MODULE_DIR              = Path(__file__).parent        # rag_module/
-# QDRANT_DB_PATH           = _MODULE_DIR / "qdrant_local_db"
-# BM25_OUTPUT_PATH         = _MODULE_DIR / "bm25_index.pkl"
+_MODULE_DIR              = Path(__file__).parent        # rag_module/
+QDRANT_DB_PATH           = _MODULE_DIR / "qdrant_local_db"
+BM25_OUTPUT_PATH         = _MODULE_DIR / "bm25_index.pkl"
 
 # --- Kaggle override (uncomment and set your dataset name) ---
-# _KAGGLE_ROOT          = Path("/kaggle/input/your-dataset-name/rag_module")
+# _KAGGLE_ROOT          = Path("/kaggle/input/datasets/duymcminh/r2ai-rag-module")
 # QDRANT_DB_PATH        = _KAGGLE_ROOT / "qdrant_local_db"
 # BM25_OUTPUT_PATH      = _KAGGLE_ROOT / "bm25_index.pkl"
 # CODE_STOCK_CSV        = _KAGGLE_ROOT / "code_stock.csv"
 
 # --- Qdrant + Embedding ---
-# COLLECTION_NAME          = "financial_tables"
-# EMBEDDING_MODEL_NAME     = "paraphrase-multilingual-MiniLM-L12-v2"
-# VECTOR_DIM               = 384
-# BATCH_SIZE               = 64            # encoding + Qdrant upsert batch size
+COLLECTION_NAME          = "financial_tables"
+EMBEDDING_MODEL_NAME     = "paraphrase-multilingual-MiniLM-L12-v2"
+VECTOR_DIM               = 384
+BATCH_SIZE               = 64            # encoding + Qdrant upsert batch size
 
 # =============================================================================
 # TESTING
 # =============================================================================
 
-BASE_DIR                 = Path("./ViFinQA")                    # project root
-FINANCIAL_STATEMENTS_DIR = BASE_DIR / "test_folder"
-CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"  # inside rag_module/
+# BASE_DIR                 = Path("./ViFinQA")                    # project root
+# FINANCIAL_STATEMENTS_DIR = BASE_DIR / "test_folder"
+# CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"  # inside rag_module/
 
-# --- ETL output ---
-PROCESSED_DATA_DIR       = BASE_DIR / "test/processed_data"
+# # --- ETL output ---
+# PROCESSED_DATA_DIR       = BASE_DIR / "test/processed_data"
 
-# --- Index output (bundled inside rag_module/ for Kaggle upload) ---
-_MODULE_DIR              = Path(__file__).parent        # rag_module/
-QDRANT_DB_PATH           = _MODULE_DIR / "test/qdrant_local_db"
-BM25_OUTPUT_PATH         = _MODULE_DIR / "test/bm25_index.pkl"
+# # --- Index output (bundled inside rag_module/ for Kaggle upload) ---
+# _MODULE_DIR              = Path(__file__).parent        # rag_module/
+# QDRANT_DB_PATH           = _MODULE_DIR / "test/qdrant_local_db"
+# BM25_OUTPUT_PATH         = _MODULE_DIR / "test/bm25_index.pkl"
 
-# --- Kaggle override (uncomment and set your dataset name) ---
-# _KAGGLE_ROOT          = Path("/kaggle/input/your-dataset-name/rag_module")
-# QDRANT_DB_PATH        = _KAGGLE_ROOT / "qdrant_local_db"
-# BM25_OUTPUT_PATH      = _KAGGLE_ROOT / "bm25_index.pkl"
-# CODE_STOCK_CSV        = _KAGGLE_ROOT / "code_stock.csv"
+# # --- Kaggle override (uncomment and set your dataset name) ---
+# # _KAGGLE_ROOT          = Path("/kaggle/input/your-dataset-name/rag_module")
+# # QDRANT_DB_PATH        = _KAGGLE_ROOT / "qdrant_local_db"
+# # BM25_OUTPUT_PATH      = _KAGGLE_ROOT / "bm25_index.pkl"
+# # CODE_STOCK_CSV        = _KAGGLE_ROOT / "code_stock.csv"
 
-# --- Qdrant + Embedding ---
-COLLECTION_NAME          = "test_financial_tables"
-EMBEDDING_MODEL_NAME     = "paraphrase-multilingual-MiniLM-L12-v2"
-VECTOR_DIM               = 384
-BATCH_SIZE               = 64            # encoding + Qdrant upsert batch size
+# # --- Qdrant + Embedding ---
+# COLLECTION_NAME          = "test_financial_tables"
+# EMBEDDING_MODEL_NAME     = "paraphrase-multilingual-MiniLM-L12-v2"
+# VECTOR_DIM               = 384
+# BATCH_SIZE               = 64            # encoding + Qdrant upsert batch size
 
 
 # --- Metadata column names (must match ETL output exactly) ---

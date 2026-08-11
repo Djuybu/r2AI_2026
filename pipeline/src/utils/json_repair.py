@@ -3,7 +3,7 @@
 import json
 import logging
 from typing import Any, Dict
-import pipeline.src.utils.json_repair as json_repair
+from json_repair import repair_json
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def safe_parse_json(content: str) -> Dict[str, Any]:
 
     # Fallback with json_repair
     try:
-        repaired = json_repair.repair_json(cleaned, return_objects=True)
+        repaired = repair_json(cleaned, return_objects=True)
         if isinstance(repaired, dict):
             return repaired
         elif isinstance(repaired, str):

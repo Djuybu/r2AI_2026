@@ -51,7 +51,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
 
     parsed_query = state.get("parsed_query", {})
     table_schema = state.get("table_schema", {})
-    actual_columns = table_schema.get("columns", [])
+    actual_columns = list(table_schema.get("columns", {}).keys())
 
     if not actual_columns:
         return {
