@@ -70,3 +70,4 @@ evals/reports/*.html
 *.swo
 *~
 Thumbs.db
+*.zip
