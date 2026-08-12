@@ -33,7 +33,7 @@ class Config:
     VLLM_MAX_MODEL_LEN: int = int(os.getenv("VLLM_MAX_MODEL_LEN", "4096"))
 
     # Paths
-    BASE_DIR: Path = Path("/kaggle/working/cocopila") if is_kaggle_environment() else Path(__file__).resolve().parent.parent
+    BASE_DIR: Path = Path("/kaggle/working/r2AI_2026/pipeline") if is_kaggle_environment() else Path(__file__).resolve().parent.parent
     DATA_DIR: Path = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
     PROMPTS_DIR: Path = Path(os.getenv("PROMPTS_DIR", BASE_DIR / "src" / "prompts"))
 

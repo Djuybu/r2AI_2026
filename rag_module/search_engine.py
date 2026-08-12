@@ -92,14 +92,64 @@ def load_qdrant_client(db_path: Path = QDRANT_DB_PATH) -> QdrantClient:
     """
     Create a QdrantClient in LOCAL DISK MODE.
     No Docker / server required — data is read directly from db_path.
+    If the directory is read-only (common in Kaggle mounts), it will copy
+    the DB to a writable location (e.g. /tmp) and open it from there.
     """
     if not db_path.exists():
         raise FileNotFoundError(
             f"Qdrant DB not found: {db_path}\n"
             "Run data_pipeline.py first to build the index."
         )
-    logger.info("Opening Qdrant local DB: %s", db_path)
-    return QdrantClient(path=str(db_path))
+
+    # Check if we can write to the directory (Qdrant needs to write a .lock file)
+    test_path = db_path
+    try:
+        lock_file = db_path / ".lock_test"
+        with open(lock_file, "w") as f:
+            f.write("test")
+        lock_file.unlink()
+    except Exception:
+        # If writing fails (e.g. Read-only file system on Kaggle), copy to /tmp
+        import shutil
+        import tempfile
+        import os
+        
+        # Use a unique name for the temporary directory
+        writable_dir = Path(tempfile.gettempdir()) / f"qdrant_db_{db_path.name}"
+        logger.warning(
+            "Directory %s is read-only. Copying database to writable location: %s",
+            db_path, writable_dir
+        )
+        
+        if writable_dir.exists():
+            try:
+                shutil.rmtree(writable_dir)
+            except Exception:
+                pass
+                
+        shutil.copytree(db_path, writable_dir)
+        
+        # Ensure files and directories are writable
+        for root, dirs, files in os.walk(writable_dir):
+            for d in dirs:
+                try:
+                    os.chmod(os.path.join(root, d), 0o777)
+                except Exception:
+                    pass
+            for f in files:
+                try:
+                    os.chmod(os.path.join(root, f), 0o666)
+                except Exception:
+                    pass
+        try:
+            os.chmod(writable_dir, 0o777)
+        except Exception:
+            pass
+            
+        test_path = writable_dir
+
+    logger.info("Opening Qdrant local DB: %s", test_path)
+    return QdrantClient(path=str(test_path))
 
 
 def load_embedding_model(model_name: str = EMBEDDING_MODEL_NAME) -> SentenceTransformer:
