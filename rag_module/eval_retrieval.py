@@ -29,7 +29,7 @@ import pandas as pd
 
 _HERE = Path(__file__).parent    # rag_module/
 
-QUESTIONS_PATH  = _HERE.parent / "questions" / "questions.jsonl"
+QUESTIONS_PATH  = "./ViFinQA/questions/questions.jsonl"
 CODE_STOCK_CSV  = _HERE / "code_stock.csv"
 
 # --- KAGGLE override (uncomment and set your dataset name) ---

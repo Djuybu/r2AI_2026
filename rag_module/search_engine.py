@@ -192,6 +192,15 @@ def parse_query(
         if m:
             ticker = m.group(1)
 
+    # Fallback: direct ticker code match as word
+    if not ticker:
+        tickers = {code.upper() for _, code in company_map}
+        for w in re.findall(r"\b[A-Za-z]{3,5}\b", question):
+            w_upper = w.upper()
+            if w_upper in tickers:
+                ticker = w_upper
+                break
+
     # --- Year ---
     m = _YEAR_RE.search(question)
     year = m.group(1) if m else ""

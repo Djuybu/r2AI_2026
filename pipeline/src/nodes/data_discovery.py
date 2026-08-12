@@ -15,7 +15,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     """LangGraph Node 2: Discover matching data file and extract metadata schema.
     
     Args:
-        state: Current AgentState containing 'parsed_query'
+        state: Current AgentState containing 'parsed_query' and 'user_query'
         cfg: System Config instance
 
     Returns:
@@ -24,11 +24,48 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     cfg = cfg or default_config
     start_time = time.time()
 
+    user_query = state.get("user_query", "")
     parsed_query = state.get("parsed_query", {})
     query_file_name = parsed_query.get("file_name")
 
-    registry = DataRegistry(cfg)
-    matched_path = registry.find_best_match(query_file_name)
+    matched_path = None
+
+    # Try hybrid search first using search_engine from rag_module
+    try:
+        from rag_module.search_engine import run_hybrid_search
+        results = run_hybrid_search(user_query)
+        if results:
+            best_match = results[0]
+            csv_path_str = best_match.get("csv_path")
+            if csv_path_str:
+                p_str = csv_path_str.replace("\\", "/")
+                idx = p_str.find("ViFinQA")
+                if idx != -1:
+                    relative_part = p_str[idx:]
+                else:
+                    relative_part = Path(p_str).name
+
+                repo_root = Path(cfg.DATA_DIR).parent.parent.resolve()
+                candidate1 = (repo_root / relative_part).resolve()
+                candidate2 = (repo_root / "rag_module" / relative_part).resolve()
+
+                if candidate1.exists():
+                    matched_path = candidate1
+                elif candidate2.exists():
+                    matched_path = candidate2
+                else:
+                    direct_path = Path(p_str).resolve()
+                    if direct_path.exists():
+                        matched_path = direct_path
+                    else:
+                        print(f"⚠️ Search engine path not found: {relative_part}")
+    except Exception as e:
+        print(f"⚠️ Search engine search failed: {e}. Falling back to DataRegistry.")
+
+    # Fallback to DataRegistry
+    if not matched_path:
+        registry = DataRegistry(cfg)
+        matched_path = registry.find_best_match(query_file_name)
 
     latency = time.time() - start_time
     node_latencies = state.get("node_latencies", {})
