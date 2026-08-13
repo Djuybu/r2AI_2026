@@ -112,6 +112,16 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
         # Step 1: Validate AST
         validate_ast(code_str)
 
+        print(f"⚙️ [Executor] Đang thực thi mã Pandas...")
+        
+        # Preload df safely to handle 'NameError: name df is not defined'
+        df_loaded = None
+        if file_path:
+            try:
+                df_loaded = pd.read_csv(file_path) if file_path.endswith('.csv') else pd.read_excel(file_path)
+            except Exception as e:
+                print(f"⚠️ [Executor] Không thể tự động load DataFrame: {e}")
+
         # Step 2: Prepare execution scope
         exec_globals = {
             "pd": pd,
@@ -119,6 +129,7 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
             "pandas": pd,
             "numpy": np,
             "file_path": file_path,
+            "df": df_loaded,
         }
         exec_locals = {}
 
@@ -133,6 +144,10 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
             raise ValueError("Biến `result` không được tìm thấy sau khi thực thi mã.")
 
         formatted = format_result(result_val)
+        
+        print(f"✅ [Executor] Thực thi THÀNH CÔNG!")
+        import json
+        print(f"📊 [Kết quả - Executor]:\n{json.dumps(formatted, indent=4, ensure_ascii=False)}\n")
 
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})

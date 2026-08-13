@@ -100,11 +100,21 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
             messages.append(HumanMessage(content=f"User Query: {ex['user_query']}\nSchema: {ex['table_schema']}"))
             messages.append(SystemMessage(content=ex["parsed_output"]))
 
+        # Get the first row (headers) from the sample rows to map numeric columns
+        sample_rows = table_schema.get("sample_rows", [])
+        header_row = sample_rows[0] if sample_rows else {}
+
+        print(f"🔍 [Schema Mapper] Tiến hành ánh xạ các cột...")
+        print(f"   - Cột thực tế: {actual_columns}")
+        if header_row:
+            print(f"   - Nhãn tương ứng hàng đầu tiên: {header_row}")
+
         messages.append(
             HumanMessage(
                 content=f"Yêu cầu: {state.get('user_query', '')}\n"
                         f"Parsed Intent: {parsed_query}\n"
-                        f"Cột thực tế trong dữ liệu: {actual_columns}"
+                        f"Cột thực tế trong dữ liệu: {actual_columns}\n"
+                        f"Giá trị thực tế ở dòng đầu tiên (Dòng tiêu đề): {header_row}"
             )
         )
 
@@ -112,11 +122,27 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         response = llm.invoke(messages)
         raw_text = response.content if isinstance(response.content, str) else str(response.content)
 
+        # Extract and print thoughts
+        import re
+        think_match = re.search(r"<think>(.*?)</think>", raw_text, re.DOTALL)
+        if think_match:
+            thought = think_match.group(1).strip()
+            indented_thought = thought.replace('\n', '\n  ')
+            print(f"💭 [Tư duy - Schema Mapper]:\n  {indented_thought}")
+        else:
+            json_start = raw_text.find("{")
+            if json_start > 10:
+                thought = raw_text[:json_start].strip()
+                indented_thought = thought.replace('\n', '\n  ')
+                print(f"💭 [Tư duy - Schema Mapper]:\n  {indented_thought}")
+
         parsed_res = safe_parse_json(raw_text)
         llm_mapping = parsed_res.get("column_mapping", {})
 
         # Merge fuzzy_mapping with llm_mapping (fuzzy takes precedence for exact hits)
         final_mapping = {**llm_mapping, **fuzzy_mapping}
+
+        print(f"📊 [Kết quả - Schema Mapper]: Ánh xạ cột cuối cùng = {final_mapping}\n")
 
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})

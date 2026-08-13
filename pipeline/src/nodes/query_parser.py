@@ -69,6 +69,21 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
 
         raw_content = response.content if isinstance(response.content, str) else str(response.content)
 
+        # Extract and print agent thoughts
+        import re
+        print(f"\n🔍 [Query Parser] Đang phân tích câu hỏi: '{user_query}'")
+        think_match = re.search(r"<think>(.*?)</think>", raw_content, re.DOTALL)
+        if think_match:
+            thought = think_match.group(1).strip()
+            indented_thought = thought.replace('\n', '\n  ')
+            print(f"💭 [Tư duy - Query Parser]:\n  {indented_thought}")
+        else:
+            json_start = raw_content.find("{")
+            if json_start > 10:
+                thought = raw_content[:json_start].strip()
+                indented_thought = thought.replace('\n', '\n  ')
+                print(f"💭 [Tư duy - Query Parser]:\n  {indented_thought}")
+
         # Parse output JSON
         parsed_json = safe_parse_json(raw_content)
 
@@ -79,6 +94,8 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
             parsed_json["query_details"] = []
         if "file_name" not in parsed_json:
             parsed_json["file_name"] = None
+
+        print(f"📊 [Kết quả - Query Parser]: Intent={parsed_json.get('intent')}, File={parsed_json.get('file_name')}, Details={parsed_json.get('query_details')}\n")
 
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})

@@ -79,11 +79,21 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 )
                 messages.append(SystemMessage(content=ex["generated_code"]))
 
+            sample_rows = table_schema.get("sample_rows", [])
+            header_row = sample_rows[0] if sample_rows else {}
+
+            print(f"🔍 [Code Generator] Tiến hành sinh mã Python (Lần đầu)...")
+            print(f"   - Cột thực tế: {table_schema.get('columns', [])}")
+            if header_row:
+                print(f"   - Nhãn thực tế hàng đầu tiên: {header_row}")
+            print(f"   - Ánh xạ cột: {column_mapping}")
+
             messages.append(
                 HumanMessage(
                     content=f"Yêu cầu người dùng: {user_query}\n"
                             f"Đường dẫn file: {file_path}\n"
-                            f"Schema bảng: {table_schema.get('columns', [])}\n"
+                            f"Cột thực tế trong dữ liệu: {table_schema.get('columns', [])}\n"
+                            f"Nhãn thực tế dòng đầu tiên (Dòng tiêu đề): {header_row}\n"
                             f"Ánh xạ cột (Column Mapping): {column_mapping}\n"
                             f"Hãy tạo mã Python/Pandas lưu kết quả cuối cùng vào biến `result`."
                 )
@@ -93,6 +103,9 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
         else:
             prompt_data = load_yaml_prompt(cfg, "reflection.yaml")
             system_prompt = prompt_data["system_prompt"]
+
+            print(f"🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần {retry_count})...")
+            print(f"   - Traceback Lỗi:\n{error_traceback.strip()}")
 
             messages = [
                 SystemMessage(content=system_prompt),
@@ -110,7 +123,23 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
         response = llm.invoke(messages)
         raw_text = response.content if isinstance(response.content, str) else str(response.content)
 
+        # Extract and print thoughts
+        import re
+        think_match = re.search(r"<think>(.*?)</think>", raw_text, re.DOTALL)
+        if think_match:
+            thought = think_match.group(1).strip()
+            indented_thought = thought.replace('\n', '\n  ')
+            print(f"💭 [Tư duy - Code Generator]:\n  {indented_thought}")
+        else:
+            code_start = raw_text.find("```")
+            if code_start > 10:
+                thought = raw_text[:code_start].strip()
+                indented_thought = thought.replace('\n', '\n  ')
+                print(f"💭 [Tư duy - Code Generator]:\n  {indented_thought}")
+
         code = clean_python_code(raw_text)
+
+        print(f"📊 [Kết quả - Code Generator] Mã Python sinh ra:\n```python\n{code}\n```\n")
 
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})
