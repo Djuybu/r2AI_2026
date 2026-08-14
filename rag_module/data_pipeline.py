@@ -45,7 +45,7 @@ import re
 import sys
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple, Set
 
 import pandas as pd
 from bs4 import BeautifulSoup, NavigableString, Tag
@@ -69,7 +69,7 @@ BASE_DIR                 = Path("./ViFinQA")                    # project root
 FINANCIAL_STATEMENTS_DIR = BASE_DIR / "financial_statements"
 CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"  # inside rag_module/
 
-# --- ETL output ---
+# # --- ETL output ---
 PROCESSED_DATA_DIR       = BASE_DIR / "processed_data"
 
 # --- Index output (bundled inside rag_module/ for Kaggle upload) ---
@@ -106,10 +106,11 @@ BATCH_SIZE               = 64            # encoding + Qdrant upsert batch size
 # BM25_OUTPUT_PATH         = _MODULE_DIR / "test/bm25_index.pkl"
 
 # # --- Kaggle override (uncomment and set your dataset name) ---
-# # _KAGGLE_ROOT          = Path("/kaggle/input/your-dataset-name/rag_module")
-# # QDRANT_DB_PATH        = _KAGGLE_ROOT / "qdrant_local_db"
-# # BM25_OUTPUT_PATH      = _KAGGLE_ROOT / "bm25_index.pkl"
-# # CODE_STOCK_CSV        = _KAGGLE_ROOT / "code_stock.csv"
+# _KAGGLE_ROOT          = Path("/kaggle/input/your-dataset-name/rag_module")
+# if _KAGGLE_ROOT.exists():
+#     QDRANT_DB_PATH        = _KAGGLE_ROOT / "qdrant_local_db"
+#     BM25_OUTPUT_PATH      = _KAGGLE_ROOT / "bm25_index.pkl"
+#     CODE_STOCK_CSV        = _KAGGLE_ROOT / "code_stock.csv"
 
 # # --- Qdrant + Embedding ---
 # COLLECTION_NAME          = "test_financial_tables"
@@ -294,8 +295,6 @@ def clean_line_noise(line: str) -> str:
     line = line.strip()
     line = re.sub(r"^[-–—\s,\.:;\(\)\[\]]+|[-–—\s,\.:;\(\)\[\]]+$", "", line)
     return line.strip()
-
-
 def extract_table_name(pre_text: str) -> str:
     """Extract a table heading from preceding context using bottom-up scan.
 
@@ -323,7 +322,7 @@ def extract_table_name(pre_text: str) -> str:
             continue
 
         cleaned = clean_line_noise(raw_line)
-        if not cleaned or _FULL_LINE_NOISE.match(cleaned):
+        if not cleaned or _FULL_LINE_NOISE.match(cleaned) or len(cleaned) > 120 or _TEMPLATE_CODE_RE.search(cleaned):
             continue
 
         if _PAREN_RE.match(cleaned):
@@ -333,17 +332,37 @@ def extract_table_name(pre_text: str) -> str:
         # Found the valid line — also grab the cleaned line above if meaningful
         parts: List[str] = []
         if i > 0:
-            cleaned_prev = clean_line_noise(lines[i - 1])
-            if cleaned_prev and not _FULL_LINE_NOISE.match(cleaned_prev) and not _PAREN_RE.match(cleaned_prev):
+            prev_line = lines[i - 1]
+            cleaned_prev = clean_line_noise(prev_line)
+            
+            # Heading prefix checks
+            starts_with_heading_prefix = bool(
+                re.match(r"^(?:\d+\.|[I-VX]+\.|[A-H]\.|[a-z]\))", cleaned)
+            )
+            
+            prev_ends_with_punctuation = bool(
+                cleaned_prev.endswith(".") or cleaned_prev.endswith(":") or cleaned_prev.endswith("?") or cleaned_prev.endswith("!")
+            )
+            
+            is_valid_prev = (
+                cleaned_prev 
+                and not _FULL_LINE_NOISE.match(cleaned_prev) 
+                and not _PAREN_RE.match(cleaned_prev)
+                and not starts_with_heading_prefix
+                and not prev_ends_with_punctuation
+                and len(cleaned_prev) <= 80
+                and not _TEMPLATE_CODE_RE.search(cleaned_prev)
+            )
+            
+            if is_valid_prev:
                 parts.append(cleaned_prev)
+                
         parts.append(cleaned)
         suffixes.reverse()
         parts.extend(suffixes)
         return " ".join(parts)
 
     return ""
-
-
 def extract_unit(pre_text: str) -> str:
     """Extract monetary unit from preceding context text."""
     for pattern in _UNIT_PATTERNS:
@@ -400,6 +419,473 @@ def attach_metadata(
     return pd.concat([meta_df, df.reset_index(drop=True)], axis=1)
 
 
+# ---------------------------------------------------------------------------
+_HEADER_RES: List[re.Pattern] = [
+    re.compile(r"\b(stt|mã\s+số|ma\s+so|thuyết\s+minh|thuyet\s+minh|chỉ\s+tiêu|chi\s+tieu|khoản\s+mục|khoan\s+muc)\b", re.IGNORECASE),
+    re.compile(r"\b(tài\s+sản|tai\s+san|nguồn\s+vốn|nguon\s+von|doanh\s+thu|chi\s+phí|chi\s+phi|vốn\s+góp|vốn\s+điều\s+lệ|cổ\s+phần|cổ\s+phiếu|lợi\s+nhuận|quỹ|thặng\s+dư)\b", re.IGNORECASE),
+    re.compile(r"\b(năm|quý|quy)\s+\d{4}\b", re.IGNORECASE),
+    re.compile(r"\b(31/12|01/01|30/06|30/09)\b"),
+    re.compile(r"^\b(20\d{2}|19\d{2})\b$"),
+    re.compile(r"\b(số\s+cuối|số\s+đầu|năm\s+nay|năm\s+trước|kỳ\s+này|kỳ\s+trước|giá\s+gốc|dự\s+phòng)\b", re.IGNORECASE),
+    re.compile(r"\b(giá\s+trị|gia\s+tri|tăng|tang|giảm|giam|cộng|cong|tổng|tong|nội\s+dung|noi\s+dung|loại|loai|tiền|tien|đầu\s+năm|cuối\s+năm|đầu\s+kỳ|cuối\s+kỳ|lãi\s+suất|lai\s+suat|đáo\s+hạn|dao\s+han|bảo\s+đảm|bao\s+dam)\b", re.IGNORECASE),
+    re.compile(r"\b(năm|nam|ngày|ngay|tháng|thang|quý|quy)\b", re.IGNORECASE),
+]
+
+_SECTION_LETTER_RE: re.Pattern = re.compile(
+    r"^(?!(?:P|Q|T|H|X|K|S|ĐT|ĐC)\.)[A-Z]\.\s*.*"  # Case-sensitive
+)
+_SECTION_OTHER_RE: re.Pattern = re.compile(
+    r"^(?:"
+    r"[I|V|X]+\.\s*.*|"                                # Roman numerals: I., II., III.
+    r"(?:[a-z\d]+\)?[.\s]*)?(?:Doanh thu|Mua hàng|Vay|Phải thu.*|Phải trả.*|Trả trước.*|Đầu tư vào.*)" # Phân mục lớn
+    r")$",
+    re.IGNORECASE                                      # Case-insensitive
+)
+
+_FINANCIAL_AMOUNT_RE: re.Pattern = re.compile(r"^\(?-?\d{1,3}(?:\.\d{3})+(?:,\d+)?\)?$|^\(?-?\d{4,}\)?$")
+
+def check_is_financial_amount(val: Any) -> bool:
+    """Check if a cell value matches the financial amount pattern, stripping optional footnote suffixes like (*), (1), (i)."""
+    if pd.isna(val) or val is None:
+        return False
+    val_str = str(val).strip().replace(" ", "")
+    if not val_str:
+        return False
+    # Strip footnote suffix like (*), (1), (i), (a) from the end
+    val_cleaned = re.sub(r"\(\*?\w*\)$", "", val_str)
+    return bool(_FINANCIAL_AMOUNT_RE.match(val_cleaned))
+
+_TEMPLATE_CODE_RE: re.Pattern = re.compile(
+    r"\b(?:mẫu|mâu|biểu|form|biêu)\s*số?\s*[a-z]?\s*\d+[-–/\w]*\b|\b[b]\s*\d{2,}[-–/\w]*\b", 
+    re.IGNORECASE
+)
+
+_COMMON_LABELS: Set[str] = {
+    "chỉ tiêu", "chi tieu", "tài sản", "tai san", "nguồn vốn", "nguon von", 
+    "stt", "mã số", "ma so", "khoản mục", "khoan muc", "nội dung", "noi dung",
+    "mã", "ma", "thuyết minh", "thuyet minh", "tên công ty", "tên", "đối tượng"
+}
+
+def is_valid_header_row(row: pd.Series) -> bool:
+    """
+    Check if a row is a valid header row.
+    Requirements:
+    - Entire row must be text/dates (no numeric financial amounts).
+    - Non-empty values must NOT be all identical (e.g. not all NaN or all same string).
+    - Must contain at least one text/header keyword.
+    """
+    non_empty_vals = []
+    has_numeric = False
+    has_header_kw = False
+    
+    for val in row.values:
+        if pd.isna(val):
+            continue
+        val_str = str(val).strip()
+        if not val_str:
+            continue
+        
+        # Clean currency suffix before checking keyword to handle 'Năm 2015VND' -> 'Năm 2015'
+        val_cleaned = clean_header_value(val)
+        
+        if check_is_financial_amount(val):
+            cleaned = val_str.replace(" ", "").replace("(", "").replace(")", "")
+            if not (cleaned.isdigit() and len(cleaned) < 3):
+                has_numeric = True
+                
+        non_empty_vals.append(val_cleaned.lower())
+        if any(rx.search(val_cleaned) for rx in _HEADER_RES):
+            has_header_kw = True
+            
+    if has_numeric:
+        return False
+        
+    if not non_empty_vals:
+        return False
+        
+    if len(set(non_empty_vals)) == 1:
+        return False
+        
+    return has_header_kw
+
+
+def is_header_extension_row(row: pd.Series) -> Tuple[bool, Optional[str]]:
+    """
+    Check if a row is a header extension/unit row.
+    Sign: Non-empty values are all identical (e.g., all 'VND' or 'Triệu đồng'), and some cells may be empty.
+    """
+    non_empty_vals = []
+    for val in row.values:
+        if pd.isna(val):
+            continue
+        val_str = str(val).strip()
+        if val_str:
+            non_empty_vals.append(val_str)
+            
+    if len(non_empty_vals) > 0 and len(set(non_empty_vals)) == 1:
+        common_val = non_empty_vals[0]
+        if any(u in common_val.lower() for u in ["đợt", "tháng"]) and len(common_val) > 15:
+            return False, None
+        return True, common_val
+    return False, None
+
+
+def has_numeric_data_columns(df: pd.DataFrame) -> bool:
+    """Check if a DataFrame has at least one column containing numeric financial amounts."""
+    meta_cols = {"Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh", "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon"}
+    data_cols = [c for c in df.columns if c not in meta_cols]
+    if not data_cols:
+        return False
+        
+    for col in data_cols:
+        for val in df[col].dropna().values:
+            if check_is_financial_amount(val):
+                return True
+    return False
+
+
+def is_header_row(row: pd.Series) -> bool:
+    """Check if a row is a table header row based on financial header keywords, excluding financial amount rows."""
+    return is_valid_header_row(row)
+
+
+def is_currency_row(row: pd.Series) -> bool:
+    """Check if a row contains only currency units or empty cells."""
+    is_ext, _ = is_header_extension_row(row)
+    return is_ext
+
+
+def is_descriptor_row(row: pd.Series) -> bool:
+    """Check if a row contains description text without financial numbers."""
+    has_text = False
+    for val in row.values:
+        if pd.isna(val):
+            continue
+        val_str = str(val).strip()
+        if not val_str:
+            continue
+        if check_is_financial_amount(val):
+            return False
+        cleaned = val_str.replace(" ", "").replace("(", "").replace(")", "")
+        if cleaned.isdigit() and len(cleaned) < 3:
+            continue
+        has_text = True
+    return has_text
+
+def is_date_only_row(row: pd.Series) -> bool:
+    """Check if all non-empty cells in the row are date/year labels."""
+    has_val = False
+    date_patterns = re.compile(
+        r"^(?:31/12|01/01|30/06|30/09|\d{1,2}/\d{1,2}/\d{4}|\d{4}|năm\s+\d{4}|tại\s+\d{1,2}/\d{1,2}/\d{4})$", 
+        re.IGNORECASE
+    )
+    for val in row.values:
+        if pd.isna(val):
+            continue
+        val_str = str(val).strip()
+        if not val_str:
+            continue
+        has_val = True
+        if not date_patterns.match(val_str) and val_str.lower() not in ["tại", "ngày", "năm"]:
+            return False
+    return has_val
+
+def clean_header_value(val: Any) -> str:
+    """Strip currency suffixes from column name strings."""
+    if pd.isna(val) or val is None:
+        return ""
+    val_str = str(val).strip()
+    cleaned = re.sub(r"\s*(?:VND|VÐ|VĐ|USD|đđ|đ|đồng|Đồng)\b.*", "", val_str, flags=re.IGNORECASE)
+    return cleaned.strip()
+
+def _extract_headers_smart_internal(df: pd.DataFrame) -> Tuple[List[str], int, Optional[str]]:
+    """Determine best headers from top rows, number of rows to drop, and optional unit."""
+    if df.empty:
+        return list(df.columns), 0, None
+
+    num_rows = len(df)
+    row0 = df.iloc[0]
+    
+    row0_valid = is_valid_header_row(row0)
+    
+    if row0_valid:
+        if num_rows > 1:
+            row1 = df.iloc[1]
+            is_ext, ext_val = is_header_extension_row(row1)
+            if is_ext:
+                header_cols = [clean_header_value(v) for v in row0.values]
+                header_cols = [name if name else f"Cột_{i}" for i, name in enumerate(header_cols)]
+                header_cols = make_columns_unique(header_cols)
+                return header_cols, 2, ext_val
+            elif is_date_only_row(row1):
+                header_cols = [clean_header_value(v) for v in row0.values]
+                header_cols = [name if name else f"Cột_{i}" for i, name in enumerate(header_cols)]
+                header_cols = make_columns_unique(header_cols)
+                return header_cols, 2, None
+            elif is_date_only_row(row0) and is_valid_header_row(row1):
+                header_cols = [clean_header_value(v) for v in row1.values]
+                header_cols = [name if name else f"Cột_{i}" for i, name in enumerate(header_cols)]
+                header_cols = make_columns_unique(header_cols)
+                return header_cols, 2, None
+            elif is_valid_header_row(row1):
+                if num_rows > 2:
+                    row2 = df.iloc[2]
+                    is_ext2, ext_val2 = is_header_extension_row(row2)
+                    if is_ext2:
+                           header_cols = [clean_header_value(v) for v in row1.values]
+                           header_cols = [name if name else f"Cột_{i}" for i, name in enumerate(header_cols)]
+                           header_cols = make_columns_unique(header_cols)
+                           return header_cols, 3, ext_val2
+                    elif is_date_only_row(row2):
+                           header_cols = [clean_header_value(v) for v in row1.values]
+                           header_cols = [name if name else f"Cột_{i}" for i, name in enumerate(header_cols)]
+                           header_cols = make_columns_unique(header_cols)
+                           return header_cols, 3, None
+                
+                header_cols = [clean_header_value(v) for v in row1.values]
+                header_cols = [name if name else f"Cột_{i}" for i, name in enumerate(header_cols)]
+                header_cols = make_columns_unique(header_cols)
+                return header_cols, 2, None
+
+        header_cols = [clean_header_value(v) for v in row0.values]
+        header_cols = [name if name else f"Cột_{i}" for i, name in enumerate(header_cols)]
+        header_cols = make_columns_unique(header_cols)
+        return header_cols, 1, None
+
+    if num_rows > 1 and is_valid_header_row(df.iloc[1]):
+        header_cols = [clean_header_value(v) for v in df.iloc[1].values]
+        header_cols = [name if name else f"Cột_{i}" for i, name in enumerate(header_cols)]
+        header_cols = make_columns_unique(header_cols)
+        return header_cols, 2, None
+
+    header_cols = [f"Cột_{i}" for i in range(len(df.columns))]
+    return header_cols, 0, None
+
+
+def extract_headers_smart(df: pd.DataFrame) -> Tuple[List[str], int, Optional[str]]:
+    """Determine best headers from top rows, number of rows to drop, and optional unit (post-processing wrapper)."""
+    cols, drop_n, unit = _extract_headers_smart_internal(df)
+    if cols:
+        first_val = str(cols[0]).strip()
+        date_patterns = re.compile(
+            r"\b(?:\d{1,2}/\d{1,2}/\d{4}|\d{4}|năm\s+\d{4}|31/12|01/01|30/06|30/09|ngày\s+\d{1,2}\s+tháng\s+\d{1,2}\s+năm\s+\d{4})\b", 
+            re.IGNORECASE
+        )
+        if date_patterns.search(first_val) or first_val.lower() in ["tại", "ngày", "năm"]:
+            cols[0] = "Chỉ tiêu"
+            cols = make_columns_unique(cols)
+    return cols, drop_n, unit
+
+
+def is_section_header_row(row: pd.Series) -> bool:
+    """Check if a row is a section header (sub-table boundary)."""
+    text_values = []
+    has_numeric = False
+    for val in row.values:
+        if pd.isna(val):
+            continue
+        val_str = str(val).strip()
+        if not val_str:
+            continue
+        cleaned_num = val_str.replace(".", "").replace(",", "").replace("-", "").replace("(", "").replace(")", "").strip()
+        if cleaned_num.isdigit() and len(cleaned_num) > 0:
+            has_numeric = True
+        else:
+            text_values.append(val_str)
+
+    if not text_values:
+        return False
+
+    unique_text = list(dict.fromkeys(text_values))
+    combined_text = " ".join(unique_text).strip()
+    if _SECTION_LETTER_RE.match(combined_text) or _SECTION_OTHER_RE.match(combined_text):
+        return True
+
+    if not has_numeric:
+        for t in unique_text:
+            if _SECTION_LETTER_RE.match(t) or _SECTION_OTHER_RE.match(t):
+                return True
+
+    return False
+
+def _has_numeric_amounts(row: pd.Series) -> bool:
+    """Check if a row contains numeric financial amount cells."""
+    for val in row.values:
+        if check_is_financial_amount(val):
+            return True
+    return False
+
+
+def ensure_subtable_totals(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    If a sub-table has multiple data rows and no explicit summary row at the end,
+    either copy section total amounts from the first row or compute column totals,
+    and append a standardized 'TỔNG CỘNG' row at the bottom.
+    """
+    if len(df) <= 1:
+        return df
+
+    last_row_text = " ".join([str(val).lower() for val in df.iloc[-1].values if not pd.isna(val)])
+    summary_keywords = ["tổng cộng", "cộng", "lưu chuyển tiền thuần", "tổng các khoản"]
+    if any(kw in last_row_text for kw in summary_keywords):
+        return df
+
+    first_row = df.iloc[0]
+    if _has_numeric_amounts(first_row):
+        total_row = first_row.copy()
+        for c_idx in range(len(total_row)):
+            val = total_row.iloc[c_idx]
+            if not pd.isna(val):
+                val_str = str(val).strip()
+                cleaned = val_str.replace(" ", "").replace(".", "").replace(",", "").replace("-", "")
+                if val_str and not _FINANCIAL_AMOUNT_RE.match(val_str.replace(" ", "")) and not cleaned.isdigit():
+                    total_row.iloc[c_idx] = "TỔNG CỘNG"
+                    break
+        total_df = pd.DataFrame([total_row.to_dict()])
+        return pd.concat([df, total_df], ignore_index=True)
+
+    first_row_text = " ".join([str(val).lower() for val in first_row.values if not pd.isna(val)])
+    if any(kw in first_row_text for kw in summary_keywords):
+        return df
+
+    cols = list(df.columns)
+    total_row = {}
+    has_summed = False
+
+    for c_idx in range(len(cols)):
+        col_name = cols[c_idx]
+        series = df.iloc[:, c_idx]
+        values = series.dropna().tolist()
+        numeric_vals = []
+        for v in values:
+            v_str = str(v).strip().replace(".", "").replace(",", "")
+            if v_str.startswith("(") and v_str.endswith(")"):
+                v_str = "-" + v_str[1:-1]
+            try:
+                num = float(v_str)
+                numeric_vals.append(num)
+            except ValueError:
+                pass
+
+        if len(numeric_vals) == len(values) and len(values) > 0:
+            total_val = sum(numeric_vals)
+            if total_val.is_integer():
+                total_row[col_name] = f"{int(total_val):,}".replace(",", ".")
+            else:
+                total_row[col_name] = f"{total_val:,.2f}".replace(",", ".")
+            has_summed = True
+        else:
+            total_row[col_name] = "TỔNG CỘNG" if not has_summed and c_idx == 0 else ""
+
+    if has_summed:
+        total_df = pd.DataFrame([total_row])
+        df = pd.concat([df, total_df], ignore_index=True)
+
+    return df
+
+
+def clean_subtable_df(sub_df: pd.DataFrame) -> Tuple[pd.DataFrame, Optional[str]]:
+    """Clean repeating headers, dates, and currency rows from a subtable DataFrame."""
+    if sub_df.empty:
+        return sub_df, None
+        
+    sub_unit = None
+    # 1. Clean headers/currencies from the top of the subtable
+    while len(sub_df) > 0:
+        first_row = sub_df.iloc[0]
+        if is_currency_row(first_row):
+            sub_unit = "VND"
+            sub_df = sub_df.iloc[1:].copy()
+        elif is_date_only_row(first_row):
+            sub_df = sub_df.iloc[1:].copy()
+        else:
+            break
+            
+    # 2. Clean repeating headers/currencies from the body of the subtable
+    body_rows_to_keep = []
+    for r_idx in range(len(sub_df)):
+        row_series = sub_df.iloc[r_idx]
+        if is_currency_row(row_series) or is_date_only_row(row_series):
+            if is_currency_row(row_series):
+                sub_unit = "VND"
+            continue
+        body_rows_to_keep.append(r_idx)
+    sub_df = sub_df.iloc[body_rows_to_keep].copy()
+    
+    return sub_df, sub_unit
+
+
+def split_dataframe_into_subtables(
+    df: pd.DataFrame, 
+    parent_table_name: str
+) -> List[Tuple[str, pd.DataFrame, Optional[str]]]:
+    """
+    Split a DataFrame into sub-tables based on section header rows.
+    Returns list of (sub_table_name, sub_df, sub_unit).
+    """
+    if df.empty:
+        return [(parent_table_name, df, None)]
+
+    split_indices = []
+    section_names = []
+
+    for row_idx in range(len(df)):
+        r = df.iloc[row_idx]
+        if is_section_header_row(r):
+            text_cells = [
+                str(val).strip() for val in r.values
+                if not pd.isna(val) and str(val).strip() and not str(val).strip().replace(".", "").replace(",", "").replace("-", "").replace("(", "").replace(")", "").isdigit()
+            ]
+            sec_name = " ".join(dict.fromkeys(text_cells)).strip()
+            if sec_name:
+                split_indices.append(row_idx)
+                section_names.append(sec_name)
+
+    if not split_indices:
+        sub_df, sub_unit = clean_subtable_df(df)
+        return [(parent_table_name, sub_df, sub_unit)]
+
+    subtables: List[Tuple[str, pd.DataFrame, Optional[str]]] = []
+    for s_idx in range(len(split_indices)):
+        start_i = split_indices[s_idx]
+        end_i = split_indices[s_idx + 1] if s_idx + 1 < len(split_indices) else len(df)
+        sub_df = df.iloc[start_i:end_i].copy()
+        if sub_df.empty:
+            continue
+
+        sec_title = section_names[s_idx]
+        sub_table_name = f"{parent_table_name}_{sec_title}" if parent_table_name else sec_title
+        
+        # Clean headers from subtable body
+        if len(sub_df) > 0:
+            sub_df = sub_df.iloc[1:].copy()
+            
+        sub_df, sub_unit = clean_subtable_df(sub_df)
+                
+        if sub_df.empty:
+            continue
+            
+        sub_df = ensure_subtable_totals(sub_df)
+        subtables.append((sub_table_name, sub_df, sub_unit))
+
+    return subtables if subtables else [(parent_table_name, df, None)]
+
+
+def make_columns_unique(cols: List[str]) -> List[str]:
+    """Ensure all column names in cols are unique by appending _1, _2 to duplicates."""
+    seen: Dict[str, int] = {}
+    unique_cols = []
+    for c in cols:
+        name = str(c).strip()
+        if name not in seen:
+            seen[name] = 0
+            unique_cols.append(name)
+        else:
+            seen[name] += 1
+            unique_cols.append(f"{name}_{seen[name]}")
+    return unique_cols
+
+
 def process_txt_file(
     file_path: Path,
     ticker_map: Dict[str, str],
@@ -419,17 +905,50 @@ def process_txt_file(
         return []
 
     tables: List[pd.DataFrame] = []
+    last_header: Optional[Tuple[int, List[str]]] = None
     for idx, table_tag, _, table_name, unit in parse_tables_from_content(content):
-        df = table_tag_to_dataframe(table_tag)
-        if df is None:
+        raw_df = table_tag_to_dataframe(table_tag)
+        if raw_df is None or raw_df.empty:
             continue
-        source_ref = f"{file_path.as_posix()}#table_{idx}"
-        df = attach_metadata(df, ticker, company_name, year,
-                             report_type, table_name, unit, source_ref)
-        tables.append(df)
+
+        num_cols = len(raw_df.columns)
+        
+        # Smart header extraction
+        header_cols, drop_n, extracted_unit = extract_headers_smart(raw_df)
+        
+        if drop_n > 0:
+            last_header = (num_cols, header_cols)
+            df_cleaned = raw_df.iloc[drop_n:].copy()
+            df_cleaned.columns = header_cols
+        elif last_header is not None and last_header[0] == num_cols:
+            header_cols = last_header[1]
+            df_cleaned = raw_df.copy()
+            df_cleaned.columns = header_cols
+        else:
+            last_header = None
+            header_cols = make_columns_unique([f"Cột_{i}" for i in range(num_cols)])
+            df_cleaned = raw_df.copy()
+            df_cleaned.columns = header_cols
+
+        # Update unit metadata if currency row was dropped and preceding text had no unit
+        table_unit = unit if unit else (extracted_unit if extracted_unit else "")
+        # Split into sub-tables if section headers exist
+        subtables = split_dataframe_into_subtables(df_cleaned, table_name)
+
+        for sub_idx, (sub_table_name, sub_df, sub_unit) in enumerate(subtables):
+            source_ref = f"{file_path.as_posix()}#table_{idx}_{sub_idx}"
+            final_unit = sub_unit if sub_unit else table_unit
+            enriched_df = attach_metadata(
+                sub_df, ticker, company_name, year,
+                report_type, sub_table_name, final_unit, source_ref
+            )
+            # Only keep tables that contain numeric data columns
+            if has_numeric_data_columns(enriched_df):
+                tables.append(enriched_df)
+            else:
+                logger.info("Discarding text-only table/subtable: %s", sub_table_name)
+
     return tables
-
-
 # ---------------------------------------------------------------------------
 # 1E. Save CSVs
 # ---------------------------------------------------------------------------
@@ -438,7 +957,7 @@ def build_csv_output_path(
     file_path: Path,
     statements_dir: Path,
     output_dir: Path,
-    table_index: int,
+    table_index: str | int,
 ) -> Path:
     """Mirror the source path under output_dir, replacing .txt with _table_N.csv."""
     relative = file_path.relative_to(statements_dir).with_suffix("")
@@ -471,9 +990,9 @@ def run_etl(
 
         for df in tables:
             try:
-                anchor_idx = int(df["Tep_Nguon"].iloc[0].split("#table_")[1])
+                anchor_idx = df["Tep_Nguon"].iloc[0].split("#table_")[1]
             except (IndexError, ValueError):
-                anchor_idx = 0
+                anchor_idx = "0"
             csv_path = build_csv_output_path(
                 file_path, statements_dir, processed_dir, anchor_idx
             )
@@ -498,15 +1017,29 @@ def build_rich_content_string(df: pd.DataFrame, meta: Dict[str, str]) -> str:
     """
     Build a semantically rich Vietnamese string for embedding + BM25.
 
-    Includes up to 50 unique financial line item labels from the first
-    data column (e.g. 'Lợi nhuận sau thuế', 'Doanh thu thuần').
+    Includes up to 50 unique financial line item labels from the detected label column.
     """
     data_cols = [c for c in df.columns if c not in META_COLS]
     line_items: List[str] = []
     if data_cols:
         try:
+            label_idx = 0
+            label_keywords = ["chỉ tiêu", "chi tieu", "tài sản", "tai san", "nguồn vốn", "nguon von", "khoản mục", "khoan muc", "tên", "ten", "đối tượng", "doi tuong"]
+            for idx_c, col in enumerate(data_cols):
+                if any(kw in str(col).lower() for kw in label_keywords):
+                    label_idx = idx_c
+                    break
+            else:
+                stt_keywords = ["stt", "mã số", "ma so", "mã", "ma"]
+                if len(data_cols) > 1 and any(kw in str(data_cols[0]).lower() for kw in stt_keywords):
+                    label_idx = 1
+
+            # Match position in original df.columns
+            target_col_name = data_cols[label_idx]
+            col_pos_in_df = list(df.columns).index(target_col_name)
+
             line_items = (
-                df[data_cols[0]].dropna().astype(str).str.strip()
+                df.iloc[:, col_pos_in_df].dropna().astype(str).str.strip()
                 .loc[lambda s: s.str.len() > 2]
                 .drop_duplicates().head(50).tolist()
             )
