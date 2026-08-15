@@ -61,6 +61,37 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     error_traceback = state.get("error_traceback")
     retry_count = state.get("retry_count", 0)
 
+    # Build context for all matched files
+    matched_table_paths = state.get("matched_table_paths", {})
+    table_schemas = state.get("table_schemas", {})
+    column_mappings = state.get("column_mappings", {})
+
+    files_context = ""
+    if matched_table_paths and len(matched_table_paths) > 1:
+        lines = ["Chúng tôi có dữ liệu của nhiều năm như sau:"]
+        for y, path in sorted(matched_table_paths.items()):
+            schema = table_schemas.get(path, {})
+            mapping = column_mappings.get(path, {})
+            cols = list(schema.get("columns", {}).keys())
+            sample = schema.get("sample_rows", [{}])[0] if schema.get("sample_rows") else {}
+            lines.append(
+                f"- Năm {y}:\n"
+                f"  Đường dẫn file (dùng trong code): '{path}'\n"
+                f"  Cột thực tế trong file: {cols}\n"
+                f"  Dòng đầu tiên: {sample}\n"
+                f"  Ánh xạ cột (Column Mapping): {mapping}\n"
+            )
+        files_context = "\n".join(lines)
+    else:
+        cols = list(table_schema.get("columns", {}).keys())
+        sample = table_schema.get("sample_rows", [{}])[0] if table_schema.get("sample_rows") else {}
+        files_context = (
+            f"Đường dẫn file (dùng trong code): '{file_path}'\n"
+            f"Cột thực tế trong file: {cols}\n"
+            f"Dòng đầu tiên: {sample}\n"
+            f"Ánh xạ cột (Column Mapping): {column_mapping}"
+        )
+
     try:
         # Scenario A: Initial Code Generation (retry_count == 0)
         if not error_traceback or retry_count == 0:
@@ -79,25 +110,21 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 )
                 messages.append(SystemMessage(content=ex["generated_code"]))
 
-            sample_rows = table_schema.get("sample_rows", [])
-            header_row = sample_rows[0] if sample_rows else {}
-
             print(f"🔍 [Code Generator] Tiến hành sinh mã Python (Lần đầu)...")
-            print(f"   - Cột thực tế: {table_schema.get('columns', [])}")
-            if header_row:
-                print(f"   - Nhãn thực tế hàng đầu tiên: {header_row}")
-            print(f"   - Ánh xạ cột: {column_mapping}")
+            if matched_table_paths and len(matched_table_paths) > 1:
+                print(f"   - Sinh mã xử lý {len(matched_table_paths)} file qua các năm...")
+            else:
+                print(f"   - Cột thực tế: {table_schema.get('columns', [])}")
+                print(f"   - Ánh xạ cột: {column_mapping}")
 
-            messages.append(
-                HumanMessage(
-                    content=f"Yêu cầu người dùng: {user_query}\n"
-                            f"Đường dẫn file: {file_path}\n"
-                            f"Cột thực tế trong dữ liệu: {table_schema.get('columns', [])}\n"
-                            f"Nhãn thực tế dòng đầu tiên (Dòng tiêu đề): {header_row}\n"
-                            f"Ánh xạ cột (Column Mapping): {column_mapping}\n"
-                            f"Hãy tạo mã Python/Pandas lưu kết quả cuối cùng vào biến `result`."
-                )
+            human_content = (
+                f"Yêu cầu người dùng: {user_query}\n\n"
+                f"{files_context}\n\n"
+                f"Hãy tạo mã Python/Pandas lưu kết quả cuối cùng vào biến `result`.\n"
+                f"Nếu có nhiều file của các năm khác nhau, hãy viết mã đọc từng file bằng pd.read_csv, "
+                f"áp dụng Column Mapping để xác định đúng cột chứa dữ liệu cần tính toán, và thực hiện tính toán/tổng hợp dữ liệu trên các năm này."
             )
+            messages.append(HumanMessage(content=human_content))
 
         # Scenario B: Reflection Debugging Loop (retry_count > 0)
         else:
@@ -107,15 +134,16 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             print(f"🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần {retry_count})...")
             print(f"   - Traceback Lỗi:\n{error_traceback.strip()}")
 
+            human_content = (
+                f"Yêu cầu người dùng: {user_query}\n\n"
+                f"{files_context}\n\n"
+                f"Mã Python bị lỗi trước đó:\n```python\n{state.get('generated_code', '')}\n```\n\n"
+                f"Traceback Lỗi:\n{error_traceback}\n\n"
+                f"Hãy sửa lại đoạn mã trên, đảm bảo kết quả cuối cùng lưu vào biến `result`."
+            )
             messages = [
                 SystemMessage(content=system_prompt),
-                HumanMessage(
-                    content=f"Yêu cầu người dùng: {user_query}\n"
-                            f"Đường dẫn file: {file_path}\n"
-                            f"Mã Python bị lỗi trước đó:\n```python\n{state.get('generated_code', '')}\n```\n\n"
-                            f"Traceback Lỗi:\n{error_traceback}\n\n"
-                            f"Hãy sửa lại đoạn mã trên, đảm bảo kết quả cuối cùng lưu vào biến `result`."
-                )
+                HumanMessage(content=human_content)
             ]
 
         # Call LLM with temperature 0 for deterministic code generation

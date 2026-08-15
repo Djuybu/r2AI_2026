@@ -4,6 +4,7 @@ Maps natural language column terms from parsed_query to actual DataFrame columns
 
 import time
 import yaml
+from pathlib import Path
 from typing import Dict, Any, Optional
 from thefuzz import process, fuzz
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -36,30 +37,12 @@ def fuzzy_match_columns(query_terms: list, actual_columns: list, cutoff: int = 7
     return mapping
 
 
-def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
-    """LangGraph Node 3: Map query details/columns to actual table schema columns.
-    
-    Args:
-        state: Current AgentState containing 'parsed_query' and 'table_schema'
-        cfg: Config instance
-
-    Returns:
-        Updated AgentState with 'column_mapping'
-    """
-    cfg = cfg or default_config
-    start_time = time.time()
-
-    parsed_query = state.get("parsed_query", {})
-    table_schema = state.get("table_schema", {})
+def map_schema_columns(user_query: str, parsed_query: Dict[str, Any], table_schema: Dict[str, Any], cfg: Config) -> Dict[str, str]:
+    """Map user query columns to actual columns in table_schema."""
     actual_columns = list(table_schema.get("columns", {}).keys())
 
     if not actual_columns:
-        return {
-            **state,
-            "status": "error",
-            "error_message": "Không tìm thấy siêu dữ liệu cột (columns) trong schema.",
-            "column_mapping": {},
-        }
+        return {}
 
     # Step 1: Extract query column candidates
     query_details = parsed_query.get("query_details", [])
@@ -75,15 +58,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
 
     # If fuzzy matching found all terms, use fuzzy_mapping directly
     if len(fuzzy_mapping) == len(requested_terms) and requested_terms:
-        latency = time.time() - start_time
-        node_latencies = state.get("node_latencies", {})
-        node_latencies["schema_mapper"] = round(latency, 3)
-        return {
-            **state,
-            "column_mapping": fuzzy_mapping,
-            "status": "pending",
-            "node_latencies": node_latencies,
-        }
+        return fuzzy_mapping
 
     # Step 3: Call LLM for semantic schema mapping fallback
     try:
@@ -104,14 +79,9 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         sample_rows = table_schema.get("sample_rows", [])
         header_row = sample_rows[0] if sample_rows else {}
 
-        print(f"🔍 [Schema Mapper] Tiến hành ánh xạ các cột...")
-        print(f"   - Cột thực tế: {actual_columns}")
-        if header_row:
-            print(f"   - Nhãn tương ứng hàng đầu tiên: {header_row}")
-
         messages.append(
             HumanMessage(
-                content=f"Yêu cầu: {state.get('user_query', '')}\n"
+                content=f"Yêu cầu: {user_query}\n"
                         f"Parsed Intent: {parsed_query}\n"
                         f"Cột thực tế trong dữ liệu: {actual_columns}\n"
                         f"Giá trị thực tế ở dòng đầu tiên (Dòng tiêu đề): {header_row}"
@@ -139,30 +109,64 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         parsed_res = safe_parse_json(raw_text)
         llm_mapping = parsed_res.get("column_mapping", {})
 
-        # Merge fuzzy_mapping with llm_mapping (fuzzy takes precedence for exact hits)
-        final_mapping = {**llm_mapping, **fuzzy_mapping}
-
-        print(f"📊 [Kết quả - Schema Mapper]: Ánh xạ cột cuối cùng = {final_mapping}\n")
-
-        latency = time.time() - start_time
-        node_latencies = state.get("node_latencies", {})
-        node_latencies["schema_mapper"] = round(latency, 3)
-
-        return {
-            **state,
-            "column_mapping": final_mapping,
-            "status": "pending",
-            "node_latencies": node_latencies,
-        }
+        # Merge fuzzy_mapping with llm_mapping
+        return {**llm_mapping, **fuzzy_mapping}
 
     except Exception as e:
-        latency = time.time() - start_time
-        node_latencies = state.get("node_latencies", {})
-        node_latencies["schema_mapper"] = round(latency, 3)
+        print(f"⚠️ LLM column mapping failed: {e}. Falling back to fuzzy matching.")
+        return fuzzy_mapping
 
-        return {
-            **state,
-            "column_mapping": fuzzy_mapping,
-            "status": "pending",  # Fallback to fuzzy_mapping instead of failing completely
-            "node_latencies": node_latencies,
-        }
+
+def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
+    """LangGraph Node 3: Map query details/columns to actual table schema columns.
+    
+    Args:
+        state: Current AgentState containing 'parsed_query' and 'table_schema'
+        cfg: Config instance
+
+    Returns:
+        Updated AgentState with 'column_mappings' and 'column_mapping'
+    """
+    cfg = cfg or default_config
+    start_time = time.time()
+
+    matched_table_paths = state.get("matched_table_paths", {})
+    table_schemas = state.get("table_schemas", {})
+    parsed_query = state.get("parsed_query", {})
+    user_query = state.get("user_query", "")
+
+    column_mappings = {}
+
+    if matched_table_paths:
+        print(f"🔍 [Schema Mapper] Tiến hành ánh xạ các cột cho {len(matched_table_paths)} file...")
+        for year, file_path in matched_table_paths.items():
+            schema = table_schemas.get(file_path, {})
+            if schema:
+                mapping = map_schema_columns(user_query, parsed_query, schema, cfg)
+                column_mappings[file_path] = mapping
+                print(f"   - File {Path(file_path).name} (Năm {year}) mapping: {mapping}")
+    else:
+        matched_table_path = state.get("matched_table_path")
+        table_schema = state.get("table_schema", {})
+        if matched_table_path and table_schema:
+            print(f"🔍 [Schema Mapper] Tiến hành ánh xạ các cột cho file duy nhất...")
+            mapping = map_schema_columns(user_query, parsed_query, table_schema, cfg)
+            column_mappings[matched_table_path] = mapping
+            print(f"   - File {Path(matched_table_path).name} mapping: {mapping}")
+
+    # Set singular fields for compatibility
+    first_mapping = {}
+    if column_mappings:
+        first_mapping = list(column_mappings.values())[0]
+
+    latency = time.time() - start_time
+    node_latencies = state.get("node_latencies", {})
+    node_latencies["schema_mapper"] = round(latency, 3)
+
+    return {
+        **state,
+        "column_mappings": column_mappings,
+        "column_mapping": first_mapping,
+        "status": "pending",
+        "node_latencies": node_latencies,
+    }

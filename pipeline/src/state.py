@@ -14,10 +14,13 @@ class AgentState(TypedDict, total=False):
 
     # Node 2: Data Discovery Output
     matched_table_path: Optional[str]
+    matched_table_paths: Dict[str, str]
 
     # Node 3: Schema Mapper Output
     table_schema: Dict[str, Any]
+    table_schemas: Dict[str, Dict[str, Any]]
     column_mapping: Dict[str, str]
+    column_mappings: Dict[str, Dict[str, str]]
 
     # Node 4: Code Generator Output
     generated_code: str

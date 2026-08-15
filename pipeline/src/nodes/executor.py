@@ -98,6 +98,8 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
 
     code_str = state.get("generated_code", "").strip()
     file_path = state.get("matched_table_path", "")
+    if not file_path and state.get("matched_table_paths"):
+        file_path = list(state.get("matched_table_paths").values())[0]
     retry_count = state.get("retry_count", 0)
 
     if not code_str:
