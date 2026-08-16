@@ -40,9 +40,9 @@ from sentence_transformers import SentenceTransformer
 
 _HERE = Path(__file__).parent   # always points to the rag_module/ directory
 
-# --- LOCAL paths (default — works when running from the project root) ---
-QDRANT_DB_PATH       = _HERE / "qdrant_local_db"
-BM25_PATH            = _HERE / "bm25_index.pkl"
+# --- LOCAL paths (currently pointing to test/ for testing) ---
+QDRANT_DB_PATH       = _HERE / "test" / "qdrant_local_db"
+BM25_PATH            = _HERE / "test" / "bm25_index.pkl"
 CODE_STOCK_CSV       = _HERE / "code_stock.csv"
 
 # --- KAGGLE paths (uncomment and set your Kaggle dataset name) ---
@@ -463,6 +463,129 @@ def run_hybrid_search(
     logger.info("Results: %d dense  |  %d sparse  |  %d fused",
                 len(dense), len(sparse), len(fused))
     return fused
+
+
+# =============================================================================
+# Targeted search helpers (team-requested additions)
+# =============================================================================
+
+def _resolve_ticker(company: str) -> str:
+    """Resolve a company name or raw ticker string to a canonical ticker code.
+
+    Uses the same longest-match company map as parse_query().
+    Falls back to returning ``company`` uppercased if no match is found.
+    """
+    _ensure_resources()
+    if _company_map:
+        c_lower = company.lower()
+        for name, code in _company_map:
+            if name.lower() in c_lower or c_lower in name.lower():
+                return code
+    return company.upper()
+
+
+def search_by_table_name(
+    company: str,
+    table_name_query: str,
+    year: Optional[str] = None,
+    report_type: Optional[str] = None,
+    top_k: int = 5,
+) -> List[RRFResult]:
+    """Find tables for a company whose Ten_Bang fuzzy-matches *table_name_query*.
+
+    Useful when the caller already knows the table type (e.g. "bảng cân đối kế
+    toán") and wants to retrieve the correct CSV without a full hybrid search.
+
+    Args:
+        company:          Ticker code OR company name (resolved automatically).
+        table_name_query: Vietnamese table name to match, e.g.
+                          "bảng cân đối kế toán hợp nhất".
+        year:             Optional year filter (e.g. "2022").
+        report_type:      Optional report type filter ("separate"/"consolidated").
+        top_k:            Maximum number of results to return.
+
+    Returns:
+        List of result dicts sorted by fuzzy Ten_Bang match score (0-100),
+        highest first.  Each dict contains all metadata fields plus
+        ``table_name_score`` (the fuzzy match score).
+    """
+    from thefuzz import fuzz  # soft dependency already used by pipeline/
+
+    _ensure_resources()
+    ticker = _resolve_ticker(company)
+    query_lower = table_name_query.lower()
+
+    candidates = []
+    for doc in (_doc_mapping or []):
+        if doc.get("Ma_Doanh_Nghiep", "").strip() != ticker:
+            continue
+        if year and str(doc.get("Nam_Tai_Chinh", "")).strip() != str(year):
+            continue
+        if report_type:
+            val = doc.get("Loai_Bao_Cao", "").strip()
+            if val not in (report_type, "unknown"):
+                continue
+        ten_bang = str(doc.get("Ten_Bang", "")).lower()
+        score = fuzz.token_set_ratio(query_lower, ten_bang)
+        candidates.append({**doc, "table_name_score": score})
+
+    candidates.sort(key=lambda x: x["table_name_score"], reverse=True)
+    return candidates[:top_k]
+
+
+def search_by_column_name(
+    company: str,
+    column_query: str,
+    year: Optional[str] = None,
+    report_type: Optional[str] = None,
+    top_k: int = 5,
+) -> List[RRFResult]:
+    """Find tables for a company that contain a column matching *column_query*.
+
+    Uses the ``col_names`` payload field written by the indexing phase.
+    Requires a re-index after the corresponding ``data_pipeline.py`` update
+    that adds ``col_names`` to the Qdrant payload and BM25 doc_mapping.
+
+    Args:
+        company:      Ticker code OR company name (resolved automatically).
+        column_query: Column name to search for, e.g. "Số cuối năm",
+                      "31/12/2022", "lợi nhuận".
+        year:         Optional year filter.
+        report_type:  Optional report type filter.
+        top_k:        Maximum number of results to return.
+
+    Returns:
+        List of result dicts sorted by fuzzy col_names match score (0-100),
+        highest first.  Each dict contains all metadata fields plus
+        ``col_name_score`` (the fuzzy match score).
+
+    Note:
+        If ``col_names`` is empty in the payload (index built before this
+        feature was added), falls back to scanning ``line_items`` instead.
+    """
+    from thefuzz import fuzz
+
+    _ensure_resources()
+    ticker = _resolve_ticker(company)
+    query_lower = column_query.lower()
+
+    candidates = []
+    for doc in (_doc_mapping or []):
+        if doc.get("Ma_Doanh_Nghiep", "").strip() != ticker:
+            continue
+        if year and str(doc.get("Nam_Tai_Chinh", "")).strip() != str(year):
+            continue
+        if report_type:
+            val = doc.get("Loai_Bao_Cao", "").strip()
+            if val not in (report_type, "unknown"):
+                continue
+        # Prefer col_names field; fall back to line_items if not yet indexed
+        search_field = doc.get("col_names", "") or doc.get("line_items", "")
+        score = fuzz.partial_ratio(query_lower, search_field.lower())
+        candidates.append({**doc, "col_name_score": score})
+
+    candidates.sort(key=lambda x: x["col_name_score"], reverse=True)
+    return candidates[:top_k]
 
 
 # =============================================================================

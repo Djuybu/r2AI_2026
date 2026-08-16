@@ -121,6 +121,14 @@ def find_financial_table_locally(ticker: str, year: str, report_type: str, query
     return None
 
 
+# Canonical search queries for each required table type (used in multi-table mode)
+_TABLE_TYPE_QUERIES: Dict[str, str] = {
+    "income_statement": "báo cáo kết quả hoạt động kinh doanh lợi nhuận doanh thu",
+    "balance_sheet":    "bảng cân đối kế toán tài sản nguồn vốn nợ phải trả",
+    "cash_flow":        "báo cáo lưu chuyển tiền tệ dòng tiền hoạt động kinh doanh",
+    "notes":            "thuyết minh báo cáo tài chính",
+}
+
 def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
     """LangGraph Node 2: Discover matching data file and extract metadata schema.
     
@@ -164,9 +172,17 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 year_list = available_years[-n_years:]
                 print(f"   - Tự động phân tích '{n_years} năm gần nhất' thành các năm: {year_list}")
 
-    # Clean query for stable RAG matching across different years
-    cleaned_search_query = clean_query_for_search(user_query)
-    print(f"   - Cleaned search query: '{cleaned_search_query}'")
+    # Use LLM-generated RAG search query if available, else fall back to cleaned user query
+    rag_search_query = parsed_query.get("rag_search_query", "").strip()
+    if not rag_search_query:
+        rag_search_query = clean_query_for_search(user_query)
+    print(f"   - RAG search query: '{rag_search_query}'")
+
+    # Table types required to answer this question (from query_parser LLM output)
+    required_tables = parsed_query.get("required_tables", [])
+    is_multi_table = len(required_tables) > 1
+    if is_multi_table:
+        print(f"   - Multi-table mode: {required_tables}")
 
     matched_table_paths = {}
     table_schemas = {}
@@ -181,6 +197,35 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             target_title = None
             
             for idx, y in enumerate(year_list):
+                if is_multi_table:
+                    # --- Multi-table mode: one RAG call per required table type ---
+                    for table_type in required_tables:
+                        tq = _TABLE_TYPE_QUERIES.get(table_type, rag_search_query)
+                        t_results = run_hybrid_search(tq, ticker=ticker, year=y, report_type=report_type)
+                        if t_results:
+                            best = t_results[0]
+                            csv_path_str = best.get("csv_path")
+                            if csv_path_str:
+                                p_str = csv_path_str.replace("\\", "/")
+                                idx_fin = p_str.find("ViFinQA")
+                                relative_part = p_str[idx_fin:] if idx_fin != -1 else Path(p_str).name
+                                repo_root = Path(cfg.DATA_DIR).parent.parent.resolve()
+                                for cand in [
+                                    (repo_root / relative_part).resolve(),
+                                    (repo_root / "rag_module" / relative_part).resolve(),
+                                    Path(p_str).resolve(),
+                                ]:
+                                    if cand.exists():
+                                        key = f"{y}_{table_type}"
+                                        matched_table_paths[key] = str(cand)
+                                        table_schemas[str(cand)] = get_table_schema(cand)
+                                        print(f"   - [{key}]: {cand.name} (RRF: {best.get('rrf_score')})")
+                                        break
+                        else:
+                            print(f"   - [{y}_{table_type}]: RAG không tìm thấy kết quả.")
+                    continue  # skip single-table logic below
+
+                # --- Single-table mode (original behaviour) ---
                 # 1. Try local scan first for high accuracy
                 matched_p = find_financial_table_locally(ticker, y, report_type, user_query, cfg)
                 if matched_p:
@@ -190,9 +235,9 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                     if idx == 0:
                         target_title = table_schemas[str(matched_p)].get("Ten_Bang")
                     continue
-                
+
                 # 2. Fallback to hybrid search
-                results = run_hybrid_search(cleaned_search_query, ticker=ticker, year=y, report_type=report_type)
+                results = run_hybrid_search(rag_search_query, ticker=ticker, year=y, report_type=report_type)
                 if results:
                     best_match = None
                     if idx == 0:

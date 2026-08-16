@@ -95,7 +95,18 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         if "file_name" not in parsed_json:
             parsed_json["file_name"] = None
 
-        print(f"📊 [Kết quả - Query Parser]: Intent={parsed_json.get('intent')}, File={parsed_json.get('file_name')}, Details={parsed_json.get('query_details')}\n")
+        # Ensure rag_search_query is present; fall back to cleaned user query
+        if not parsed_json.get("rag_search_query"):
+            import re as _re
+            _q = _re.sub(r"\b20\d{2}\b", "", user_query)
+            _q = _re.sub(r"\s+", " ", _q).strip()
+            parsed_json["rag_search_query"] = _q
+
+        # Ensure required_tables is present with at least one entry
+        if not parsed_json.get("required_tables"):
+            parsed_json["required_tables"] = ["income_statement"]
+
+        print(f"📊 [Kết quả - Query Parser]: Intent={parsed_json.get('intent')}, File={parsed_json.get('file_name')}, Tables={parsed_json.get('required_tables')}, RAG Query='{parsed_json.get('rag_search_query')}'\n")
 
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})

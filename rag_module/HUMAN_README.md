@@ -95,8 +95,9 @@ sys.path.append("/kaggle/input/vifinqa-rag-module")
 # Install dependencies (run this cell once)
 # !pip install -r /kaggle/input/vifinqa-rag-module/rag_module/requirements.txt
 
-from rag_module.search_engine import run_hybrid_search
+from rag_module.search_engine import run_hybrid_search, search_by_table_name, search_by_column_name
 
+# --- Hybrid Search ---
 # First call loads all resources (roughly 30 seconds for model download)
 results = run_hybrid_search("Loi nhuan sau thue cua FPT nam 2023", top_k=5)
 
@@ -119,6 +120,20 @@ results = run_hybrid_search(
 
 ---
 
+## Targeted Search Helpers
+
+If you know exactly what table or column you are looking for, you can use the targeted search helpers. These use exact/fuzzy metadata matching instead of embedding search:
+
+```python
+# Find tables by their name (e.g., "bảng cân đối kế toán")
+table_results = search_by_table_name("FPT", "bảng cân đối kế toán", year="2022")
+
+# Find tables that contain a specific column (e.g., "Số cuối năm")
+col_results = search_by_column_name("FPT", "Số cuối năm")
+```
+
+---
+
 ## What run_hybrid_search Returns
 
 A list of dicts sorted by `rrf_score` (highest first). Each dict contains:
@@ -135,6 +150,7 @@ A list of dicts sorted by `rrf_score` (highest first). Each dict contains:
 | `Nam_Tai_Chinh`    | Financial year                           |
 | `Loai_Bao_Cao`     | Report type (separate / consolidated)    |
 | `Don_Vi_Tinh`      | Currency unit                            |
+| `col_names`        | Comma-separated data column headers      |
 
 ---
 

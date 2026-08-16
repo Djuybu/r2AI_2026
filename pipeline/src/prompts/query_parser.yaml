@@ -1,12 +1,18 @@
 system_prompt: |
   Bạn là một chuyên gia phân tích cú pháp dữ liệu (Data Query Parser).
   Nhiệm vụ của bạn là tiếp nhận câu hỏi của người dùng bằng tiếng Việt hoặc tiếng Anh và trích xuất ý định thành định dạng JSON chuẩn.
-  
+
+  Với trường "rag_search_query": viết một cụm từ khóa ngắn gọn (3-8 từ) chỉ gồm thuật ngữ tài chính quan trọng, KHÔNG có tên công ty, KHÔNG có năm, KHÔNG có từ nối/hỏi. Mục đích là dùng làm truy vấn tìm kiếm vector/BM25.
+
+  Với trường "required_tables": liệt kê các loại bảng cần thiết để trả lời câu hỏi. Chỉ dùng các giá trị: "income_statement", "balance_sheet", "cash_flow", "notes". Nếu chỉ cần 1 bảng thì liệt kê 1 phần tử.
+
   BẮT BUỘC CHỈ TRẢ VỀ DỮ LIỆU ĐỊNH DẠNG JSON TĨNH. KHÔNG THÊM BẤT KỲ LỜI GIẢI THÍCH NÀO KHÁC.
 
 json_schema: |
   {
     "file_name": "tên_file_được_nhắc_tới_hoặc_null",
+    "rag_search_query": "cụm_từ_khóa_ngắn_cho_RAG",
+    "required_tables": ["income_statement | balance_sheet | cash_flow | notes"],
     "query_details": [
       {
         "column_name": "tên_cột",
@@ -22,6 +28,8 @@ few_shot_examples:
     parsed_output: |
       {
         "file_name": "doanh_thu",
+        "rag_search_query": "doanh thu kết quả kinh doanh",
+        "required_tables": ["income_statement"],
         "query_details": [
           {
             "column_name": "doanh thu",
@@ -31,16 +39,43 @@ few_shot_examples:
         ],
         "intent": "aggregate"
       }
-  - user_query: "Liệt kê top 5 sản phẩm bán chạy nhất"
+  - user_query: "So sánh lợi nhuận sau thuế và dòng tiền từ hoạt động kinh doanh của AAA năm 2022"
     parsed_output: |
       {
         "file_name": null,
+        "rag_search_query": "lợi nhuận sau thuế dòng tiền hoạt động kinh doanh",
+        "required_tables": ["income_statement", "cash_flow"],
         "query_details": [
           {
-            "column_name": "sản phẩm",
-            "operation": "top_n",
-            "filter": "top 5"
+            "column_name": "lợi nhuận sau thuế",
+            "operation": "none",
+            "filter": null
+          },
+          {
+            "column_name": "dòng tiền từ hoạt động kinh doanh",
+            "operation": "none",
+            "filter": null
           }
         ],
-        "intent": "filter_sort"
+        "intent": "compare"
+      }
+  - user_query: "Tổng tài sản và nợ phải trả của VCB năm 2021"
+    parsed_output: |
+      {
+        "file_name": null,
+        "rag_search_query": "tổng tài sản nợ phải trả cân đối kế toán",
+        "required_tables": ["balance_sheet"],
+        "query_details": [
+          {
+            "column_name": "tổng tài sản",
+            "operation": "none",
+            "filter": null
+          },
+          {
+            "column_name": "nợ phải trả",
+            "operation": "none",
+            "filter": null
+          }
+        ],
+        "intent": "aggregate"
       }
