@@ -53,6 +53,35 @@ def map_schema_columns(user_query: str, parsed_query: Dict[str, Any], table_sche
         elif isinstance(d, str):
             requested_terms.append(d)
 
+    # Step 1.5: Check if this is a financial statement table structure (pivot-like schema)
+    label_col = None
+    value_col = None
+    
+    for c in ["CHÍ TIÊU", "CHỈ TIÊU", "TÀI SẢN", "NGUỒN VỐN", "Cột_0", "Mã số"]:
+        if c in actual_columns:
+            label_col = c
+            break
+            
+    for c in ["Năm nay", "Số đầu năm", "Số cuối năm", "Năm trước"]:
+        if c in actual_columns:
+            value_col = c
+            break
+            
+    if not label_col and "0" in actual_columns:
+        label_col = "0"
+    if not value_col and "1" in actual_columns:
+        value_col = "1"
+        
+    if label_col and value_col:
+        print(f"📊 [Schema Mapper] Phát hiện cấu trúc Báo cáo Tài chính: Nhãn='{label_col}', Giá trị='{value_col}'")
+        mapping = {}
+        terms = requested_terms if requested_terms else ["chỉ tiêu"]
+        for term in terms:
+            mapping[term] = label_col
+        mapping["giá trị"] = value_col
+        mapping["số tiền"] = value_col
+        return mapping
+
     # Step 2: Try fuzzy matching first for high-confidence direct matches
     fuzzy_mapping = fuzzy_match_columns(requested_terms, actual_columns, cutoff=80)
 
