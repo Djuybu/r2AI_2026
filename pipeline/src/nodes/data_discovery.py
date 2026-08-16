@@ -59,8 +59,26 @@ def clean_query_for_search(query: str) -> str:
     return q
 
 
+def get_ticker_locally(query: str, cfg: Config) -> str:
+    """Scans processed_data folder to match ticker with user query locally without loading RAG."""
+    repo_root = Path(cfg.DATA_DIR).parent.parent.resolve()
+    p_dir = repo_root / "rag_module" / "ViFinQA" / "processed_data"
+    if not p_dir.exists():
+        p_dir = repo_root / "ViFinQA" / "processed_data"
+        
+    if not p_dir.exists():
+        return ""
+        
+    tickers = [d.name for d in p_dir.iterdir() if d.is_dir()]
+    q_upper = query.upper()
+    for t in tickers:
+        if re.search(rf"\b{t}\b", q_upper):
+            return t
+    return ""
+
+
 def find_financial_table_locally(ticker: str, year: str, report_type: str, query: str, cfg: Config) -> Optional[Path]:
-    """Scans local ticker directories to find the exact financial table matching the query context."""
+    """Scans local ticker directories to find the exact financial table matching the query context with quality checks."""
     import glob
     import pandas as pd
     from thefuzz import fuzz
@@ -75,7 +93,8 @@ def find_financial_table_locally(ticker: str, year: str, report_type: str, query
     ]
     balance_sheet_keywords = [
         "tài sản", "nợ phải trả", "nợ ngắn hạn", "nợ dài hạn", 
-        "vốn chủ sở hữu", "thặng dư vốn", "cân đối kế toán"
+        "vốn chủ sở hữu", "thặng dư vốn", "cân đối kế toán",
+        "tiền và các khoản tương đương tiền", "tương đương tiền", "tiền", "tổng tiền"
     ]
     cash_flow_keywords = [
         "lưu chuyển tiền tệ", "dòng tiền", "tiền và tương đương tiền"
@@ -103,16 +122,34 @@ def find_financial_table_locally(ticker: str, year: str, report_type: str, query
     best_score = -1
     
     for f in files:
-        # Check files that are likely the main tables (often containing _0 or short names)
         try:
             df_sample = pd.read_csv(f, nrows=1)
             if "Ten_Bang" in df_sample.columns:
                 title = str(df_sample["Ten_Bang"].iloc[0]).upper()
                 for t in targets:
-                    score = fuzz.token_set_ratio(t, title)
-                    if score > best_score:
-                        best_score = score
-                        best_file = Path(f)
+                    title_score = fuzz.token_set_ratio(t, title)
+                    if title_score >= 80:
+                        # Column quality check: count generic indices versus descriptive columns
+                        cols = list(df_sample.columns)
+                        digit_cols = sum(1 for c in cols if str(c).isdigit())
+                        quality_score = len(cols) - digit_cols
+                        
+                        # High bonus for standard accounting headers
+                        standard_keywords = ["chỉ tiêu", "năm nay", "năm trước", "số đầu năm", "số cuối năm", "thuyết minh", "mã số"]
+                        for c in cols:
+                            if any(k in str(c).lower() for k in standard_keywords):
+                                quality_score += 50
+                        
+                        # Query keyword alignment bonus
+                        query_bonus = 0
+                        for word in ["tiền", "doanh thu", "chi phí", "lợi nhuận", "nợ", "vốn", "tài sản"]:
+                            if word in q_lower and word in title.lower():
+                                query_bonus += 100
+
+                        total_score = title_score + quality_score + query_bonus
+                        if total_score > best_score:
+                            best_score = total_score
+                            best_file = Path(f)
         except Exception:
             continue
             
@@ -149,7 +186,13 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             ticker, _, report_type = se.parse_query(user_query, se._company_map)
             print(f"   - Ticker tìm thấy từ RAG: {ticker or 'Không tìm thấy'}, Report Type: {report_type}")
     except Exception as e:
-        print(f"⚠️ Search engine import/load failed: {e}")
+        print(f"⚠️ Search engine import/load failed: {e}. Running local ticker detection fallback...")
+        ticker = get_ticker_locally(user_query, cfg)
+        if "hợp nhất" in user_query.lower():
+            report_type = "consolidated"
+        else:
+            report_type = "separate"
+        print(f"   - Ticker tìm thấy bằng Local Fallback: {ticker or 'Không tìm thấy'}, Report Type: {report_type}")
 
     # Extract years
     year_list = extract_years_from_text(user_query)

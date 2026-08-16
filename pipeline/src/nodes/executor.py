@@ -133,13 +133,11 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
             "file_path": file_path,
             "df": df_loaded,
         }
-        exec_locals = {}
-
-        # Step 3: Execute code
-        exec(code_str, exec_globals, exec_locals)
+        # Step 3: Execute code with unified globals/locals dict to resolve function scoping in exec
+        exec(code_str, exec_globals)
 
         # Retrieve result variable
-        result_val = exec_locals.get("result") if "result" in exec_locals else exec_globals.get("result")
+        result_val = exec_globals.get("result")
 
         if result_val is None:
             # If result wasn't explicitly assigned, check if last expression was evaluated
