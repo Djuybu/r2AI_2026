@@ -1,12 +1,13 @@
 """Node 4: Code Generation & Reflection Node.
-Generates executable Python/Pandas code based on intent, column mapping, and error tracebacks during reflection loops.
+Sinh code Python/Pandas dựa trên mục tiêu (trich_xuat/tinh_tong/so_sanh),
+cột mapping, và bảng dữ liệu đã tìm được.
 """
 
 import re
 import time
 import yaml
-from typing import Dict, Any, Optional
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from typing import Dict, Any, Optional, List
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from pipeline.src.state import AgentState
 from pipeline.src.config import Config, config as default_config
@@ -41,11 +42,38 @@ def clean_python_code(raw_code: str) -> str:
     return cleaned
 
 
+def _build_files_context(
+    discovered_tables: List[Dict[str, Any]],
+    column_mapping: Dict[str, str],
+) -> str:
+    """Build context string describing available files for code generation."""
+    if not discovered_tables:
+        return "Không có bảng dữ liệu."
+
+    lines = []
+    for i, tbl in enumerate(discovered_tables):
+        csv_path = tbl.get("csv_path", "")
+        ten_bang = tbl.get("Ten_Bang", "N/A")
+        nam = tbl.get("Nam_Tai_Chinh", "N/A")
+        escaped_path = csv_path.replace('\\', '\\\\')
+        lines.append(
+            f"- File {i+1} (Năm {nam}):\n"
+            f"  Đường dẫn: '{escaped_path}'\n"
+            f"  Tên bảng: {ten_bang}\n"
+        )
+
+    lines.append(f"\nColumn Mapping: {column_mapping}")
+    return "\n".join(lines)
+
+
 def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
-    """LangGraph Node 4: Generate Pandas code or fix previously failed code (Reflection Loop).
-    
+    """LangGraph Node 4: Sinh code Pandas hoặc sửa code lỗi (Reflection Loop).
+
+    Đọc parsed_query format mới (muc_tieu, noi_dung, ten_cong_ty, so_nam, tieu_chi_phu)
+    và discovered_tables để sinh code phù hợp.
+
     Args:
-        state: Current AgentState containing user_query, column_mapping, table_schema, error_traceback
+        state: Current AgentState
         cfg: Config instance
 
     Returns:
@@ -55,45 +83,40 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     start_time = time.time()
 
     user_query = state.get("user_query", "")
-    file_path = state.get("matched_table_path", "")
-    table_schema = state.get("table_schema", {})
+    parsed_query = state.get("parsed_query", {})
+    discovered_tables = state.get("discovered_tables", [])
     column_mapping = state.get("column_mapping", {})
     error_traceback = state.get("error_traceback")
     retry_count = state.get("retry_count", 0)
 
-    # Build context for all matched files
-    matched_table_paths = state.get("matched_table_paths", {})
-    table_schemas = state.get("table_schemas", {})
-    column_mappings = state.get("column_mappings", {})
+    # Extract parsed query fields
+    muc_tieu = parsed_query.get("muc_tieu", "trich_xuat")
+    noi_dung = parsed_query.get("noi_dung", "")
+    ten_cong_ty = parsed_query.get("ten_cong_ty", "")
+    so_nam = parsed_query.get("so_nam", [])
+    tieu_chi_phu = parsed_query.get("tieu_chi_phu")
 
-    files_context = ""
-    if matched_table_paths and len(matched_table_paths) > 1:
-        lines = ["Chúng tôi có dữ liệu của nhiều năm như sau:"]
-        for y, path in sorted(matched_table_paths.items()):
-            schema = table_schemas.get(path, {})
-            mapping = column_mappings.get(path, {})
-            cols = list(schema.get("columns", {}).keys())
-            sample = schema.get("sample_rows", [{}])[0] if schema.get("sample_rows") else {}
-            lines.append(
-                f"- Năm {y}:\n"
-                f"  Đường dẫn file (dùng trong code): '{path}'\n"
-                f"  Cột thực tế trong file: {cols}\n"
-                f"  Dòng đầu tiên: {sample}\n"
-                f"  Ánh xạ cột (Column Mapping): {mapping}\n"
-            )
-        files_context = "\n".join(lines)
-    else:
-        cols = list(table_schema.get("columns", {}).keys())
-        sample = table_schema.get("sample_rows", [{}])[0] if table_schema.get("sample_rows") else {}
-        files_context = (
-            f"Đường dẫn file (dùng trong code): '{file_path}'\n"
-            f"Cột thực tế trong file: {cols}\n"
-            f"Dòng đầu tiên: {sample}\n"
-            f"Ánh xạ cột (Column Mapping): {column_mapping}"
-        )
+    # Get column names from mapping
+    label_col = column_mapping.get("label_column", "CHỈ TIÊU")
+    value_col = column_mapping.get("value_column", "Năm nay")
+
+    # Build files context
+    files_context = _build_files_context(discovered_tables, column_mapping)
+
+    # Build file path variables for code
+    paths_str = ""
+    if discovered_tables:
+        if len(discovered_tables) == 1:
+            escaped = discovered_tables[0]["csv_path"].replace('\\', '\\\\')
+            paths_str = f"file_path = '{escaped}'"
+        else:
+            for tbl in discovered_tables:
+                nam = tbl.get("Nam_Tai_Chinh", "default")
+                escaped = tbl["csv_path"].replace('\\', '\\\\')
+                paths_str += f"file_path_{nam} = '{escaped}'\n"
 
     try:
-        # Scenario A: Initial Code Generation (retry_count == 0)
+        # Scenario A: Initial Code Generation
         if not error_traceback or retry_count == 0:
             prompt_data = load_yaml_prompt(cfg, "code_generator.yaml")
             system_prompt = prompt_data["system_prompt"]
@@ -109,59 +132,63 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                     )
                 )
                 messages.append(SystemMessage(content=ex["generated_code"]))
-            # Build specific financial statement instructions in English to avoid UTF-8 protobuf issues
-            paths_str = ""
-            if matched_table_paths:
-                for y, path in sorted(matched_table_paths.items()):
-                    escaped_path = path.replace('\\', '\\\\')
-                    paths_str += f"file_path_{y} = '{escaped_path}'\n"
-            else:
-                escaped_path = file_path.replace('\\', '\\\\')
-                paths_str = f"file_path = '{escaped_path}'"
 
-            # Determine label and value columns
-            label_col = "CHÍ TIÊU"
-            val_col = "Năm nay"
-            if column_mapping:
-                for v in column_mapping.values():
-                    if v in ["CHÍ TIÊU", "CHỈ TIÊU", "TÀI SẢN", "NGUỒN VỐN", "Cột_0", "Mã số"]:
-                        label_col = v
-                        break
-                for k, v in column_mapping.items():
-                    if k in ["giá trị", "số tiền", "Năm nay", "Năm trước", "Số cuối năm", "Số đầu năm"]:
-                        val_col = v
-                        break
+            # Build human message with structured instructions
+            muc_tieu_desc = {
+                "trich_xuat": "TRÍCH XUẤT giá trị cụ thể",
+                "tinh_tong": "TÍNH TỔNG (tìm dòng Tổng/Cộng trước, nếu không có thì cộng các dòng con)",
+                "so_sanh": "SO SÁNH giá trị giữa nhiều năm/công ty",
+            }
 
             human_content = (
                 f"Yêu cầu người dùng: {user_query}\n\n"
-                f"{files_context}\n\n"
-                f"🚨 IMPORTANT FINANCIAL STATEMENT RULES:\n"
-                f"1. This is a financial statement pivot table where:\n"
-                f"   - Column '{label_col}' contains the names/labels of the accounts (e.g. 'Tiền và các khoản tương đương tiền', 'Doanh thu thuần').\n"
-                f"   - Column '{val_col}' contains the numeric values (represented as strings with dots like '382.666' or parentheses for negative values).\n"
-                f"2. To extract the value for any item (e.g., 'tổng tiền', 'tiền và các khoản tương đương tiền'), you MUST:\n"
-                f"   - Filter the row using `.str.contains` on column '{label_col}':\n"
-                f"     row = df[df['{label_col}'].str.contains('tiền', case=False, na=False)]\n"
-                f"   - Extract the raw string value from column '{val_col}':\n"
-                f"     raw_val = row['{val_col}'].values[0]\n"
-                f"   - Parse it using the clean_val helper to convert it to a float.\n"
-                f"3. You MUST read each file path explicitly. Use these variables directly in your code:\n"
-                f"{paths_str}\n"
-                f"4. Write code to:\n"
-                f"   - Define a helper function `clean_val(val)` to clean the numeric strings:\n"
-                f"     def clean_val(val):\n"
-                f"         if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:\n"
-                f"             return 0.0\n"
-                f"         val_str = str(val).strip().replace('.', '')\n"
-                f"         if '(' in val_str and ')' in val_str:\n"
-                f"             val_str = '-' + val_str.replace('(', '').replace(')', '')\n"
-                f"         return float(val_str)\n"
-                f"   - Read each year's file using pd.read_csv.\n"
-                f"   - Find the target row in column '{label_col}' (e.g. searching for a relevant keyword like 'tiền' for cash/money questions, or 'doanh thu' for revenue questions).\n"
-                f"   - Extract and clean the target value from column '{val_col}' for each year.\n"
-                f"   - Calculate the final result (e.g. for growth rate from 2019 to 2021, compute (val_2021 - val_2019) / val_2019 * 100).\n"
-                f"   - Assign the final numeric result (float) to the variable `result`."
+                f"MỤC TIÊU: {muc_tieu_desc.get(muc_tieu, muc_tieu)}\n"
+                f"NỘI DUNG cần tìm (ở cột label): '{noi_dung}'\n"
+                f"Công ty: {ten_cong_ty}\n"
+                f"Năm: {so_nam}\n"
+                f"Tiêu chí phụ: {tieu_chi_phu or '(không có)'}\n\n"
+                f"DỮ LIỆU CÓ SẴN:\n{files_context}\n\n"
+                f"CỘT QUAN TRỌNG:\n"
+                f"- Cột nhãn (chứa tên chỉ tiêu): '{label_col}'\n"
+                f"- Cột giá trị: '{value_col}'\n\n"
+                f"BIẾN ĐƯỜNG DẪN FILE:\n{paths_str}\n\n"
             )
+
+            # Add specific instructions based on muc_tieu
+            if muc_tieu == "trich_xuat":
+                human_content += (
+                    f"HƯỚNG DẪN CỤ THỂ:\n"
+                    f"1. Đọc file CSV.\n"
+                    f"2. Filter dòng chứa '{noi_dung}' ở cột '{label_col}'.\n"
+                    f"3. Lấy giá trị ở cột '{value_col}', clean bằng clean_val().\n"
+                    f"4. Gán vào biến result.\n"
+                )
+            elif muc_tieu == "tinh_tong":
+                human_content += (
+                    f"HƯỚNG DẪN CỤ THỂ:\n"
+                    f"1. Đọc file CSV.\n"
+                    f"2. Tìm dòng có chứa 'Tổng' hoặc 'Cộng' kèm '{noi_dung}' ở cột '{label_col}'.\n"
+                    f"3. Nếu tìm thấy → lấy giá trị đó, clean bằng clean_val(), gán vào result.\n"
+                    f"4. Nếu KHÔNG tìm thấy → tìm các dòng con riêng lẻ liên quan đến '{noi_dung}', "
+                    f"cộng tổng giá trị và gán vào result.\n"
+                )
+            elif muc_tieu == "so_sanh":
+                human_content += (
+                    f"HƯỚNG DẪN CỤ THỂ:\n"
+                    f"1. Đọc từng file CSV (mỗi file là một năm).\n"
+                    f"2. Từ mỗi file, filter dòng chứa '{noi_dung}' ở cột '{label_col}'.\n"
+                    f"3. Lấy giá trị ở cột '{value_col}', clean bằng clean_val().\n"
+                    f"4. Tính chênh lệch (delta) và phần trăm thay đổi giữa các năm.\n"
+                    f"5. Gán result = dict chứa giá trị từng năm, delta, pct_change.\n"
+                )
+
+            human_content += (
+                f"\n🚨 BẮT BUỘC:\n"
+                f"- Định nghĩa clean_val(val) để parse string số tài chính.\n"
+                f"- Dùng pd.read_csv() để đọc file.\n"
+                f"- Gán kết quả cuối cùng vào biến `result`.\n"
+            )
+
             messages.append(HumanMessage(content=human_content))
 
         # Scenario B: Reflection Debugging Loop (retry_count > 0)
@@ -172,43 +199,29 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             print(f"🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần {retry_count})...")
             print(f"   - Traceback Lỗi:\n{error_traceback.strip()}")
 
-            # Determine label and value columns
-            label_col = "CHÍ TIÊU"
-            val_col = "Năm nay"
-            if column_mapping:
-                for v in column_mapping.values():
-                    if v in ["CHÍ TIÊU", "CHỈ TIÊU", "TÀI SẢN", "NGUỒN VỐN", "Cột_0", "Mã số"]:
-                        label_col = v
-                        break
-                for k, v in column_mapping.items():
-                    if k in ["giá trị", "số tiền", "Năm nay", "Năm trước", "Số cuối năm", "Số đầu năm"]:
-                        val_col = v
-                        break
-
             human_content = (
                 f"Yêu cầu người dùng: {user_query}\n\n"
-                f"{files_context}\n\n"
+                f"MỤC TIÊU: {muc_tieu}\n"
+                f"NỘI DUNG: '{noi_dung}'\n"
+                f"DỮ LIỆU:\n{files_context}\n\n"
+                f"CỘT: label='{label_col}', value='{value_col}'\n\n"
+                f"BIẾN ĐƯỜNG DẪN:\n{paths_str}\n\n"
                 f"Mã Python bị lỗi trước đó:\n```python\n{state.get('generated_code', '')}\n```\n\n"
                 f"Traceback Lỗi:\n{error_traceback}\n\n"
-                f"Hãy sửa lại đoạn mã trên, đảm bảo kết quả cuối cùng lưu vào biến `result`.\n\n"
-                f"🚨 FINANCIAL STATEMENT DEBUGGING TIPS:\n"
-                f"1. Filter the row using `.str.contains` (e.g. 'tiền' or 'doanh thu' or the target keyword from query) on column '{label_col}'.\n"
-                f"2. Extract the value from the value column '{val_col}' and clean it using `clean_val` before calculating.\n"
-                f"3. Use the exact absolute file paths from the context; do not formatting paths or loop dynamically.\n"
-                f"4. Store the final result in the variable `result`."
+                f"Hãy sửa lại đoạn mã trên, đảm bảo kết quả cuối cùng lưu vào biến `result`.\n"
+                f"Dùng clean_val() để parse giá trị số. Dùng .str.contains trên cột '{label_col}'.\n"
             )
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=human_content)
             ]
 
-        # Call LLM with temperature 0 for deterministic code generation
+        # Call LLM
         llm = get_llm(cfg=cfg, temperature=0.0)
         response = llm.invoke(messages)
         raw_text = response.content if isinstance(response.content, str) else str(response.content)
 
         # Extract and print thoughts
-        import re
         think_match = re.search(r"<think>(.*?)</think>", raw_text, re.DOTALL)
         if think_match:
             thought = think_match.group(1).strip()

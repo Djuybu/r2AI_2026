@@ -1,33 +1,14 @@
+# Schema Mapper prompt — hiện tại không sử dụng LLM.
+# File này giữ lại để reference và có thể sử dụng trong tương lai nếu cần.
+
 system_prompt: >
-  Bạn là một chuyên gia phân tích Schema và ánh xạ dữ liệu (Schema Mapping Specialist).
-  Nhiệm vụ của bạn là nhận vào:
-  1. Cấu trúc yêu cầu của người dùng (parsed_query).
-  2. Danh sách cột thực tế và định dạng dữ liệu (table_schema) của bảng dữ liệu.
-  
-  Hãy ánh xạ các cột mà người dùng đề cập sang TÊN CỘT THỰC TẾ trong bảng dữ liệu.
-  Nếu tên cột của người dùng không khớp chính xác, hãy dùng ngữ nghĩa để tìm cột gần nhất.
-  Trả về duy nhất một đối tượng JSON tuân thủ schema bên dưới. Không kèm theo văn bản giải thích.
+  Schema Mapper hiện sử dụng rule-based matching thay vì LLM.
+  Nội dung (noi_dung) nằm ở cột đầu tiên của bảng nên không cần map.
+  Chỉ map tiêu chí phụ (tieu_chi_phu) sang tên cột giá trị thực tế.
 
 json_schema: |
   {
-    "column_mapping": {
-      "tên_cột_người_dùng_hỏi": "tên_cột_thực_tế_trong_csv",
-      ...
-    },
-    "unmapped_columns": ["tên_cột_không_tìm_thấy"],
-    "confidence_score": 0.95
+    "label_column": "tên cột đầu tiên (chỉ tiêu)",
+    "value_column": "tên cột giá trị",
+    "all_columns": "danh sách tất cả các cột"
   }
-
-few_shot_examples:
-  - user_query: "Tính tổng doanh thu theo tháng từ sales_data"
-    table_schema:
-      columns: ["Order_Date", "Total_Revenue", "Product_Category", "Customer_ID"]
-    parsed_output: |
-      {
-        "column_mapping": {
-          "doanh thu": "Total_Revenue",
-          "tháng": "Order_Date"
-        },
-        "unmapped_columns": [],
-        "confidence_score": 1.0
-      }

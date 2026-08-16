@@ -47,11 +47,17 @@ def main():
                 
                 # Custom logging depending on node
                 if node_name == "query_parser":
-                    print(f"   Intent: {node_state.get('parsed_query', {}).get('intent')}")
-                    print(f"   File name: {node_state.get('parsed_query', {}).get('file_name')}")
-                    print(f"   Query details: {node_state.get('parsed_query', {}).get('query_details')}")
+                    pq = node_state.get('parsed_query', {})
+                    print(f"   Mục tiêu: {pq.get('muc_tieu')}")
+                    print(f"   Nội dung: {pq.get('noi_dung')}")
+                    print(f"   Tên công ty: {pq.get('ten_cong_ty')}")
+                    print(f"   Số năm: {pq.get('so_nam')}")
+                    print(f"   Tiêu chí phụ: {pq.get('tieu_chi_phu')}")
                 elif node_name == "data_discovery":
-                    print(f"   Matched file path: {node_state.get('matched_table_path')}")
+                    tables = node_state.get('discovered_tables', [])
+                    print(f"   Số bảng tìm thấy: {len(tables)}")
+                    for tbl in tables:
+                        print(f"      - {tbl.get('Ten_Bang')} ({tbl.get('Nam_Tai_Chinh')}): {tbl.get('csv_path')}")
                 elif node_name == "schema_mapper":
                     print(f"   Column mapping: {node_state.get('column_mapping')}")
                 elif node_name == "code_generator":

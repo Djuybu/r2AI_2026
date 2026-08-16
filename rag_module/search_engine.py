@@ -465,6 +465,89 @@ def run_hybrid_search(
     return fused
 
 
+def search_by_company_and_content(
+    company_name: str,
+    content: str,
+    year: Optional[str] = None,
+    report_type: Optional[str] = None,
+    top_k: int = 5,
+) -> List[RRFResult]:
+    """
+    Tra cứu bảng báo cáo tài chính dựa trên tên công ty (hoặc mã chứng khoán)
+    và nội dung nằm ở cột đầu tiên (chỉ tiêu).
+
+    Args:
+        company_name: Tên công ty hoặc mã chứng khoán (VD: 'Vinamilk', 'VNM', 'FPT')
+        content: Nội dung nằm ở cột đầu tiên của bảng (VD: 'Doanh thu thuần', 'Tài sản ngắn hạn')
+        year: Năm báo cáo tài chính (VD: '2023')
+        report_type: Loại báo cáo ('separate' | 'consolidated')
+        top_k: Số lượng bảng tìm kiếm từ hybrid search
+
+    Returns:
+        Danh sách các bảng kết quả tìm kiếm đã sắp xếp theo rrf_score.
+    """
+    _ensure_resources()
+
+    # 1. Xác định ticker từ company_name
+    ticker = ""
+    if company_name:
+        c_upper = company_name.strip().upper()
+        if _company_map:
+            tickers = {code.upper() for _, code in _company_map}
+            if c_upper in tickers:
+                ticker = c_upper
+
+        if not ticker and _company_map:
+            for c_name, code in _company_map:
+                if c_name.lower() in company_name.lower() or company_name.lower() in c_name.lower():
+                    ticker = code
+                    break
+
+        if not ticker and _company_map:
+            t_parsed, _, _ = parse_query(company_name, _company_map)
+            ticker = t_parsed
+
+    # 2. Xây dựng search query kết hợp tên công ty và nội dung
+    query = f"{company_name} {content}".strip() if company_name else content
+
+    logger.info("Search by company & content: Company='%s' (Ticker='%s') | Content='%s' | Year=%s",
+                company_name, ticker, content, year)
+
+    # 3. Thực hiện hybrid search
+    results = run_hybrid_search(
+        query=query,
+        top_k=top_k,
+        ticker=ticker or None,
+        year=year or None,
+        report_type=report_type or None,
+    )
+
+    if not results:
+        return []
+
+    # 4. Kiểm tra độ khớp nội dung ở cột 0 để ưu tiên bảng chứa content ở cột 0
+    if content:
+        content_lower = content.lower().strip()
+        for r in results:
+            csv_path = r.get("csv_path", "")
+            if csv_path and os.path.exists(csv_path):
+                try:
+                    df_sample = pd.read_csv(csv_path, nrows=50)
+                    if not df_sample.empty:
+                        first_col = df_sample.iloc[:, 0].astype(str).str.lower()
+                        if first_col.str.contains(content_lower, regex=False).any():
+                            r["rrf_score"] = round(r["rrf_score"] + 0.1, 6)
+                            r["content_matched"] = True
+                except Exception:
+                    pass
+
+        # Re-sort theo score đã cập nhật
+        results = sorted(results, key=lambda x: x["rrf_score"], reverse=True)
+
+    return results
+
+
+
 # =============================================================================
 # CLI (for quick testing from terminal)
 # =============================================================================

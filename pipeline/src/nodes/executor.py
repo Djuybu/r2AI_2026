@@ -97,9 +97,10 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
     start_time = time.time()
 
     code_str = state.get("generated_code", "").strip()
-    file_path = state.get("matched_table_path", "")
-    if not file_path and state.get("matched_table_paths"):
-        file_path = list(state.get("matched_table_paths").values())[0]
+    discovered_tables = state.get("discovered_tables", [])
+    file_path = ""
+    if discovered_tables:
+        file_path = discovered_tables[0].get("csv_path", "")
     retry_count = state.get("retry_count", 0)
 
     if not code_str:

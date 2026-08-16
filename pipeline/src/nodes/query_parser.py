@@ -1,7 +1,10 @@
 """Node 1: Query Parser Node.
-Standardizes natural language questions into structured JSON intents.
+Phân tích câu hỏi tài chính thành cấu trúc JSON chuẩn.
+Output format mới: muc_tieu, noi_dung, ten_cong_ty, so_nam, tieu_chi_phu.
+Không thực hiện tìm bảng — việc này do Data Discovery xử lý.
 """
 
+import re
 import time
 import yaml
 from typing import Dict, Any, Optional
@@ -24,8 +27,11 @@ def load_query_parser_prompt(cfg: Config) -> Dict[str, Any]:
 
 
 def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
-    """LangGraph Node 1: Extract intent and parameters from user query.
-    
+    """LangGraph Node 1: Phân tích câu hỏi thành cấu trúc truy vấn.
+
+    Trích xuất: muc_tieu, noi_dung, ten_cong_ty, so_nam, tieu_chi_phu.
+    KHÔNG tìm bảng — Data Discovery sẽ xử lý.
+
     Args:
         state: Current AgentState containing 'user_query'
         cfg: Config instance (defaults to global config)
@@ -52,7 +58,7 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         json_schema = prompt_data["json_schema"]
         few_shots = prompt_data.get("few_shot_examples", [])
 
-        # Build prompt instructions
+        # Build prompt messages
         prompt_messages = [
             SystemMessage(content=f"{system_prompt}\n\nSchema Yêu cầu:\n{json_schema}")
         ]
@@ -70,7 +76,6 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         raw_content = response.content if isinstance(response.content, str) else str(response.content)
 
         # Extract and print agent thoughts
-        import re
         print(f"\n🔍 [Query Parser] Đang phân tích câu hỏi: '{user_query}'")
         think_match = re.search(r"<think>(.*?)</think>", raw_content, re.DOTALL)
         if think_match:
@@ -87,15 +92,32 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         # Parse output JSON
         parsed_json = safe_parse_json(raw_content)
 
-        # Ensure minimal structure
-        if "intent" not in parsed_json:
-            parsed_json["intent"] = "general"
-        if "query_details" not in parsed_json:
-            parsed_json["query_details"] = []
-        if "file_name" not in parsed_json:
-            parsed_json["file_name"] = None
+        # Ensure minimal structure with new fields
+        if "muc_tieu" not in parsed_json:
+            parsed_json["muc_tieu"] = "trich_xuat"
+        if "noi_dung" not in parsed_json:
+            parsed_json["noi_dung"] = ""
+        if "ten_cong_ty" not in parsed_json:
+            parsed_json["ten_cong_ty"] = ""
+        if "so_nam" not in parsed_json:
+            parsed_json["so_nam"] = []
+        if "tieu_chi_phu" not in parsed_json:
+            parsed_json["tieu_chi_phu"] = None
 
-        print(f"📊 [Kết quả - Query Parser]: Intent={parsed_json.get('intent')}, File={parsed_json.get('file_name')}, Details={parsed_json.get('query_details')}\n")
+        # Ensure so_nam is always a list
+        if isinstance(parsed_json["so_nam"], str):
+            parsed_json["so_nam"] = [parsed_json["so_nam"]]
+        elif isinstance(parsed_json["so_nam"], (int, float)):
+            parsed_json["so_nam"] = [str(int(parsed_json["so_nam"]))]
+
+        print(
+            f"📊 [Kết quả - Query Parser]:\n"
+            f"   Mục tiêu: {parsed_json.get('muc_tieu')}\n"
+            f"   Nội dung: {parsed_json.get('noi_dung')}\n"
+            f"   Công ty: {parsed_json.get('ten_cong_ty')}\n"
+            f"   Năm: {parsed_json.get('so_nam')}\n"
+            f"   Tiêu chí phụ: {parsed_json.get('tieu_chi_phu')}\n"
+        )
 
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})

@@ -87,7 +87,7 @@ from tqdm import tqdm
 # TESTING  (currently active — switch to PRODUCTION block for full run)
 # =============================================================================
 BASE_DIR                 = Path("./ViFinQA")                          # project root
-FINANCIAL_STATEMENTS_DIR = BASE_DIR / "test_statement"                # small test set
+FINANCIAL_STATEMENTS_DIR = BASE_DIR / "test/statement"                # small test set
 CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"   # inside rag_module/
 
 # --- ETL output ---

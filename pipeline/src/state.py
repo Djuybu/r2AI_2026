@@ -9,18 +9,23 @@ class AgentState(TypedDict, total=False):
     # User Input
     user_query: str
 
-    # Node 1: Query Parser Output
+    # Node 1: Query Parser Output (structured)
     parsed_query: Dict[str, Any]
+    # Expected format:
+    # {
+    #   "muc_tieu": "trich_xuat" | "tinh_tong" | "so_sanh",
+    #   "noi_dung": str,          # Nội dung ở cột đầu tiên của bảng
+    #   "ten_cong_ty": str,       # Tên công ty
+    #   "so_nam": list[str],      # Danh sách năm
+    #   "tieu_chi_phu": str | None  # Tiêu chí phụ (tên cột giá trị)
+    # }
 
     # Node 2: Data Discovery Output
-    matched_table_path: Optional[str]
-    matched_table_paths: Dict[str, str]
+    discovered_tables: List[Dict[str, Any]]  # List bảng từ Search Engine
+    # Each table dict contains: csv_path, Ten_Bang, rrf_score, Ma_Doanh_Nghiep, Nam_Tai_Chinh, etc.
 
     # Node 3: Schema Mapper Output
-    table_schema: Dict[str, Any]
-    table_schemas: Dict[str, Dict[str, Any]]
-    column_mapping: Dict[str, str]
-    column_mappings: Dict[str, Dict[str, str]]
+    column_mapping: Dict[str, str]  # Map tiêu_chí_phụ → tên cột thực tế
 
     # Node 4: Code Generator Output
     generated_code: str
@@ -31,7 +36,6 @@ class AgentState(TypedDict, total=False):
     retry_count: int
 
     # General Workflow Metadata
-    status: Literal["pending", "success", "error", "fallback"]
+    status: Literal["pending", "success", "error"]
     error_message: Optional[str]
     node_latencies: Dict[str, float]
-    llm_token_usage: Dict[str, int]

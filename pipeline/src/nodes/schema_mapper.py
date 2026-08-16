@@ -1,192 +1,162 @@
 """Node 3: Schema Mapper Node.
-Maps natural language column terms from parsed_query to actual DataFrame columns using fuzzy matching and LLM context.
+Ánh xạ tiêu chí phụ (tieu_chi_phu) sang tên cột thực tế trong bảng dữ liệu.
+Nội dung (noi_dung) nằm ở cột đầu tiên nên không cần map.
+Sử dụng rule-based matching, không gọi LLM.
 """
 
 import time
-import yaml
+import pandas as pd
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from thefuzz import process, fuzz
-from langchain_core.messages import SystemMessage, HumanMessage
 
 from pipeline.src.state import AgentState
 from pipeline.src.config import Config, config as default_config
-from pipeline.src.llm_provider import get_llm
-from pipeline.src.utils.json_repair import safe_parse_json
 
 
-def load_schema_mapper_prompt(cfg: Config) -> Dict[str, Any]:
-    """Load prompt templates from YAML."""
-    prompt_path = cfg.get_prompt_path("schema_mapper.yaml")
-    if not prompt_path.exists():
-        raise FileNotFoundError(f"Prompt file not found at: {prompt_path}")
+# Danh sách các cột giá trị phổ biến trong báo cáo tài chính Việt Nam
+DEFAULT_VALUE_COLUMNS = [
+    "Năm nay", "Năm trước",
+    "Số cuối năm", "Số đầu năm",
+    "Số cuối kỳ", "Số đầu kỳ",
+    "Kỳ này", "Kỳ trước",
+]
 
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
-
-def fuzzy_match_columns(query_terms: list, actual_columns: list, cutoff: int = 70) -> Dict[str, str]:
-    """Perform fuzzy matching between user query column terms and actual CSV columns."""
-    mapping = {}
-    for term in query_terms:
-        if not term:
-            continue
-        match, score = process.extractOne(term, actual_columns, scorer=fuzz.token_set_ratio)
-        if score >= cutoff:
-            mapping[term] = match
-    return mapping
+# Các cột nhãn (cột đầu tiên) phổ biến
+LABEL_COLUMNS = [
+    "CHÍ TIÊU", "CHỈ TIÊU", "TÀI SẢN", "NGUỒN VỐN",
+    "Cột_0", "Mã số", "Chỉ tiêu",
+]
 
 
-def map_schema_columns(user_query: str, parsed_query: Dict[str, Any], table_schema: Dict[str, Any], cfg: Config) -> Dict[str, str]:
-    """Map user query columns to actual columns in table_schema."""
-    actual_columns = list(table_schema.get("columns", {}).keys())
+def _get_columns_from_table(table: Dict[str, Any]) -> List[str]:
+    """Extract column names from a discovered table by reading its CSV file."""
+    csv_path = table.get("csv_path", "")
+    if not csv_path:
+        return []
 
-    if not actual_columns:
-        return {}
-
-    # Step 1: Extract query column candidates
-    query_details = parsed_query.get("query_details", [])
-    requested_terms = []
-    for d in query_details:
-        if isinstance(d, dict) and "column_name" in d:
-            requested_terms.append(d["column_name"])
-        elif isinstance(d, str):
-            requested_terms.append(d)
-
-    # Step 1.5: Check if this is a financial statement table structure (pivot-like schema)
-    label_col = None
-    value_col = None
-    
-    for c in ["CHÍ TIÊU", "CHỈ TIÊU", "TÀI SẢN", "NGUỒN VỐN", "Cột_0", "Mã số"]:
-        if c in actual_columns:
-            label_col = c
-            break
-            
-    for c in ["Năm nay", "Số đầu năm", "Số cuối năm", "Năm trước"]:
-        if c in actual_columns:
-            value_col = c
-            break
-            
-    if not label_col and "0" in actual_columns:
-        label_col = "0"
-    if not value_col and "1" in actual_columns:
-        value_col = "1"
-        
-    if label_col and value_col:
-        print(f"📊 [Schema Mapper] Phát hiện cấu trúc Báo cáo Tài chính: Nhãn='{label_col}', Giá trị='{value_col}'")
-        mapping = {}
-        terms = requested_terms if requested_terms else ["chỉ tiêu"]
-        for term in terms:
-            mapping[term] = label_col
-        mapping["giá trị"] = value_col
-        mapping["số tiền"] = value_col
-        return mapping
-
-    # Step 2: Try fuzzy matching first for high-confidence direct matches
-    fuzzy_mapping = fuzzy_match_columns(requested_terms, actual_columns, cutoff=80)
-
-    # If fuzzy matching found all terms, use fuzzy_mapping directly
-    if len(fuzzy_mapping) == len(requested_terms) and requested_terms:
-        return fuzzy_mapping
-
-    # Step 3: Call LLM for semantic schema mapping fallback
     try:
-        prompt_data = load_schema_mapper_prompt(cfg)
-        system_prompt = prompt_data["system_prompt"]
-        json_schema = prompt_data["json_schema"]
-        few_shots = prompt_data.get("few_shot_examples", [])
+        df = pd.read_csv(csv_path, nrows=2)
+        return list(df.columns)
+    except Exception:
+        return []
 
-        messages = [
-            SystemMessage(content=f"{system_prompt}\n\nSchema Yêu Cầu JSON:\n{json_schema}")
-        ]
 
-        for ex in few_shots:
-            messages.append(HumanMessage(content=f"User Query: {ex['user_query']}\nSchema: {ex['table_schema']}"))
-            messages.append(SystemMessage(content=ex["parsed_output"]))
+def _find_label_column(columns: List[str]) -> Optional[str]:
+    """Find the label column (cột đầu tiên chứa tên chỉ tiêu)."""
+    for c in LABEL_COLUMNS:
+        if c in columns:
+            return c
 
-        # Get the first row (headers) from the sample rows to map numeric columns
-        sample_rows = table_schema.get("sample_rows", [])
-        header_row = sample_rows[0] if sample_rows else {}
+    # Fallback: check column index 0
+    if columns and not columns[0].replace('.', '').isdigit():
+        return columns[0]
 
-        messages.append(
-            HumanMessage(
-                content=f"Yêu cầu: {user_query}\n"
-                        f"Parsed Intent: {parsed_query}\n"
-                        f"Cột thực tế trong dữ liệu: {actual_columns}\n"
-                        f"Giá trị thực tế ở dòng đầu tiên (Dòng tiêu đề): {header_row}"
-            )
+    return None
+
+
+def _find_value_column(columns: List[str], tieu_chi_phu: Optional[str] = None) -> Optional[str]:
+    """Find the value column based on tieu_chi_phu or default heuristics."""
+    non_label_cols = [c for c in columns if c not in LABEL_COLUMNS]
+
+    if tieu_chi_phu and non_label_cols:
+        # 1. Exact or substring match for dates / explicit column criteria
+        clean_tcp = str(tieu_chi_phu).strip().lower()
+        for col in non_label_cols:
+            if clean_tcp in col.strip().lower():
+                return col
+
+        # 2. Fuzzy match tieu_chi_phu against actual columns
+        match, score = process.extractOne(
+            tieu_chi_phu, non_label_cols, scorer=fuzz.token_set_ratio
         )
+        if score >= 50:
+            return match
 
-        llm = get_llm(cfg=cfg, temperature=0.0)
-        response = llm.invoke(messages)
-        raw_text = response.content if isinstance(response.content, str) else str(response.content)
+    # Default: find first known value column
+    for c in DEFAULT_VALUE_COLUMNS:
+        if c in columns:
+            return c
 
-        # Extract and print thoughts
-        import re
-        think_match = re.search(r"<think>(.*?)</think>", raw_text, re.DOTALL)
-        if think_match:
-            thought = think_match.group(1).strip()
-            indented_thought = thought.replace('\n', '\n  ')
-            print(f"💭 [Tư duy - Schema Mapper]:\n  {indented_thought}")
-        else:
-            json_start = raw_text.find("{")
-            if json_start > 10:
-                thought = raw_text[:json_start].strip()
-                indented_thought = thought.replace('\n', '\n  ')
-                print(f"💭 [Tư duy - Schema Mapper]:\n  {indented_thought}")
+    # Fallback: pick second column (first non-label column)
+    if len(columns) >= 2:
+        return columns[1]
 
-        parsed_res = safe_parse_json(raw_text)
-        llm_mapping = parsed_res.get("column_mapping", {})
-
-        # Merge fuzzy_mapping with llm_mapping
-        return {**llm_mapping, **fuzzy_mapping}
-
-    except Exception as e:
-        print(f"⚠️ LLM column mapping failed: {e}. Falling back to fuzzy matching.")
-        return fuzzy_mapping
+    return None
 
 
 def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
-    """LangGraph Node 3: Map query details/columns to actual table schema columns.
-    
+    """LangGraph Node 3: Map tiêu chí phụ sang tên cột thực tế.
+
+    - Nội dung (noi_dung) nằm ở cột đầu tiên → không cần map.
+    - Chỉ cần map tiêu_chí_phụ → tên cột giá trị thực tế.
+    - Rule-based matching, không gọi LLM.
+
     Args:
-        state: Current AgentState containing 'parsed_query' and 'table_schema'
+        state: Current AgentState containing 'parsed_query' and 'discovered_tables'
         cfg: Config instance
 
     Returns:
-        Updated AgentState with 'column_mappings' and 'column_mapping'
+        Updated AgentState with 'column_mapping'
     """
     cfg = cfg or default_config
     start_time = time.time()
 
-    matched_table_paths = state.get("matched_table_paths", {})
-    table_schemas = state.get("table_schemas", {})
     parsed_query = state.get("parsed_query", {})
-    user_query = state.get("user_query", "")
+    discovered_tables = state.get("discovered_tables", [])
+    tieu_chi_phu = parsed_query.get("tieu_chi_phu")
 
-    column_mappings = {}
+    print(f"\n🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...")
+    print(f"   - Tiêu chí phụ: {tieu_chi_phu or '(không có)'}")
 
-    if matched_table_paths:
-        print(f"🔍 [Schema Mapper] Tiến hành ánh xạ các cột cho {len(matched_table_paths)} file...")
-        for year, file_path in matched_table_paths.items():
-            schema = table_schemas.get(file_path, {})
-            if schema:
-                mapping = map_schema_columns(user_query, parsed_query, schema, cfg)
-                column_mappings[file_path] = mapping
-                print(f"   - File {Path(file_path).name} (Năm {year}) mapping: {mapping}")
-    else:
-        matched_table_path = state.get("matched_table_path")
-        table_schema = state.get("table_schema", {})
-        if matched_table_path and table_schema:
-            print(f"🔍 [Schema Mapper] Tiến hành ánh xạ các cột cho file duy nhất...")
-            mapping = map_schema_columns(user_query, parsed_query, table_schema, cfg)
-            column_mappings[matched_table_path] = mapping
-            print(f"   - File {Path(matched_table_path).name} mapping: {mapping}")
+    column_mapping: Dict[str, str] = {}
 
-    # Set singular fields for compatibility
-    first_mapping = {}
-    if column_mappings:
-        first_mapping = list(column_mappings.values())[0]
+    if not discovered_tables:
+        print(f"⚠️ [Schema Mapper] Không có bảng dữ liệu để ánh xạ.")
+        latency = time.time() - start_time
+        node_latencies = state.get("node_latencies", {})
+        node_latencies["schema_mapper"] = round(latency, 3)
+        return {
+            **state,
+            "column_mapping": {},
+            "status": "pending",
+            "node_latencies": node_latencies,
+        }
+
+    # Read columns from the first discovered table
+    first_table = discovered_tables[0]
+    columns = _get_columns_from_table(first_table)
+
+    if not columns:
+        print(f"⚠️ [Schema Mapper] Không đọc được cột từ bảng: {first_table.get('csv_path')}")
+        latency = time.time() - start_time
+        node_latencies = state.get("node_latencies", {})
+        node_latencies["schema_mapper"] = round(latency, 3)
+        return {
+            **state,
+            "column_mapping": {},
+            "status": "pending",
+            "node_latencies": node_latencies,
+        }
+
+    print(f"   - Cột trong bảng: {columns}")
+
+    # Find label column (cột đầu tiên)
+    label_col = _find_label_column(columns)
+    if label_col:
+        column_mapping["label_column"] = label_col
+        print(f"   - Cột nhãn (chỉ tiêu): '{label_col}'")
+
+    # Find value column based on tieu_chi_phu
+    value_col = _find_value_column(columns, tieu_chi_phu)
+    if value_col:
+        column_mapping["value_column"] = value_col
+        print(f"   - Cột giá trị: '{value_col}'")
+
+    # Map all available columns for reference
+    column_mapping["all_columns"] = str(columns)
+
+    print(f"\n📊 [Kết quả - Schema Mapper]: {column_mapping}\n")
 
     latency = time.time() - start_time
     node_latencies = state.get("node_latencies", {})
@@ -194,8 +164,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
 
     return {
         **state,
-        "column_mappings": column_mappings,
-        "column_mapping": first_mapping,
+        "column_mapping": column_mapping,
         "status": "pending",
         "node_latencies": node_latencies,
     }
