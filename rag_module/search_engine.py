@@ -22,6 +22,7 @@ NOTE: Qdrant runs in LOCAL DISK MODE — QdrantClient(path=QDRANT_DB_PATH).
 
 from __future__ import annotations
 
+import os
 import logging
 import pickle
 import re
