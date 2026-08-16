@@ -40,9 +40,15 @@ from sentence_transformers import SentenceTransformer
 
 _HERE = Path(__file__).parent   # always points to the rag_module/ directory
 
-# --- LOCAL paths (currently pointing to test/ for testing) ---
-QDRANT_DB_PATH       = _HERE / "test" / "qdrant_local_db"
-BM25_PATH            = _HERE / "test" / "bm25_index.pkl"
+# --- LOCAL paths (auto-detect root or test directory) ---
+_DEFAULT_QDRANT = _HERE / "qdrant_local_db"
+_TEST_QDRANT    = _HERE / "test" / "qdrant_local_db"
+QDRANT_DB_PATH  = _DEFAULT_QDRANT if _DEFAULT_QDRANT.exists() else _TEST_QDRANT
+
+_DEFAULT_BM25   = _HERE / "bm25_index.pkl"
+_TEST_BM25      = _HERE / "test" / "bm25_index.pkl"
+BM25_PATH       = _DEFAULT_BM25 if _DEFAULT_BM25.exists() else _TEST_BM25
+
 CODE_STOCK_CSV       = _HERE / "code_stock.csv"
 
 # --- KAGGLE paths (uncomment and set your Kaggle dataset name) ---
