@@ -54,6 +54,14 @@ def _load_table_data(file_path: Path) -> Optional[pd.DataFrame]:
     return None
 
 
+# Canonical search queries for each required table type (used in multi-table mode)
+_TABLE_TYPE_QUERIES: Dict[str, str] = {
+    "income_statement": "báo cáo kết quả hoạt động kinh doanh lợi nhuận doanh thu",
+    "balance_sheet":    "bảng cân đối kế toán tài sản nguồn vốn nợ phải trả",
+    "cash_flow":        "báo cáo lưu chuyển tiền tệ dòng tiền hoạt động kinh doanh",
+    "notes":            "thuyết minh báo cáo tài chính",
+}
+
 def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
     """LangGraph Node 2: Tìm kiếm bảng dữ liệu liên quan bằng Search Engine.
 
@@ -105,47 +113,137 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
         report_type = "separate"
         if "hợp nhất" in user_query.lower():
             report_type = "consolidated"
+        else:
+            report_type = "separate"
+        print(f"   - Ticker tìm thấy bằng Local Fallback: {ticker or 'Không tìm thấy'}, Report Type: {report_type}")
 
-    except Exception as e:
-        latency = time.time() - start_time
-        node_latencies = state.get("node_latencies", {})
-        node_latencies["data_discovery"] = round(latency, 3)
-        return {
-            **state,
-            "status": "error",
-            "error_message": f"Search Engine không khả dụng: {str(e)}",
-            "discovered_tables": [],
-            "node_latencies": node_latencies,
-        }
+    # Extract years
+    year_list = extract_years_from_text(user_query)
+    
+    # Resolve relative years like "3 năm gần đây"
+    if ticker and not year_list:
+        m_recent = re.search(r"(\d+)\s*năm\s*(gần\s*(đây|nhất)|qua)", user_query.lower())
+        if m_recent:
+            n_years = int(m_recent.group(1))
+            available_years = get_available_years_for_ticker(ticker, cfg)
+            if available_years:
+                year_list = available_years[-n_years:]
+                print(f"   - Tự động phân tích '{n_years} năm gần nhất' thành các năm: {year_list}")
 
-    # Search for tables and pick the BEST MATCH table(s)
-    all_discovered_tables: List[Dict[str, Any]] = []
+    # Use LLM-generated RAG search query if available, else fall back to cleaned user query
+    rag_search_query = parsed_query.get("rag_search_query", "").strip()
+    if not rag_search_query:
+        rag_search_query = clean_query_for_search(user_query)
+    print(f"   - RAG search query: '{rag_search_query}'")
 
-    if not so_nam:
-        # No year specified — search by company & content, pick top 1 best match
-        print(f"   - Tra cứu bảng tốt nhất cho công ty '{ten_cong_ty}' và nội dung '{noi_dung}'...")
+    # Table types required to answer this question (from query_parser LLM output)
+    required_tables = parsed_query.get("required_tables", [])
+    is_multi_table = len(required_tables) > 1
+    if is_multi_table:
+        print(f"   - Multi-table mode: {required_tables}")
+
+    matched_table_paths = {}
+    table_schemas = {}
+
+    # If we have a ticker and multiple years, search year-by-year
+    if ticker and year_list:
+        print(f"💭 [Tư duy - Data Discovery]: Tìm kiếm dữ liệu cho {ticker} qua các năm {year_list}...")
         try:
-            results = search_by_company_and_content(
-                company_name=ten_cong_ty,
-                content=noi_dung,
-                year=None,
-                report_type=report_type,
-                top_k=5,
-            )
-            if results:
-                best_match = results[0]  # Bảng có độ khớp cao nhất
-                csv_path = _resolve_csv_path(best_match.get("csv_path", ""), cfg)
-                if csv_path:
-                    table_entry = {
-                        "csv_path": str(csv_path),
-                        "Ten_Bang": best_match.get("Ten_Bang", ""),
-                        "rrf_score": best_match.get("rrf_score", 0.0),
-                        "Ma_Doanh_Nghiep": best_match.get("Ma_Doanh_Nghiep", ten_cong_ty),
-                        "Nam_Tai_Chinh": best_match.get("Nam_Tai_Chinh", ""),
-                        "Loai_Bao_Cao": best_match.get("Loai_Bao_Cao", report_type),
-                    }
-                    all_discovered_tables.append(table_entry)
-                    print(f"   🏆 Bảng có độ khớp CAO NHẤT: {csv_path.name} — {table_entry['Ten_Bang']} (RRF: {table_entry['rrf_score']:.4f})")
+            from rag_module.search_engine import run_hybrid_search
+            from thefuzz import fuzz
+            
+            target_title = None
+            
+            for idx, y in enumerate(year_list):
+                if is_multi_table:
+                    # --- Multi-table mode: one RAG call per required table type ---
+                    for table_type in required_tables:
+                        tq = _TABLE_TYPE_QUERIES.get(table_type, rag_search_query)
+                        t_results = run_hybrid_search(tq, ticker=ticker, year=y, report_type=report_type)
+                        if t_results:
+                            best = t_results[0]
+                            csv_path_str = best.get("csv_path")
+                            if csv_path_str:
+                                p_str = csv_path_str.replace("\\", "/")
+                                idx_fin = p_str.find("ViFinQA")
+                                relative_part = p_str[idx_fin:] if idx_fin != -1 else Path(p_str).name
+                                repo_root = Path(cfg.DATA_DIR).parent.parent.resolve()
+                                for cand in [
+                                    (repo_root / relative_part).resolve(),
+                                    (repo_root / "rag_module" / relative_part).resolve(),
+                                    Path(p_str).resolve(),
+                                ]:
+                                    if cand.exists():
+                                        key = f"{y}_{table_type}"
+                                        matched_table_paths[key] = str(cand)
+                                        table_schemas[str(cand)] = get_table_schema(cand)
+                                        print(f"   - [{key}]: {cand.name} (RRF: {best.get('rrf_score')})")
+                                        break
+                        else:
+                            print(f"   - [{y}_{table_type}]: RAG không tìm thấy kết quả.")
+                    continue  # skip single-table logic below
+
+                # --- Single-table mode (original behaviour) ---
+                # 1. Try local scan first for high accuracy
+                matched_p = find_financial_table_locally(ticker, y, report_type, user_query, cfg)
+                if matched_p:
+                    matched_table_paths[y] = str(matched_p)
+                    table_schemas[str(matched_p)] = get_table_schema(matched_p)
+                    print(f"   - Năm {y}: Khớp file bằng Local Statement Scan: {matched_p.name}")
+                    if idx == 0:
+                        target_title = table_schemas[str(matched_p)].get("Ten_Bang")
+                    continue
+
+                # 2. Fallback to hybrid search
+                results = run_hybrid_search(rag_search_query, ticker=ticker, year=y, report_type=report_type)
+                if results:
+                    best_match = None
+                    if idx == 0:
+                        best_match = results[0]
+                        target_title = best_match.get("Ten_Bang")
+                    else:
+                        best_score = -1
+                        for r in results[:10]:  # Compare top 10 candidates
+                            title = r.get("Ten_Bang", "")
+                            if title and target_title:
+                                score = fuzz.token_sort_ratio(title.lower(), target_title.lower())
+                                if score > best_score:
+                                    best_score = score
+                                    best_match = r
+                        
+                        # Fallback to rank #1 if no good match is found
+                        if not best_match or best_score < 60:
+                            best_match = results[0]
+                    
+                    csv_path_str = best_match.get("csv_path")
+                    if csv_path_str:
+                        p_str = csv_path_str.replace("\\", "/")
+                        idx_fin = p_str.find("ViFinQA")
+                        if idx_fin != -1:
+                            relative_part = p_str[idx_fin:]
+                        else:
+                            relative_part = Path(p_str).name
+
+                        repo_root = Path(cfg.DATA_DIR).parent.parent.resolve()
+                        candidate1 = (repo_root / relative_part).resolve()
+                        candidate2 = (repo_root / "rag_module" / relative_part).resolve()
+
+                        matched_p = None
+                        if candidate1.exists():
+                            matched_p = candidate1
+                        elif candidate2.exists():
+                            matched_p = candidate2
+                        else:
+                            direct_path = Path(p_str).resolve()
+                            if direct_path.exists():
+                                matched_p = direct_path
+
+                        if matched_p:
+                            matched_table_paths[y] = str(matched_p)
+                            table_schemas[str(matched_p)] = get_table_schema(matched_p)
+                            print(f"   - Năm {y}: Khớp file {matched_p.name} (Tên bảng: {best_match.get('Ten_Bang')}, RRF: {best_match.get('rrf_score')})")
+                        else:
+                            print(f"   - Năm {y}: Không tìm thấy file trên local: {relative_part}")
                 else:
                     print(f"   ❌ Không thể resolve đường dẫn file: {best_match.get('csv_path')}")
             else:

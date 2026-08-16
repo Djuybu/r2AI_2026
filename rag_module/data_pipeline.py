@@ -1060,7 +1060,9 @@ def build_rich_content_string(df: pd.DataFrame, meta: Dict[str, str]) -> str:
     """
     Build a semantically rich Vietnamese string for embedding + BM25.
 
-    Includes up to 50 unique financial line item labels from the detected label column.
+    Includes up to 50 unique financial line item labels from the detected label
+    column AND all data column names, so queries on column names (e.g. "Số cuối
+    năm", "31/12/2023") are also retrievable.
     """
     data_cols = [c for c in df.columns if c not in META_COLS]
     line_items: List[str] = []
@@ -1099,6 +1101,10 @@ def build_rich_content_string(df: pd.DataFrame, meta: Dict[str, str]) -> str:
     ]
     if line_items:
         parts.append(f"Các chỉ tiêu: {', '.join(line_items)}")
+    # Include column names so BM25/dense can match on column headers
+    # e.g. "Số cuối năm", "31/12/2020", "Thuyết minh"
+    if data_cols:
+        parts.append(f"Tên các cột: {', '.join(str(c) for c in data_cols)}")
     return " ".join(parts)
 
 
@@ -1197,12 +1203,16 @@ def run_indexing(
                 pass
 
         content_strings.append(content_str)
+        # col_names: comma-separated data column headers stored in payload
+        # for use by search_by_column_name() in search_engine.py.
+        col_names_str = ", ".join(str(c) for c in data_cols)
         payloads.append({
             **meta,
             "csv_path":   csv_path.as_posix(),
             "row_count":  len(df),
             "col_count":  len(data_cols),
             "line_items": line_items,
+            "col_names":  col_names_str,
         })
 
     logger.info("Phase 2A complete. Documents: %d  |  Skipped: %d",

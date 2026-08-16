@@ -10,147 +10,120 @@ architecture, critical constraints, and the purpose of each file.
 This codebase implements a Hybrid Search RAG (Retrieval-Augmented Generation)
 pipeline for Vietnamese Financial Statements (the ViFinQA dataset).
 
-The pipeline has three phases:
+### Three Phases
 
-```
-Phase 1 - ETL
-  financial_statements/*_extracted.txt
-      -> BeautifulSoup HTML table parsing (NO REGEX for HTML -- strict rule)
-      -> pandas DataFrame + metadata attachment
-  processed_data/**/*.csv
+**Phase 1 — ETL**
+- Reads `financial_statements/*_extracted.txt`
+- Parses HTML tables using BeautifulSoup + lxml (NO REGEX — strict rule)
+- Attaches metadata: ticker, year, report type, currency unit, table name
+- Tracks source line number via `<table` count in raw text (`@line_N` in Tep_Nguon)
+- Writes one CSV per sub-table to `processed_data/`
 
-Phase 2 - Indexing
-  processed_data/**/*.csv
-      -> build_rich_content_string(): Vietnamese text with up to 50 line items
-      -> SentenceTransformer (paraphrase-multilingual-MiniLM-L12-v2)
-  rag_module/qdrant_local_db/    (Qdrant local disk DB, dense vectors)
-  rag_module/bm25_index.pkl      (BM25Okapi serialised index, sparse)
+**Phase 2 — Indexing**
+- Reads CSVs, builds `build_rich_content_string()`: Vietnamese text with up to
+  50 row labels PLUS all data column names (`Ten cac cot: ...`)
+- Encodes with `paraphrase-multilingual-MiniLM-L12-v2` (384-dim vectors)
+- Upserts to Qdrant local disk DB; payload now includes `col_names` field
+- Builds BM25Okapi, serializes to `bm25_index.pkl`
 
-Phase 3 - Retrieval
-  User question
-      -> parse_query(): longest-match company name -> (ticker, year, report_type)
-      -> qdrant_search()  dense  ---+
-      -> bm25_search()    sparse ---+--> apply_rrf() -> Top-N ranked tables
-```
+**Phase 3 — Retrieval**
+- `run_hybrid_search()`: dense (Qdrant) + sparse (BM25) + RRF fusion
+- `search_by_table_name()`: fuzzy-match tables by Ten_Bang (no embedding needed)
+- `search_by_column_name()`: fuzzy-match tables by column header (uses col_names)
 
 ---
 
 ## Critical Constraints
 
-### Qdrant is LOCAL DISK MODE ONLY -- No Docker, No Server
+### Qdrant — LOCAL DISK MODE ONLY
 
 ```python
-# Correct -- how Qdrant is initialised everywhere in this codebase:
-client = QdrantClient(path=str(QDRANT_DB_PATH))
-
-# Wrong -- do not use these:
-client = QdrantClient(host="localhost", port=6333)   # requires Docker
-client = QdrantClient(":memory:")                     # not persistent
+client = QdrantClient(path=str(QDRANT_DB_PATH))  # correct
+# client = QdrantClient(host="localhost", port=6333)  # wrong — needs Docker
 ```
 
-The Qdrant database is persisted as a local folder (`qdrant_local_db/`).
-This design was chosen for Kaggle compatibility -- Kaggle Notebooks cannot
-run Docker containers or expose network services.
+Kaggle Notebooks cannot run Docker, so local disk mode is mandatory.
 
-### HTML Parsing -- No Regex
+### HTML Parsing — No Regex
 
-All HTML table extraction must use BeautifulSoup + lxml. Do not use regex to
-parse HTML strings. This is a strict project rule enforced in `data_pipeline.py`.
+Use BeautifulSoup + lxml only. No regex for HTML strings. Enforced in `data_pipeline.py`.
 
-### Qdrant Client API Version
+### Qdrant Client API
 
-This codebase requires `qdrant-client >= 1.9.0`.
-- Use `client.query_points(query=vector, ...)` -- NOT `client.search()`
-  (that method was removed in v1.7+)
-- Results are in the `.points` attribute of the response object.
-- Use `MatchAny(any=[...])` for OR conditions on payload fields.
+Requires `qdrant-client >= 1.9.0`.
+- `client.query_points(query=vector, ...)` — NOT `client.search()` (removed in v1.7+)
+- Results in `.points` attribute.
+- `MatchAny(any=[...])` for OR conditions.
 
 ---
 
 ## File-by-File Reference
 
-### rag_module/data_pipeline.py
+### data_pipeline.py
 
-Full end-to-end pipeline merging the old `etl_pipeline.py` and `indexer.py`.
+Full ETL + Indexing pipeline.
 
-- Phase 1 (ETL): reads `*_extracted.txt` files, parses HTML tables with
-  BeautifulSoup, attaches metadata (ticker, year, report type, currency unit),
-  writes one CSV per table to `processed_data/`.
-- Phase 2 (Indexing): reads CSVs, builds rich content strings, encodes with
-  SentenceTransformer, upserts to Qdrant local DB, builds BM25Okapi, saves
-  `bm25_index.pkl`.
-- Main function: `run_pipeline()` orchestrates both phases end to end.
-- CLI: `python rag_module/data_pipeline.py [--skip-etl]`
+- Phase 1: reads `*_extracted.txt`, parses HTML, attaches metadata, writes CSVs.
+- Phase 2: reads CSVs, builds content strings (row labels + **column names**),
+  encodes vectors, upserts to Qdrant (payload has `col_names`), builds BM25.
+- CLI: `python rag_module/data_pipeline.py [--skip-etl] [--run-indexing]`
 
-### rag_module/search_engine.py
+### search_engine.py
 
-Hybrid search engine designed to be imported in Kaggle Notebooks.
+Hybrid search for Kaggle Notebooks. All resources lazy-loaded and cached.
 
-- `run_hybrid_search(query, top_k, ticker, year, report_type)` is the main
-  public API. All heavy resources are lazy-loaded on the first call and then
-  cached in module-level globals for subsequent calls.
-- `parse_query(question, company_map)` extracts ticker, year, report_type using
-  longest-match company name lookup. This prevents shorter ticker names from
-  shadowing longer company name variants (e.g. "FPT" matching before
-  "CTCP Chung khoan FPT" -> FTS).
-- `qdrant_search()` and `bm25_search()` both filter on:
-  1. Ma_Doanh_Nghiep == ticker
-  2. Nam_Tai_Chinh == year
-  3. Loai_Bao_Cao IN (report_type, "unknown") -- see design decision below
+- `run_hybrid_search(query, top_k, ticker, year, report_type)` — main API
+- `search_by_table_name(company, table_name_query, year?, report_type?, top_k)` — fuzzy-match Ten_Bang, no embedding
+- `search_by_column_name(company, column_query, year?, report_type?, top_k)` — fuzzy-match col_names, falls back to line_items if col_names empty
+- `_resolve_ticker(company)` — company name or ticker string → ticker code
+- `parse_query(question, company_map)` — extracts ticker, year, report_type
 
-### rag_module/eval_retrieval.py
+### eval_retrieval.py
 
-Batch evaluation against `questions/questions.jsonl`. Reads questions, calls
-`run_hybrid_search()`, and prints ranked results for visual inspection.
+Batch evaluation against `questions/questions.jsonl`.
 CLI: `python rag_module/eval_retrieval.py --question-id 4 --show-data`
 
-### rag_module/code_stock.csv
+### code_stock.csv
 
-Maps ticker codes (e.g. FTS) to full company names (e.g. CTCP Chung khoan FPT).
-Used by `parse_query()` for entity extraction. Contains 100 companies.
-Columns: "Ma CK" (ticker), "Ten cong ty" (company name).
+Ticker → company name mapping. 100 companies.
+Columns: `Ma CK` (ticker), `Ten cong ty` (company name).
 
-### rag_module/qdrant_local_db/
+### qdrant_local_db/
 
-Qdrant vector database directory generated by `data_pipeline.py`.
-- Collection name: financial_tables
-- Vector dimension: 384 (paraphrase-multilingual-MiniLM-L12-v2)
-- Distance metric: Cosine similarity
+Qdrant vector DB. Collection: `financial_tables`. Dimension: 384. Distance: Cosine.
 
-### rag_module/bm25_index.pkl
+### bm25_index.pkl
 
-Serialised BM25 sparse index generated by `data_pipeline.py`.
-Pickle format: `{"bm25": BM25Okapi, "doc_mapping": List[Dict]}`
-`doc_mapping[i]` maps BM25 corpus index i to a full metadata dict that
-includes `csv_path`, `Ma_Doanh_Nghiep`, `Nam_Tai_Chinh`, `Loai_Bao_Cao`.
+Format: `{"bm25": BM25Okapi, "doc_mapping": List[Dict]}`
+
+Each `doc_mapping` entry has: `csv_path`, `Ma_Doanh_Nghiep`, `Nam_Tai_Chinh`,
+`Loai_Bao_Cao`, `Ten_Bang`, `line_items`, `col_names` (NEW — comma-separated column headers).
 
 ---
 
 ## Key Data Structures
 
-### Processed CSV Schema (output of Phase 1 ETL)
+### Processed CSV Schema (Phase 1 ETL output)
 
-Each CSV in `processed_data/` represents one financial table.
+| Column           | Description                                                           |
+|------------------|-----------------------------------------------------------------------|
+| Ma_Doanh_Nghiep  | Ticker code (e.g. `FPT`)                                              |
+| Ten_Doanh_Nghiep | Company name                                                          |
+| Nam_Tai_Chinh    | Year as string (e.g. `"2023"`)                                        |
+| Loai_Bao_Cao     | `"separate"`, `"consolidated"`, or `"unknown"`                        |
+| Ten_Bang         | Table heading + sub-section, e.g. `"BANG CAN DOI KE TOAN_I. Tien"` |
+| Don_Vi_Tinh      | Currency unit (e.g. `"VND"`)                                          |
+| Tep_Nguon        | Source path + anchor + line, e.g. `file.txt#table_0_0@line_193`      |
+| data columns     | Actual Vietnamese column headers as column names                      |
 
-| Column             | Description                                        |
-|--------------------|----------------------------------------------------|
-| Ma_Doanh_Nghiep    | Ticker code (e.g. FPT)                             |
-| Ten_Doanh_Nghiep   | Company name                                       |
-| Nam_Tai_Chinh      | Year stored as a string (e.g. "2023")              |
-| Loai_Bao_Cao       | "separate", "consolidated", or "unknown"           |
-| Ten_Bang           | Table heading extracted from surrounding context   |
-| Don_Vi_Tinh        | Currency unit (e.g. "VND", "Ty dong")              |
-| Tep_Nguon          | Source file path + anchor + line (e.g. file.txt#table_0_0@line_193)  |
-| 0, 1, 2, ...       | Flattened table data columns                       |
-
-### RRFResult Dict (returned by run_hybrid_search)
+### RRFResult Dict (from run_hybrid_search)
 
 ```python
 {
-    "csv_path":         str,   # absolute path to the source CSV
-    "rrf_score":        float, # fused relevance score (higher is better)
-    "dense_rank":       int,   # rank position from Qdrant search
-    "sparse_rank":      int,   # rank position from BM25 search
+    "csv_path":         str,    # absolute path to source CSV
+    "rrf_score":        float,  # fused score (higher = better)
+    "dense_rank":       int,
+    "sparse_rank":      int,
     "Ma_Doanh_Nghiep":  str,
     "Ten_Doanh_Nghiep": str,
     "Nam_Tai_Chinh":    str,
@@ -158,33 +131,71 @@ Each CSV in `processed_data/` represents one financial table.
     "Ten_Bang":         str,
     "Don_Vi_Tinh":      str,
     "Tep_Nguon":        str,
-    "line_items":       str,   # comma-separated financial indicator labels
+    "line_items":       str,    # comma-separated row labels (up to 50)
+    "col_names":        str,    # comma-separated column headers (NEW)
     "row_count":        int,
     "col_count":        int,
 }
 ```
+
+### Multi-Table matched_table_paths (pipeline convention)
+
+Single-table question — key is just the year string:
+```python
+{"2020": "/path/AAA_2020_income.csv", "2021": "/path/AAA_2021_income.csv"}
+```
+
+Multi-table question — flat key `"{year}_{table_type}"`:
+```python
+{
+    "2020_income_statement": "/path/AAA_2020_income.csv",
+    "2020_cash_flow":        "/path/AAA_2020_cashflow.csv",
+    "2021_income_statement": "/path/AAA_2021_income.csv",
+    "2021_cash_flow":        "/path/AAA_2021_cashflow.csv",
+}
+```
+
+`code_generator` and `schema_mapper` use `for key, path in matched_table_paths.items()`
+and work with both shapes without modification.
+
+### Query Parser JSON Schema
+
+```json
+{
+  "file_name": null,
+  "rag_search_query": "loi nhuan sau thue ket qua kinh doanh",
+  "required_tables": ["income_statement"],
+  "query_details": [{"column_name": "...", "operation": "...", "filter": null}],
+  "intent": "aggregate"
+}
+```
+
+- `rag_search_query` — compact keyword phrase for RAG (no company name, no year, no filler).
+  Used by `data_discovery_node` as the search query instead of the raw user question.
+- `required_tables` — values: `income_statement`, `balance_sheet`, `cash_flow`, `notes`.
+  When `len > 1`, multi-table mode triggers in `data_discovery_node`.
 
 ---
 
 ## Key Design Decisions
 
 **1. Loai_Bao_Cao = "unknown"**
+Some companies publish one report per year with no separate/consolidated label.
+ETL assigns `"unknown"`. Search uses `MatchAny(any=[report_type, "unknown"])`.
 
-Some companies (e.g. FTS) publish only one report per year with no
-separate/consolidated distinction. The ETL pipeline assigns "unknown" in this
-case. The search engine treats "unknown" as matching any requested report type
-using `MatchAny(any=[report_type, "unknown"])` in Qdrant and an equivalent
-`if val not in (report_type, "unknown"): continue` in the BM25 filter.
-
-**2. Rich content strings**
-
-`build_rich_content_string()` includes up to 50 unique financial line item
-labels from the first data column of each table. This ensures BM25 can
-keyword-match specific Vietnamese terms like "Loi nhuan sau thue" and that
-the embedding captures what is actually inside the table, not just its title.
+**2. Rich content strings (row labels + column names)**
+`build_rich_content_string()` appends both:
+- Up to 50 row labels (`Cac chi tieu: ...`) — enables BM25 row-label matching
+- All column names (`Ten cac cot: ...`) — enables matching on column headers
 
 **3. Longest-match entity extraction**
+`parse_query()` sorts company names by length descending.
+Prevents `"FPT"` from shadowing `"CTCP Chung khoan FPT"` → FTS.
 
-`parse_query()` sorts company names by length descending and does substring
-matching. This prevents the shorter token "FPT" from matching before the
-full company name "CTCP Chung khoan FPT", which correctly maps to ticker FTS.
+**4. Source line tracking**
+`Tep_Nguon` format: `file.txt#table_0_0@line_193`
+Computed by counting `\n` characters before each `<table` in raw_content.
+
+**5. Sub-table splitting**
+Large tables are split at section header rows. `Ten_Bang` format:
+`PARENT_TABLE_NAME_SECTION_NAME` using `_` as separator.

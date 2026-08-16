@@ -22,3 +22,6 @@ sentence-transformers>=3.0.0
 
 # --- Sparse BM25 retrieval ---
 rank-bm25>=0.2.2
+
+# --- Fuzzy matching (for search_by_table_name and search_by_column_name) ---
+thefuzz>=0.22.1
