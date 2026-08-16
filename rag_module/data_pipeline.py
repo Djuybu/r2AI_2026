@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple, Set
 
 import pandas as pd
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Tag
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 from rank_bm25 import BM25Okapi
@@ -62,20 +62,20 @@ from tqdm import tqdm
 # Change these to absolute paths if needed.
 
 # =============================================================================
-# PRODUCTION
+# PRODUCTION  (comment out this block and uncomment TESTING when developing)
 # =============================================================================
 # --- Input ---
-BASE_DIR                 = Path("./ViFinQA")                    # project root
-FINANCIAL_STATEMENTS_DIR = BASE_DIR / "financial_statements"
-CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"  # inside rag_module/
+# BASE_DIR                 = Path("./ViFinQA")
+# FINANCIAL_STATEMENTS_DIR = BASE_DIR / "financial_statements"
+# CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"
 
 # # --- ETL output ---
-PROCESSED_DATA_DIR       = BASE_DIR / "processed_data"
+# PROCESSED_DATA_DIR       = BASE_DIR / "processed_data"
 
-# --- Index output (bundled inside rag_module/ for Kaggle upload) ---
-_MODULE_DIR              = Path(__file__).parent        # rag_module/
-QDRANT_DB_PATH           = _MODULE_DIR / "qdrant_local_db"
-BM25_OUTPUT_PATH         = _MODULE_DIR / "bm25_index.pkl"
+# # --- Index output (bundled inside rag_module/ for Kaggle upload) ---
+# _MODULE_DIR              = Path(__file__).parent
+# QDRANT_DB_PATH           = _MODULE_DIR / "qdrant_local_db"
+# BM25_OUTPUT_PATH         = _MODULE_DIR / "bm25_index.pkl"
 
 # --- Kaggle override (uncomment and set your dataset name) ---
 # _KAGGLE_ROOT          = Path("/kaggle/input/datasets/duymcminh/r2ai-rag-module")
@@ -83,40 +83,26 @@ BM25_OUTPUT_PATH         = _MODULE_DIR / "bm25_index.pkl"
 # BM25_OUTPUT_PATH      = _KAGGLE_ROOT / "bm25_index.pkl"
 # CODE_STOCK_CSV        = _KAGGLE_ROOT / "code_stock.csv"
 
+# =============================================================================
+# TESTING  (currently active — switch to PRODUCTION block for full run)
+# =============================================================================
+BASE_DIR                 = Path("./ViFinQA")                          # project root
+FINANCIAL_STATEMENTS_DIR = BASE_DIR / "test_statement"                # small test set
+CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"   # inside rag_module/
+
+# --- ETL output ---
+PROCESSED_DATA_DIR       = BASE_DIR / "test/processed_data"
+
+# --- Index output ---
+_MODULE_DIR              = Path(__file__).parent        # rag_module/
+QDRANT_DB_PATH           = _MODULE_DIR / "test/qdrant_local_db"
+BM25_OUTPUT_PATH         = _MODULE_DIR / "test/bm25_index.pkl"
+
 # --- Qdrant + Embedding ---
-COLLECTION_NAME          = "financial_tables"
+COLLECTION_NAME          = "test_financial_tables"
 EMBEDDING_MODEL_NAME     = "paraphrase-multilingual-MiniLM-L12-v2"
 VECTOR_DIM               = 384
 BATCH_SIZE               = 64            # encoding + Qdrant upsert batch size
-
-# =============================================================================
-# TESTING
-# =============================================================================
-
-# BASE_DIR                 = Path("./ViFinQA")                    # project root
-# FINANCIAL_STATEMENTS_DIR = BASE_DIR / "test_folder"
-# CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"  # inside rag_module/
-
-# # --- ETL output ---
-# PROCESSED_DATA_DIR       = BASE_DIR / "test/processed_data"
-
-# # --- Index output (bundled inside rag_module/ for Kaggle upload) ---
-# _MODULE_DIR              = Path(__file__).parent        # rag_module/
-# QDRANT_DB_PATH           = _MODULE_DIR / "test/qdrant_local_db"
-# BM25_OUTPUT_PATH         = _MODULE_DIR / "test/bm25_index.pkl"
-
-# # --- Kaggle override (uncomment and set your dataset name) ---
-# _KAGGLE_ROOT          = Path("/kaggle/input/your-dataset-name/rag_module")
-# if _KAGGLE_ROOT.exists():
-#     QDRANT_DB_PATH        = _KAGGLE_ROOT / "qdrant_local_db"
-#     BM25_OUTPUT_PATH      = _KAGGLE_ROOT / "bm25_index.pkl"
-#     CODE_STOCK_CSV        = _KAGGLE_ROOT / "code_stock.csv"
-
-# # --- Qdrant + Embedding ---
-# COLLECTION_NAME          = "test_financial_tables"
-# EMBEDDING_MODEL_NAME     = "paraphrase-multilingual-MiniLM-L12-v2"
-# VECTOR_DIM               = 384
-# BATCH_SIZE               = 64            # encoding + Qdrant upsert batch size
 
 
 # --- Metadata column names (must match ETL output exactly) ---
@@ -248,53 +234,72 @@ def extract_metadata_from_path(file_path: Path) -> Tuple[str, str, str]:
 # 1C-D. HTML table parsing & metadata attachment
 # ---------------------------------------------------------------------------
 
-def _get_preceding_text_lines(tag: Tag, n: int = 5) -> str:
-    """Collect up to *n* non-empty text lines appearing before a <table> tag.
+def _get_preceding_lines_from_raw(
+    raw_lines: List[str],
+    table_line: int,
+    n: int = 15,
+) -> str:
+    """Return up to *n* raw source lines immediately above *table_line* (0-indexed).
 
-    Lines are delimited by <br> tags that were inserted during preprocessing.
+    This replaces the old BeautifulSoup sibling walk.  Using the raw source
+    line list (before <br> injection) gives a much wider and more accurate
+    context window for table-name extraction.
+
+    Args:
+        raw_lines:  The source file split on newlines (before <br> injection).
+        table_line: 0-indexed line number where the <table> tag begins.
+        n:          How many lines above the table to include (default 15).
+
+    Returns:
+        A newline-joined string of the *n* lines above *table_line*.
     """
-    collected: List[str] = []
-    current_parts: List[str] = []
-    sibling = tag.previous_sibling
-    while sibling is not None and len(collected) < n:
-        if isinstance(sibling, Tag) and sibling.name == "br":
-            line = " ".join(current_parts).strip()
-            if line:
-                collected.append(line)
-            current_parts = []
-        elif isinstance(sibling, NavigableString):
-            text = str(sibling).strip()
-            if text:
-                current_parts.insert(0, text)
-        sibling = sibling.previous_sibling
-    # Remaining text before the first <br> encountered
-    line = " ".join(current_parts).strip()
-    if line and len(collected) < n:
-        collected.append(line)
-    # collected is closest-first; reverse to chronological order
-    collected.reverse()
-    return "\n".join(collected)
+    start = max(0, table_line - n)
+    end   = max(0, table_line)          # exclusive; don't include the table line itself
+    lines = raw_lines[start:end]
+    return "\n".join(lines)
 
 
 def clean_line_noise(line: str) -> str:
-    """Strip inline noise (units, templates, page separators) from a line, keeping the rest."""
-    # 1. Strip unit of measurement declarations and everything after them
-    line = re.sub(r"\b(?:đơn\s+vị\s+tính|đvt)\b.*", "", line, flags=re.IGNORECASE)
-    line = re.sub(r"\bđơn\s+vị\b\s*(?::|-|là)\s*\w+.*", "", line, flags=re.IGNORECASE)
+    """Strip inline noise (units, templates, page separators, dates) from a line.
 
-    # 2. Strip template headers, publication notes, page separators, dates
-    line = re.sub(
-        r"\b(?:mẫu\s+b\s*\d+.*|ban\s+hành\s+kèm\s+theo.*|ban\s+hành\s+ngày.*|"
-        r"ngày\s+\d{1,2}/\d{1,2}/\d{4}.*|===\s*PAGE.*)",
-        "",
-        line,
-        flags=re.IGNORECASE
-    )
+    Applied during the bottom-up scan in extract_table_name() so that lines
+    like 'Đơn vị: VND', 'MÃU B 01-DN/HN', 'Tại ngày 31 tháng 12 năm 2015',
+    'Cho năm tài chính kết thúc' are eliminated before finding the real heading.
+    """
+    # 1. Unit-of-measurement declarations (any variant of 'đơn vị')
+    #    e.g. 'Đơn vị tính: VND', 'Đơn vị: VND', 'ĐVT: Triệu đồng'
+    line = re.sub(r"(?i)\b(?:đơn\s+vị(?:\s+tính)?|đvt)\b.*", "", line)
+
+    # 2. Vietnamese date/period phrases (entire line or trailing)
+    #    e.g. 'Tại ngày 31 tháng 12 năm 2015'
+    #         'ngày 31 tháng 12 năm 2020'
+    #         'Cho năm tài chính kết thúc ngày ...'
+    #         'Cho năm tài chính kết thúc'
+    line = re.sub(r"(?i)\bTại\s+ngày\b.*", "", line)
+    line = re.sub(r"(?i)\bngày\s+\d{1,2}\s+tháng\s+\d{1,2}\s+năm\s+\d{4}\b.*", "", line)
+    line = re.sub(r"(?i)\bngày\s+\d{1,2}/\d{1,2}/\d{4}\b.*", "", line)
+    line = re.sub(r"(?i)\bCho\s+(?:năm|kỳ)\s+tài\s+chính\b.*", "", line)
+    line = re.sub(r"(?i)\bNăm\s+tài\s+chính\s+kết\s+thúc\b.*", "", line)
+
+    # 3. Template / form codes
+    #    e.g. 'MÃU B 01-DN/HN', 'Mẫu số B01-DN', 'Ban hành kèm theo ...'
+    #    Note: use a character class that handles both accented (MÃU) and unaccented (MAU) forms.
+    line = re.sub(r"(?i)m[aâãàáảạăắằặẳẵ]u\s*(?:s[oố])?\s*[bB][\s\d\-/\w]*.*", "", line)
+    line = re.sub(r"(?i)\bm[aâãàáảạăắằặẳẵ]u\b.*", "", line)        # bare 'MÃU' / 'MAU' residual
+    line = re.sub(r"(?i)\b[bB]\s*0\d[-/\w]+.*", "", line)          # e.g. B01-DN/HN standalone
+    line = re.sub(r"(?i)\bban\s+hành\b.*", "", line)
+    line = re.sub(r"(?i)===\s*PAGE.*", "", line)
+
+    # 4. Address / location noise (common in company headers)
+    #    e.g. 'Lô CN11+CN12, cụm công nghiệp An Đồng,'
+    #         'thị trấn Nam Sách, huyện Nam Sách, tỉnh Hải Dương'
+    line = re.sub(r"(?i)\b(?:lô|cụm\s+công\s+nghiệp|thị\s+trấn|huyện|tỉnh|phường|quận|thành\s+phố)\b.*", "", line)
 
     # Clean up dangling punctuation & outer whitespace
     line = line.strip()
-    line = re.sub(r"^[-–—\s,\.:;\(\)\[\]]+|[-–—\s,\.:;\(\)\[\]]+$", "", line)
+    line = re.sub(r"^[-–—\s,\.:;()\[\]]+|[-–—\s,\.:;()\[\]]+$", "", line)
     return line.strip()
+
 def extract_table_name(pre_text: str) -> str:
     """Extract a table heading from preceding context using bottom-up scan.
 
@@ -374,17 +379,47 @@ def extract_unit(pre_text: str) -> str:
 
 def parse_tables_from_content(
     content: str,
-) -> Generator[Tuple[int, Tag, str, str, str], None, None]:
+    raw_content: str,
+) -> Generator[Tuple[int, Tag, str, str, str, int], None, None]:
     """
     Parse all <table> tags from raw text using BeautifulSoup + lxml.
     NOTE: Regex is NOT used to parse HTML (project rule).
+
+    Yields:
+        idx          -- sequential table index within the file
+        table_tag    -- BeautifulSoup Tag object
+        pre_text     -- raw context lines above the table (for debugging)
+        table_name   -- extracted heading string
+        unit         -- extracted monetary unit string
+        source_line  -- 1-indexed line number in the original source file
     """
+    # Pre-compute 1-indexed source line numbers for every <table> tag by
+    # scanning raw_content (before <br> injection) for literal '<table'
+    # occurrences and counting newlines before each hit.
+    # This avoids relying on lxml .sourceline, which is unreliable after
+    # BeautifulSoup wraps the fragment in implicit <html>/<body> elements.
+    raw_lower   = raw_content.lower()
+    raw_lines   = raw_content.splitlines()   # 0-indexed list for context lookup
+    table_source_lines: List[int] = []
+    search_start = 0
+    while True:
+        pos = raw_lower.find("<table", search_start)
+        if pos == -1:
+            break
+        line_num = raw_content[:pos].count("\n") + 1  # 1-indexed
+        table_source_lines.append(line_num)
+        search_start = pos + 1
+
     soup = BeautifulSoup(content, "lxml")
     for idx, table_tag in enumerate(soup.find_all("table")):
-        pre_text   = _get_preceding_text_lines(table_tag, n=5)
+        source_line = table_source_lines[idx] if idx < len(table_source_lines) else 0
+        orig_line_0 = max(0, source_line - 1)   # convert to 0-indexed
+
+        pre_text   = _get_preceding_lines_from_raw(raw_lines, orig_line_0, n=15)
         table_name = extract_table_name(pre_text)
         unit       = extract_unit(pre_text)
-        yield idx, table_tag, pre_text, table_name, unit
+        yield idx, table_tag, pre_text, table_name, unit, source_line
+
 
 
 def table_tag_to_dataframe(table_tag: Tag) -> Optional[pd.DataFrame]:
@@ -897,25 +932,31 @@ def process_txt_file(
         logger.warning("Ticker '%s' not found in code_stock.csv.", ticker)
 
     try:
-        content = file_path.read_text(encoding="utf-8", errors="replace")
-        # Insert <br> before each newline so BeautifulSoup preserves line breaks
-        content = content.replace("\n", "<br>\n")
+        raw_content = file_path.read_text(encoding="utf-8", errors="replace")
+        # Keep raw_content (before <br> injection) for line-number tracking
+        # and context-window extraction.  Normalise line endings first.
+        raw_content = raw_content.replace("\r\n", "\n").replace("\r", "\n")
+
+        # Insert <br> before each newline so BeautifulSoup preserves line
+        # breaks.  The number of \n characters is unchanged by this step,
+        # which is why counting \n in raw_content gives correct line numbers.
+        content = raw_content.replace("\n", "<br>\n")
     except OSError as exc:
         logger.error("Cannot read %s: %s", file_path, exc)
         return []
 
     tables: List[pd.DataFrame] = []
     last_header: Optional[Tuple[int, List[str]]] = None
-    for idx, table_tag, _, table_name, unit in parse_tables_from_content(content):
+    for idx, table_tag, _, table_name, unit, source_line in parse_tables_from_content(content, raw_content):
         raw_df = table_tag_to_dataframe(table_tag)
         if raw_df is None or raw_df.empty:
             continue
 
         num_cols = len(raw_df.columns)
-        
+
         # Smart header extraction
         header_cols, drop_n, extracted_unit = extract_headers_smart(raw_df)
-        
+
         if drop_n > 0:
             last_header = (num_cols, header_cols)
             df_cleaned = raw_df.iloc[drop_n:].copy()
@@ -936,7 +977,9 @@ def process_txt_file(
         subtables = split_dataframe_into_subtables(df_cleaned, table_name)
 
         for sub_idx, (sub_table_name, sub_df, sub_unit) in enumerate(subtables):
-            source_ref = f"{file_path.as_posix()}#table_{idx}_{sub_idx}"
+            # Include the original source line number so a result can be traced
+            # back to the exact location in the .txt file (Issue 2 fix).
+            source_ref = f"{file_path.as_posix()}#table_{idx}_{sub_idx}@line_{source_line}"
             final_unit = sub_unit if sub_unit else table_unit
             enriched_df = attach_metadata(
                 sub_df, ticker, company_name, year,

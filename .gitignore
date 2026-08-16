@@ -71,3 +71,6 @@ evals/reports/*.html
 *~
 Thumbs.db
 *.zip
+
+# Original Folder
+/ViFinQA

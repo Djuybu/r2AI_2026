@@ -140,7 +140,7 @@ Each CSV in `processed_data/` represents one financial table.
 | Loai_Bao_Cao       | "separate", "consolidated", or "unknown"           |
 | Ten_Bang           | Table heading extracted from surrounding context   |
 | Don_Vi_Tinh        | Currency unit (e.g. "VND", "Ty dong")              |
-| Tep_Nguon          | Source file path + anchor (e.g. file.txt#table_3)  |
+| Tep_Nguon          | Source file path + anchor + line (e.g. file.txt#table_0_0@line_193)  |
 | 0, 1, 2, ...       | Flattened table data columns                       |
 
 ### RRFResult Dict (returned by run_hybrid_search)
