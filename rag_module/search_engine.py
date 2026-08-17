@@ -50,7 +50,8 @@ _DEFAULT_BM25   = _HERE / "bm25_index.pkl"
 _TEST_BM25      = _HERE / "test" / "bm25_index.pkl"
 BM25_PATH       = _DEFAULT_BM25 if _DEFAULT_BM25.exists() else _TEST_BM25
 
-CODE_STOCK_CSV       = _HERE / "code_stock.csv"
+_DEFAULT_CSV = _HERE / "ViFinQA" / "code_stock.csv"
+CODE_STOCK_CSV = _DEFAULT_CSV if _DEFAULT_CSV.exists() else _HERE / "code_stock.csv"
 
 # --- KAGGLE paths (uncomment and set your Kaggle dataset name) ---
 # _KAGGLE_ROOT       = Path("/kaggle/input/your-dataset-name/rag_module")
@@ -169,16 +170,22 @@ def load_embedding_model(model_name: str = EMBEDDING_MODEL_NAME) -> SentenceTran
 def load_bm25_index(pkl_path: Path = BM25_PATH) -> Tuple[Any, List[Dict[str, Any]]]:
     """Load BM25Okapi and doc_mapping from the pickle file."""
     if not pkl_path.is_file():
-        raise FileNotFoundError(
-            f"BM25 index not found: {pkl_path}\n"
-            "Run data_pipeline.py first to build the index."
-        )
-    with open(pkl_path, "rb") as f:
-        data = pickle.load(f)
-    bm25        = data["bm25"]
-    doc_mapping = data["doc_mapping"]
-    logger.info("BM25 index loaded. Corpus size: %d documents.", bm25.corpus_size)
-    return bm25, doc_mapping
+        logger.warning(f"BM25 index not found: {pkl_path}")
+        return None, []
+
+    try:
+        with open(pkl_path, "rb") as f:
+            data = pickle.load(f)
+        bm25        = data["bm25"]
+        doc_mapping = data["doc_mapping"]
+        logger.info("BM25 index loaded. Corpus size: %d documents.", getattr(bm25, 'corpus_size', len(doc_mapping)))
+        return bm25, doc_mapping
+    except MemoryError:
+        logger.warning("MemoryError while loading BM25 index pickle file (%s). Falling back to Qdrant Dense Search only.", pkl_path)
+        return None, []
+    except Exception as e:
+        logger.warning("Failed to load BM25 index: %s. Falling back to Qdrant Dense Search only.", e)
+        return None, []
 
 
 def load_company_map(csv_path: Path = CODE_STOCK_CSV) -> List[Tuple[str, str]]:
@@ -297,10 +304,11 @@ def qdrant_search(
         query, normalize_embeddings=True, convert_to_numpy=True
     ).tolist()
 
-    must = [
-        FieldCondition(key="Ma_Doanh_Nghiep", match=MatchValue(value=ticker)),
-        FieldCondition(key="Nam_Tai_Chinh",   match=MatchValue(value=year)),
-    ]
+    must = []
+    if ticker:
+        must.append(FieldCondition(key="Ma_Doanh_Nghiep", match=MatchValue(value=ticker)))
+    if year:
+        must.append(FieldCondition(key="Nam_Tai_Chinh", match=MatchValue(value=year)))
     if report_type:
         must.append(
             FieldCondition(key="Loai_Bao_Cao",
@@ -342,6 +350,9 @@ def bm25_search(
     Filters: Ma_Doanh_Nghiep == ticker  AND  Nam_Tai_Chinh == year
     Optional: Loai_Bao_Cao IN (report_type, 'unknown')
     """
+    if bm25 is None or not doc_mapping:
+        return []
+
     tokens     = tokenize(query)
     all_scores = bm25.get_scores(tokens)
     ranked_idx = sorted(range(len(all_scores)),
@@ -353,9 +364,9 @@ def bm25_search(
         if rank_counter > top_k:
             break
         meta = doc_mapping[doc_idx]
-        if meta.get("Ma_Doanh_Nghiep", "").strip() != ticker.strip():
+        if ticker and meta.get("Ma_Doanh_Nghiep", "").strip() != ticker.strip():
             continue
-        if str(meta.get("Nam_Tai_Chinh", "")).strip() != str(year).strip():
+        if year and str(meta.get("Nam_Tai_Chinh", "")).strip() != str(year).strip():
             continue
         if report_type:
             val = meta.get("Loai_Bao_Cao", "").strip()
@@ -454,9 +465,8 @@ def run_hybrid_search(
         year        = year        or _y
         report_type = report_type or _rt
 
-    if not ticker or not year:
-        logger.warning("Could not extract ticker/year from query: %s", query)
-        return []
+    if not ticker:
+        logger.info("Ticker not explicitly found for query: '%s'. Performing broad hybrid search.", query)
 
     logger.info("Query: %s  |  Ticker: %s  |  Year: %s  |  Type: %s",
                 query, ticker, year, report_type)
@@ -528,6 +538,17 @@ def search_by_company_and_content(
         year=year or None,
         report_type=report_type or None,
     )
+
+    # Fallback: nếu không tìm thấy kết quả cho năm cụ thể, thử lại không giới hạn year
+    if not results and year:
+        logger.info("No search results for year='%s'. Retrying without year restriction...", year)
+        results = run_hybrid_search(
+            query=query,
+            top_k=top_k,
+            ticker=ticker or None,
+            year=None,
+            report_type=report_type or None,
+        )
 
     if not results:
         return []

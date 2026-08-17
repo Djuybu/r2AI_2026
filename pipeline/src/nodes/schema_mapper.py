@@ -28,6 +28,14 @@ LABEL_COLUMNS = [
     "Cột_0", "Mã số", "Chỉ tiêu",
 ]
 
+# Các cột metadata/thông tin chung (không phải cột chứa số liệu giá trị)
+METADATA_COLUMNS = [
+    "Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh",
+    "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon",
+    "CHÍ TIÊU", "CHỈ TIÊU", "TÀI SẢN", "NGUỒN VỐN",
+    "Cột_0", "Mã số", "Chỉ tiêu", "STT"
+]
+
 
 def _get_columns_from_table(table: Dict[str, Any]) -> List[str]:
     """Extract column names from a discovered table by reading its CSV file."""
@@ -57,30 +65,35 @@ def _find_label_column(columns: List[str]) -> Optional[str]:
 
 def _find_value_column(columns: List[str], tieu_chi_phu: Optional[str] = None) -> Optional[str]:
     """Find the value column based on tieu_chi_phu or default heuristics."""
-    non_label_cols = [c for c in columns if c not in LABEL_COLUMNS]
+    # Lọc bỏ các cột metadata thông tin chung
+    value_candidate_cols = [c for c in columns if c not in METADATA_COLUMNS]
 
-    if tieu_chi_phu and non_label_cols:
+    if not value_candidate_cols:
+        # Fallback: nếu tất cả đều thuộc metadata (hiếm), lấy cột sau label_col
+        value_candidate_cols = [c for c in columns if c not in LABEL_COLUMNS]
+
+    if tieu_chi_phu and value_candidate_cols:
         # 1. Exact or substring match for dates / explicit column criteria
         clean_tcp = str(tieu_chi_phu).strip().lower()
-        for col in non_label_cols:
+        for col in value_candidate_cols:
             if clean_tcp in col.strip().lower():
                 return col
 
-        # 2. Fuzzy match tieu_chi_phu against actual columns
+        # 2. Fuzzy match tieu_chi_phu against actual value columns
         match, score = process.extractOne(
-            tieu_chi_phu, non_label_cols, scorer=fuzz.token_set_ratio
+            tieu_chi_phu, value_candidate_cols, scorer=fuzz.token_set_ratio
         )
         if score >= 50:
             return match
 
     # Default: find first known value column
     for c in DEFAULT_VALUE_COLUMNS:
-        if c in columns:
+        if c in value_candidate_cols:
             return c
 
-    # Fallback: pick second column (first non-label column)
-    if len(columns) >= 2:
-        return columns[1]
+    # Fallback: pick first numeric value column available
+    if value_candidate_cols:
+        return value_candidate_cols[0]
 
     return None
 

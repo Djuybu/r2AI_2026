@@ -73,11 +73,20 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     user_query = state.get("user_query", "")
     parsed_query = state.get("parsed_query", {})
 
-    # Extract fields from parsed_query
+    # Extract fields from parsed_query with fallbacks
     noi_dung = parsed_query.get("noi_dung", "")
     ten_cong_ty = parsed_query.get("ten_cong_ty", "")
     so_nam = parsed_query.get("so_nam", [])
     muc_tieu = parsed_query.get("muc_tieu", "trich_xuat")
+
+    if not so_nam:
+        so_nam = re.findall(r"\b(20\d{2})\b", user_query)
+    if not ten_cong_ty:
+        m_ticker = re.search(r"\b([A-Za-z]{3,5})\b", user_query)
+        if m_ticker:
+            ten_cong_ty = m_ticker.group(1)
+    if not noi_dung:
+        noi_dung = user_query
 
     print(f"\n🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...")
     print(f"   - Nội dung: '{noi_dung}'")

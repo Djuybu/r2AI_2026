@@ -26,6 +26,38 @@ def load_query_parser_prompt(cfg: Config) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
+    """Fallback rule-based parser when LLM is unreachable."""
+    q = user_query.strip()
+    years = re.findall(r"\b(20\d{2})\b", q)
+
+    q_lower = q.lower()
+    if "so sánh" in q_lower or "thay đổi" in q_lower or "tăng trưởng" in q_lower:
+        muc_tieu = "so_sanh"
+    elif "tổng" in q_lower or "cộng" in q_lower:
+        muc_tieu = "tinh_tong"
+    else:
+        muc_tieu = "trich_xuat"
+
+    m_ticker = re.search(r"\b([A-Za-z]{3,5})\b", q)
+    company = m_ticker.group(1) if m_ticker else ""
+
+    clean_content = re.sub(r"\b(20\d{2})\b", "", q)
+    if company:
+        clean_content = re.sub(rf"\b{company}\b", "", clean_content, flags=re.IGNORECASE)
+    for word in ["của", "năm", "báo cáo", "tài chính", "cho", "là bao nhiêu", "bao nhiêu"]:
+        clean_content = re.sub(rf"\b{word}\b", "", clean_content, flags=re.IGNORECASE)
+    clean_content = re.sub(r"\s+", " ", clean_content).strip()
+
+    return {
+        "muc_tieu": muc_tieu,
+        "noi_dung": clean_content or q,
+        "ten_cong_ty": company,
+        "so_nam": years,
+        "tieu_chi_phu": None,
+    }
+
+
 def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
     """LangGraph Node 1: Phân tích câu hỏi thành cấu trúc truy vấn.
 
@@ -143,14 +175,24 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         }
 
     except Exception as e:
+        print(f"⚠️ [Query Parser] LLM không phản hồi ({e}). Đang sử dụng Rule-based Fallback Parser...")
+        parsed_json = _fallback_parse_query(user_query)
+
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})
         node_latencies["query_parser"] = round(latency, 3)
 
+        print(
+            f"📊 [Kết quả Fallback - Query Parser]:\n"
+            f"   Mục tiêu: {parsed_json.get('muc_tieu')}\n"
+            f"   Nội dung: {parsed_json.get('noi_dung')}\n"
+            f"   Công ty: {parsed_json.get('ten_cong_ty')}\n"
+            f"   Năm: {parsed_json.get('so_nam')}\n"
+        )
+
         return {
             **state,
-            "status": "error",
-            "error_message": f"Query parser node error: {str(e)}",
-            "parsed_query": {},
+            "parsed_query": parsed_json,
+            "status": "pending",
             "node_latencies": node_latencies,
         }
