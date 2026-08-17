@@ -11,8 +11,12 @@ from pipeline.src.state import AgentState
 from pipeline.src.config import Config, config as default_config
 from pipeline.src.utils.data_registry import DataRegistry, get_table_schema
 
+MIN_RRF_SCORE = 0.04
+
+
 
 def extract_years_from_text(text: str) -> list[str]:
+
     """Extract list of explicit years or year ranges from Vietnamese/English text."""
     years = [int(y) for y in re.findall(r"\b(20\d{2})\b", text)]
     if not years:
@@ -300,35 +304,40 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                         if not best_match or best_score < 60:
                             best_match = results[0]
                     
-                    csv_path_str = best_match.get("csv_path")
-                    if csv_path_str:
-                        p_str = csv_path_str.replace("\\", "/")
-                        idx_fin = p_str.find("ViFinQA")
-                        if idx_fin != -1:
-                            relative_part = p_str[idx_fin:]
-                        else:
-                            relative_part = Path(p_str).name
+                    if best_match and best_match.get("rrf_score", 0) < MIN_RRF_SCORE:
+                        print(f"⚠️ RAG score ({best_match.get('rrf_score')}) dưới ngưỡng an toàn {MIN_RRF_SCORE}. Bỏ qua kết quả RAG rác.")
+                        best_match = None
 
-                        repo_root = Path(cfg.DATA_DIR).parent.parent.resolve()
-                        candidate1 = (repo_root / relative_part).resolve()
-                        candidate2 = (repo_root / "rag_module" / relative_part).resolve()
+                    if best_match:
+                        csv_path_str = best_match.get("csv_path")
+                        if csv_path_str:
+                            p_str = csv_path_str.replace("\\", "/")
+                            idx_fin = p_str.find("ViFinQA")
+                            if idx_fin != -1:
+                                relative_part = p_str[idx_fin:]
+                            else:
+                                relative_part = Path(p_str).name
 
-                        matched_p = None
-                        if candidate1.exists():
-                            matched_p = candidate1
-                        elif candidate2.exists():
-                            matched_p = candidate2
-                        else:
-                            direct_path = Path(p_str).resolve()
-                            if direct_path.exists():
-                                matched_p = direct_path
+                            repo_root = Path(cfg.DATA_DIR).parent.parent.resolve()
+                            candidate1 = (repo_root / relative_part).resolve()
+                            candidate2 = (repo_root / "rag_module" / relative_part).resolve()
 
-                        if matched_p:
-                            matched_table_paths[y] = str(matched_p)
-                            table_schemas[str(matched_p)] = get_table_schema(matched_p)
-                            print(f"   - Năm {y}: Khớp file {matched_p.name} (Tên bảng: {best_match.get('Ten_Bang')}, RRF: {best_match.get('rrf_score')})")
-                        else:
-                            print(f"   - Năm {y}: Không tìm thấy file trên local: {relative_part}")
+                            matched_p = None
+                            if candidate1.exists():
+                                matched_p = candidate1
+                            elif candidate2.exists():
+                                matched_p = candidate2
+                            else:
+                                direct_path = Path(p_str).resolve()
+                                if direct_path.exists():
+                                    matched_p = direct_path
+
+                            if matched_p:
+                                matched_table_paths[y] = str(matched_p)
+                                table_schemas[str(matched_p)] = get_table_schema(matched_p)
+                                print(f"   - Năm {y}: Khớp file {matched_p.name} (Tên bảng: {best_match.get('Ten_Bang')}, RRF: {best_match.get('rrf_score')})")
+                            else:
+                                print(f"   - Năm {y}: Không tìm thấy file trên local: {relative_part}")
                 else:
                     print(f"   - Năm {y}: RAG không tìm thấy kết quả phù hợp.")
         except Exception as e:
@@ -353,32 +362,38 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 results = run_hybrid_search(user_query)
                 if results:
                     best_match = results[0]
-                    csv_path_str = best_match.get("csv_path")
-                    print(f"   - Tìm thấy file khớp nhất từ RAG: {Path(csv_path_str).name} (RRF Score: {best_match.get('rrf_score')})")
-                    if csv_path_str:
-                        p_str = csv_path_str.replace("\\", "/")
-                        idx = p_str.find("ViFinQA")
-                        if idx != -1:
-                            relative_part = p_str[idx:]
-                        else:
-                            relative_part = Path(p_str).name
+                    if best_match.get("rrf_score", 0) < MIN_RRF_SCORE:
+                        print(f"⚠️ RAG score ({best_match.get('rrf_score')}) dưới ngưỡng an toàn {MIN_RRF_SCORE}. Bỏ qua kết quả RAG rác.")
+                        best_match = None
 
-                        repo_root = Path(cfg.DATA_DIR).parent.parent.resolve()
-                        candidate1 = (repo_root / relative_part).resolve()
-                        candidate2 = (repo_root / "rag_module" / relative_part).resolve()
-
-                        if candidate1.exists():
-                            matched_path = candidate1
-                        elif candidate2.exists():
-                            matched_path = candidate2
-                        else:
-                            direct_path = Path(p_str).resolve()
-                            if direct_path.exists():
-                                matched_path = direct_path
+                    if best_match:
+                        csv_path_str = best_match.get("csv_path")
+                        print(f"   - Tìm thấy file khớp nhất từ RAG: {Path(csv_path_str).name} (RRF Score: {best_match.get('rrf_score')})")
+                        if csv_path_str:
+                            p_str = csv_path_str.replace("\\", "/")
+                            idx = p_str.find("ViFinQA")
+                            if idx != -1:
+                                relative_part = p_str[idx:]
                             else:
-                                print(f"⚠️ Search engine path not found: {relative_part}")
+                                relative_part = Path(p_str).name
+
+                            repo_root = Path(cfg.DATA_DIR).parent.parent.resolve()
+                            candidate1 = (repo_root / relative_part).resolve()
+                            candidate2 = (repo_root / "rag_module" / relative_part).resolve()
+
+                            if candidate1.exists():
+                                matched_path = candidate1
+                            elif candidate2.exists():
+                                matched_path = candidate2
+                            else:
+                                direct_path = Path(p_str).resolve()
+                                if direct_path.exists():
+                                    matched_path = direct_path
+                                else:
+                                    print(f"⚠️ Search engine path not found: {relative_part}")
                 else:
                     print("   - RAG Hybrid Search không trả về kết quả.")
+
             except Exception as e:
                 print(f"⚠️ Search engine search failed: {e}. Falling back to DataRegistry.")
 

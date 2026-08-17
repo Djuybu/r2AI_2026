@@ -19,3 +19,27 @@ few_shot_examples:
       df = pd.read_csv(file_path)
       result = df.groupby("Category")["Revenue"].sum().reset_index()
       ```
+  - user_query: "Chi phí hoạt động của CTG năm 2019 là bao nhiêu"
+    file_path: "processed_data/CTG/2019/CTG_financial_statements_2019_separate_table_12.csv"
+    column_mapping: {"chi phí hoạt động": "0", "giá trị": "1"}
+    generated_code: |
+      ```python
+      # Đọc dữ liệu và lấy chi phí hoạt động năm 2019
+      import pandas as pd
+      df = pd.read_csv(file_path)
+
+      def clean_val(val):
+          if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+              return 0.0
+          val_str = str(val).strip().replace('.', '')
+          if '(' in val_str and ')' in val_str:
+              val_str = '-' + val_str.replace('(', '').replace(')', '')
+          return float(val_str)
+
+      row = df[df['0'].astype(str).str.contains('Chi phí hoạt động|chi phí hoạt động', case=False, na=False)]
+      if not row.empty:
+          result = clean_val(row['1'].values[0])
+      else:
+          result = None
+      ```
+

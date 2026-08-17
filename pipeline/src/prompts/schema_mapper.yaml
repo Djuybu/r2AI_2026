@@ -4,15 +4,21 @@ system_prompt: >
   1. Cấu trúc yêu cầu của người dùng (parsed_query).
   2. Danh sách cột thực tế và định dạng dữ liệu (table_schema) của bảng dữ liệu.
   
-  Hãy ánh xạ các cột mà người dùng đề cập sang TÊN CỘT THỰC TẾ trong bảng dữ liệu.
-  Nếu tên cột của người dùng không khớp chính xác, hãy dùng ngữ nghĩa để tìm cột gần nhất.
+  Hãy ánh xạ các từ khóa/cột mà người dùng đề cập sang TÊN CỘT THỰC TẾ trong bảng dữ liệu.
+  
+  QUY TẮC BẮT BUỘC:
+  1. Tất cả các giá trị cột trong đối tượng `column_mapping` BẮT BUỘC phải là tên cột THỰC TẾ nằm trong danh sách "Cột thực tế trong dữ liệu". Tuyệt đối KHÔNG ĐƯỢC sinh ra tên cột không có trong bảng (ví dụ: không bao giờ tự bịa ra "Total_Revenue" hay "Order_Date" nếu chúng không có trong danh sách cột).
+  2. Trong bảng Báo cáo Tài chính Việt Nam, tên cột thực tế thường là dạng số thứ tự "0", "1", "2" hoặc các cột tiêu chuẩn như "CHÍ TIÊU", "Năm nay", "Năm trước", "Số cuối năm", "Số đầu năm".
+     - Cột "0" hoặc "CHÍ TIÊU" chứa nhãn chỉ tiêu tài chính (ví dụ: "Chi phí hoạt động", "Doanh thu thuần", "Tiền").
+     - Cột "1" hoặc "Năm nay" chứa số tiền tương ứng.
+  3. Nếu không tìm thấy cột thực tế khớp với từ khóa, hãy đưa từ khóa đó vào "unmapped_columns" và KHÔNG đưa vào "column_mapping".
+  
   Trả về duy nhất một đối tượng JSON tuân thủ schema bên dưới. Không kèm theo văn bản giải thích.
 
 json_schema: |
   {
     "column_mapping": {
-      "tên_cột_người_dùng_hỏi": "tên_cột_thực_tế_trong_csv",
-      ...
+      "tên_cột_người_dùng_hỏi": "tên_cột_thực_tế_trong_csv"
     },
     "unmapped_columns": ["tên_cột_không_tìm_thấy"],
     "confidence_score": 0.95
@@ -31,3 +37,29 @@ few_shot_examples:
         "unmapped_columns": [],
         "confidence_score": 1.0
       }
+  - user_query: "Chi phí hoạt động của CTG năm 2019 là bao nhiêu"
+    table_schema:
+      columns: ["Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh", "0", "1", "2"]
+      header_row: {"0": "Chỉ tiêu", "1": "Năm 2019", "2": "Năm 2018"}
+    parsed_output: |
+      {
+        "column_mapping": {
+          "chi phí hoạt động": "0",
+          "giá trị": "1"
+        },
+        "unmapped_columns": [],
+        "confidence_score": 0.95
+      }
+  - user_query: "Tính tổng tài sản của VCB năm 2020"
+    table_schema:
+      columns: ["Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh", "CHÍ TIÊU", "Năm nay", "Năm trước"]
+    parsed_output: |
+      {
+        "column_mapping": {
+          "tài sản": "CHÍ TIÊU",
+          "giá trị": "Năm nay"
+        },
+        "unmapped_columns": [],
+        "confidence_score": 0.95
+      }
+
