@@ -22,18 +22,16 @@ DEFAULT_VALUE_COLUMNS = [
     "Kỳ này", "Kỳ trước",
 ]
 
-# Các cột nhãn (cột đầu tiên) phổ biến
-LABEL_COLUMNS = [
-    "CHÍ TIÊU", "CHỈ TIÊU", "TÀI SẢN", "NGUỒN VỐN",
-    "Cột_0", "Mã số", "Chỉ tiêu",
+# Các cột metadata/thông tin chung ở đầu file CSV
+METADATA_HEADER_COLUMNS = [
+    "Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh",
+    "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon"
 ]
 
-# Các cột metadata/thông tin chung (không phải cột chứa số liệu giá trị)
-METADATA_COLUMNS = [
-    "Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh",
-    "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon",
+# Ưu tiên các tên cột nhãn tiếng Việt rõ ràng
+KNOWN_LABEL_COLUMNS = [
     "CHÍ TIÊU", "CHỈ TIÊU", "TÀI SẢN", "NGUỒN VỐN",
-    "Cột_0", "Mã số", "Chỉ tiêu", "STT"
+    "Cột_0", "Chỉ tiêu", "Mã số", "STT"
 ]
 
 
@@ -51,26 +49,31 @@ def _get_columns_from_table(table: Dict[str, Any]) -> List[str]:
 
 
 def _find_label_column(columns: List[str]) -> Optional[str]:
-    """Find the label column (cột đầu tiên chứa tên chỉ tiêu)."""
-    for c in LABEL_COLUMNS:
+    """Find the label column (cột đầu tiên chứa tên chỉ tiêu tài chính)."""
+    # 1. Kiểm tra các cột có tên nhãn tiếng Việt rõ ràng
+    for c in KNOWN_LABEL_COLUMNS:
         if c in columns:
             return c
 
-    # Fallback: check column index 0
-    if columns and not columns[0].replace('.', '').isdigit():
-        return columns[0]
+    # 2. Lấy cột đầu tiên KHÔNG thuộc danh sách metadata chung
+    for c in columns:
+        if c not in METADATA_HEADER_COLUMNS:
+            return c
 
-    return None
+    return columns[0] if columns else None
 
 
-def _find_value_column(columns: List[str], tieu_chi_phu: Optional[str] = None) -> Optional[str]:
+def _find_value_column(columns: List[str], label_col: Optional[str] = None, tieu_chi_phu: Optional[str] = None) -> Optional[str]:
     """Find the value column based on tieu_chi_phu or default heuristics."""
-    # Lọc bỏ các cột metadata thông tin chung
-    value_candidate_cols = [c for c in columns if c not in METADATA_COLUMNS]
-
-    if not value_candidate_cols:
-        # Fallback: nếu tất cả đều thuộc metadata (hiếm), lấy cột sau label_col
-        value_candidate_cols = [c for c in columns if c not in LABEL_COLUMNS]
+    # Lọc ra các cột nằm SAU label_col và KHÔNG thuộc metadata
+    label_idx = columns.index(label_col) if label_col and label_col in columns else -1
+    
+    value_candidate_cols = []
+    for idx, c in enumerate(columns):
+        if c in METADATA_HEADER_COLUMNS or c == label_col:
+            continue
+        if idx > label_idx or label_idx == -1:
+            value_candidate_cols.append(c)
 
     if tieu_chi_phu and value_candidate_cols:
         # 1. Exact or substring match for dates / explicit column criteria
@@ -160,8 +163,8 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         column_mapping["label_column"] = label_col
         print(f"   - Cột nhãn (chỉ tiêu): '{label_col}'")
 
-    # Find value column based on tieu_chi_phu
-    value_col = _find_value_column(columns, tieu_chi_phu)
+    # Find value column based on tieu_chi_phu and label_col
+    value_col = _find_value_column(columns, label_col, tieu_chi_phu)
     if value_col:
         column_mapping["value_column"] = value_col
         print(f"   - Cột giá trị: '{value_col}'")

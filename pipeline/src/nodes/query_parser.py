@@ -32,21 +32,29 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     years = re.findall(r"\b(20\d{2})\b", q)
 
     q_lower = q.lower()
-    if "so sánh" in q_lower or "thay đổi" in q_lower or "tăng trưởng" in q_lower:
+    if "so sánh" in q_lower or "thay đổi" in q_lower or "tăng trưởng" in q_lower or "từ năm" in q_lower:
         muc_tieu = "so_sanh"
     elif "tổng" in q_lower or "cộng" in q_lower:
         muc_tieu = "tinh_tong"
     else:
         muc_tieu = "trich_xuat"
 
-    m_ticker = re.search(r"\b([A-Za-z]{3,5})\b", q)
+    m_ticker = re.search(r"\b([A-Z]{3,5})\b", q)
     company = m_ticker.group(1) if m_ticker else ""
 
     clean_content = re.sub(r"\b(20\d{2})\b", "", q)
     if company:
         clean_content = re.sub(rf"\b{company}\b", "", clean_content, flags=re.IGNORECASE)
-    for word in ["của", "năm", "báo cáo", "tài chính", "cho", "là bao nhiêu", "bao nhiêu"]:
-        clean_content = re.sub(rf"\b{word}\b", "", clean_content, flags=re.IGNORECASE)
+    
+    # Remove growth/comparison stop words
+    stop_phrases = [
+        "tốc độ tăng trưởng %", "tốc độ tăng trưởng", "tăng trưởng %", "tăng trưởng",
+        "so sánh", "từ năm", "đến năm", "của", "năm", "báo cáo", "tài chính",
+        "cho", "là bao nhiêu", "bao nhiêu"
+    ]
+    for word in stop_phrases:
+        clean_content = re.sub(rf"\b{re.escape(word)}\b", "", clean_content, flags=re.IGNORECASE)
+    
     clean_content = re.sub(r"\s+", " ", clean_content).strip()
 
     return {

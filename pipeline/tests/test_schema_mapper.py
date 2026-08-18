@@ -1,12 +1,22 @@
 """Unit tests for Schema Mapper Node."""
 
-from pipeline.src.nodes.schema_mapper import fuzzy_match_columns
+import unittest
+from pipeline.src.nodes.schema_mapper import _find_label_column, _find_value_column
 
 
-def test_fuzzy_match_columns():
-    query_terms = ["revenue", "order date", "category"]
-    actual_columns = ["Order_Date", "Total_Revenue", "Product_Category"]
+class TestSchemaMapper(unittest.TestCase):
 
-    mapping = fuzzy_match_columns(query_terms, actual_columns, cutoff=50)
-    assert len(mapping) > 0
-    assert mapping["revenue"] == "Total_Revenue"
+    def test_find_label_column(self):
+        cols = ["Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "CHỈ TIÊU", "Năm nay", "Năm trước"]
+        label_col = _find_label_column(cols)
+        self.assertEqual(label_col, "CHỈ TIÊU")
+
+    def test_find_value_column(self):
+        cols = ["Ma_Doanh_Nghiep", "CHỈ TIÊU", "Mã số", "Năm nay", "Năm trước"]
+        val_col = _find_value_column(cols, label_col="CHỈ TIÊU", tieu_chi_phu="Năm nay")
+        self.assertEqual(val_col, "Năm nay")
+
+
+if __name__ == "__main__":
+    unittest.main()
+

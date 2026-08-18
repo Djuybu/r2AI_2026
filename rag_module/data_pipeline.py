@@ -47,6 +47,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple, Set
 
+import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup, Tag
 from qdrant_client import QdrantClient
@@ -65,17 +66,17 @@ from tqdm import tqdm
 # PRODUCTION  (comment out this block and uncomment TESTING when developing)
 # =============================================================================
 # --- Input ---
-# BASE_DIR                 = Path("./ViFinQA")
-# FINANCIAL_STATEMENTS_DIR = BASE_DIR / "financial_statements"
-# CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"
+BASE_DIR                 = Path("./ViFinQA")
+FINANCIAL_STATEMENTS_DIR = BASE_DIR / "financial_statements"
+CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"
 
 # # --- ETL output ---
-# PROCESSED_DATA_DIR       = BASE_DIR / "processed_data"
+PROCESSED_DATA_DIR       = BASE_DIR / "processed_data"
 
 # # --- Index output (bundled inside rag_module/ for Kaggle upload) ---
-# _MODULE_DIR              = Path(__file__).parent
-# QDRANT_DB_PATH           = _MODULE_DIR / "qdrant_local_db"
-# BM25_OUTPUT_PATH         = _MODULE_DIR / "bm25_index.pkl"
+_MODULE_DIR              = Path(__file__).parent
+QDRANT_DB_PATH           = _MODULE_DIR / "qdrant_local_db"
+BM25_OUTPUT_PATH         = _MODULE_DIR / "bm25_index.pkl"
 
 # --- Kaggle override (uncomment and set your dataset name) ---
 # _KAGGLE_ROOT          = Path("/kaggle/input/datasets/duymcminh/r2ai-rag-module")
@@ -86,20 +87,20 @@ from tqdm import tqdm
 # =============================================================================
 # TESTING  (currently active — switch to PRODUCTION block for full run)
 # =============================================================================
-BASE_DIR                 = Path("./ViFinQA")                          # project root
-FINANCIAL_STATEMENTS_DIR = BASE_DIR / "test/statement"                # small test set
-CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"   # inside rag_module/
+# BASE_DIR                 = Path("./ViFinQA")                          # project root
+# FINANCIAL_STATEMENTS_DIR = BASE_DIR / "test/statement"                # small test set
+# CODE_STOCK_CSV           = Path(__file__).parent / "code_stock.csv"   # inside rag_module/
 
 # --- ETL output ---
-PROCESSED_DATA_DIR       = BASE_DIR / "test/processed_data"
+# PROCESSED_DATA_DIR       = BASE_DIR / "test/processed_data"
 
 # --- Index output ---
-_MODULE_DIR              = Path(__file__).parent        # rag_module/
-QDRANT_DB_PATH           = _MODULE_DIR / "test/qdrant_local_db"
-BM25_OUTPUT_PATH         = _MODULE_DIR / "test/bm25_index.pkl"
+# _MODULE_DIR              = Path(__file__).parent        # rag_module/
+# QDRANT_DB_PATH           = _MODULE_DIR / "test/qdrant_local_db"
+# BM25_OUTPUT_PATH         = _MODULE_DIR / "test/bm25_index.pkl"
 
 # --- Qdrant + Embedding ---
-COLLECTION_NAME          = "test_financial_tables"
+COLLECTION_NAME          = "financial_tables"
 EMBEDDING_MODEL_NAME     = "paraphrase-multilingual-MiniLM-L12-v2"
 VECTOR_DIM               = 384
 BATCH_SIZE               = 64            # encoding + Qdrant upsert batch size
@@ -988,8 +989,8 @@ def process_txt_file(
             # Only keep tables that contain numeric data columns
             if has_numeric_data_columns(enriched_df):
                 tables.append(enriched_df)
-            else:
-                logger.info("Discarding text-only table/subtable: %s", sub_table_name)
+            # else:
+            #     # logger.info("Discarding text-only table/subtable: %s", sub_table_name)
 
     return tables
 # ---------------------------------------------------------------------------
@@ -1229,32 +1230,33 @@ def run_indexing(
     )
     logger.info("Phase 2B complete. Vectors shape: %s", vectors.shape)
 
-    # --- Phase 2C: Build Qdrant points + BM25 corpus ---
-    qdrant_points: List[PointStruct]    = []
+    # --- Phase 2C & 2D: Build Qdrant points + BM25 corpus & Upload ---
+    logger.info("Phase 2C & 2D — Uploading points to Qdrant & preparing BM25 corpus …")
     bm25_corpus:   List[List[str]]      = []
     doc_mapping:   List[Dict[str, Any]] = []
-
-    for i, (content_str, payload, vector) in enumerate(
-        zip(content_strings, payloads, vectors)
-    ):
-        point_id = str(uuid.uuid4())
-        qdrant_points.append(PointStruct(
-            id=point_id, vector=vector.tolist(), payload=payload
-        ))
-        bm25_corpus.append(tokenize(content_str))
-        doc_mapping.append({
-            "bm25_idx": i, "qdrant_id": point_id,
-            "content_string": content_str, **payload,
-        })
-
-    # --- Phase 2D: Upload to Qdrant ---
-    logger.info("Phase 2D — Uploading %d points to Qdrant …", len(qdrant_points))
     uploaded = 0
-    for start in tqdm(range(0, len(qdrant_points), batch_size),
+
+    for start in tqdm(range(0, len(content_strings), batch_size),
                       desc="Uploading to Qdrant", unit="batch"):
-        batch = qdrant_points[start: start + batch_size]
-        qdrant.upsert(collection_name=collection_name, points=batch)
-        uploaded += len(batch)
+        end = min(start + batch_size, len(content_strings))
+        batch_points: List[PointStruct] = []
+        for i in range(start, end):
+            content_str = content_strings[i]
+            payload = payloads[i]
+            # Force float32 to prevent numpy float64 doubling memory allocation
+            vector_f32 = vectors[i].astype(np.float32).tolist()
+            point_id = str(uuid.uuid4())
+            batch_points.append(PointStruct(
+                id=point_id, vector=vector_f32, payload=payload
+            ))
+            bm25_corpus.append(tokenize(content_str))
+            doc_mapping.append({
+                "bm25_idx": i, "qdrant_id": point_id,
+                "content_string": content_str, **payload,
+            })
+        qdrant.upsert(collection_name=collection_name, points=batch_points)
+        uploaded += len(batch_points)
+
     logger.info("Phase 2D complete. %d points uploaded.", uploaded)
 
     # --- Phase 2E: BM25 ---

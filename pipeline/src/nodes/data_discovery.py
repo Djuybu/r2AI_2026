@@ -4,6 +4,7 @@ Không sử dụng fallback — chỉ dùng hàm của Search Engine trong searc
 Trả về các bảng có độ khớp cao nhất.
 """
 
+import re
 import time
 import pandas as pd
 from pathlib import Path
@@ -52,6 +53,30 @@ def _load_table_data(file_path: Path) -> Optional[pd.DataFrame]:
     except Exception as e:
         print(f"⚠️ [Data Discovery] Không thể đọc file {file_path.name}: {e}")
     return None
+
+
+def _log_candidates(results: List[Dict[str, Any]], year_label: str = "") -> None:
+    """In log chi tiết các ứng viên top-K tìm được từ Search Engine kèm minh chứng khớp cột có nghĩa."""
+    prefix = f" (Năm {year_label})" if year_label else ""
+    print(f"   📋 Danh sách {len(results)} bảng ứng viên Top-K từ Search Engine{prefix}:")
+    for idx, item in enumerate(results, 1):
+        p_str = item.get("csv_path", "")
+        file_name = Path(p_str).name if p_str else "N/A"
+        ten_bang = item.get("Ten_Bang", "N/A")
+        rrf = item.get("rrf_score", 0.0)
+        dense_r = item.get("dense_rank", "-")
+        sparse_r = item.get("sparse_rank", "-")
+        matched = item.get("content_matched", False)
+        matched_col = item.get("matched_col_name", "")
+        matched_sample = item.get("matched_sample", "")
+
+        col_tag = f"Cột '{matched_col}'" if matched_col else "Cột đầu tiên có nghĩa"
+        matched_str = f" ✅ [Matched {col_tag}]" if matched else ""
+        print(f"      #{idx} RRF: {rrf:.6f} | DenseRank: {dense_r} | SparseRank: {sparse_r}{matched_str}")
+        print(f"         File: {file_name}")
+        print(f"         Tên bảng: {ten_bang}")
+        if matched and matched_sample:
+            print(f"         🔍 Minh chứng dòng khớp trong {col_tag}: \"{matched_sample}\"")
 
 
 def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
@@ -134,6 +159,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 top_k=5,
             )
             if results:
+                _log_candidates(results)
                 best_match = results[0]  # Bảng có độ khớp cao nhất
                 csv_path = _resolve_csv_path(best_match.get("csv_path", ""), cfg)
                 if csv_path:
@@ -146,7 +172,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                         "Loai_Bao_Cao": best_match.get("Loai_Bao_Cao", report_type),
                     }
                     all_discovered_tables.append(table_entry)
-                    print(f"   🏆 Bảng có độ khớp CAO NHẤT: {csv_path.name} — {table_entry['Ten_Bang']} (RRF: {table_entry['rrf_score']:.4f})")
+                    print(f"   🏆 Bảng có độ khớp CAO NHẤT: {csv_path.name} — {table_entry['Ten_Bang']} (RRF: {table_entry['rrf_score']:.6f})")
                 else:
                     print(f"   ❌ Không thể resolve đường dẫn file: {best_match.get('csv_path')}")
             else:
@@ -166,6 +192,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                     top_k=5,
                 )
                 if results:
+                    _log_candidates(results, year_label=str(year))
                     best_match = results[0]  # Bảng có độ khớp cao nhất của năm đó
                     csv_path = _resolve_csv_path(best_match.get("csv_path", ""), cfg)
                     if csv_path:
@@ -178,7 +205,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                             "Loai_Bao_Cao": best_match.get("Loai_Bao_Cao", report_type),
                         }
                         all_discovered_tables.append(table_entry)
-                        print(f"   🏆 Năm {year} - Bảng có độ khớp CAO NHẤT: {csv_path.name} — {best_match.get('Ten_Bang', '?')} (RRF: {table_entry['rrf_score']:.4f})")
+                        print(f"   🏆 Năm {year} - Bảng có độ khớp CAO NHẤT: {csv_path.name} — {best_match.get('Ten_Bang', '?')} (RRF: {table_entry['rrf_score']:.6f})")
                     else:
                         print(f"   ❌ Năm {year}: Không thể resolve đường dẫn file: {best_match.get('csv_path')}")
                 else:

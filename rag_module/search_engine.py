@@ -482,6 +482,43 @@ def run_hybrid_search(
     return fused
 
 
+METADATA_HEADER_COLUMNS = {
+    "Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh",
+    "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon"
+}
+
+
+def is_meaningful_text_column(series: pd.Series) -> bool:
+    """Kiểm tra xem cột có chứa văn bản chỉ tiêu có nghĩa không (bỏ qua số thứ tự, mã số, ký tự mục)."""
+    valid_vals = series.dropna().astype(str).str.strip()
+    valid_vals = valid_vals[valid_vals != ""]
+    if valid_vals.empty:
+        return False
+
+    meaningful_count = 0
+    total = len(valid_vals)
+    for val in valid_vals:
+        # Nếu có từ/chuỗi dài hơn 4 ký tự hoặc chứa khoảng trắng không phải số thuần
+        if len(val) > 4 or (" " in val and not val.replace(" ", "").isdigit()):
+            meaningful_count += 1
+
+    return (meaningful_count / total) >= 0.25 if total > 0 else False
+
+
+def get_first_meaningful_column(df: pd.DataFrame) -> Tuple[Optional[str], pd.Series]:
+    """Tìm cột ĐẦU TIÊN CÓ NGHĨA trong DataFrame (bỏ qua metadata và các cột STT/Mã số thuần số)."""
+    candidate_cols = [c for c in df.columns if c not in METADATA_HEADER_COLUMNS]
+    if not candidate_cols:
+        candidate_cols = list(df.columns)
+
+    for col in candidate_cols:
+        if is_meaningful_text_column(df[col]):
+            return col, df[col]
+
+    first_col = candidate_cols[0] if candidate_cols else df.columns[0]
+    return first_col, df[first_col]
+
+
 def search_by_company_and_content(
     company_name: str,
     content: str,
@@ -491,11 +528,11 @@ def search_by_company_and_content(
 ) -> List[RRFResult]:
     """
     Tra cứu bảng báo cáo tài chính dựa trên tên công ty (hoặc mã chứng khoán)
-    và nội dung nằm ở cột đầu tiên (chỉ tiêu).
+    và nội dung nằm ở cột đầu tiên có nghĩa (chỉ tiêu).
 
     Args:
         company_name: Tên công ty hoặc mã chứng khoán (VD: 'Vinamilk', 'VNM', 'FPT')
-        content: Nội dung nằm ở cột đầu tiên của bảng (VD: 'Doanh thu thuần', 'Tài sản ngắn hạn')
+        content: Nội dung nằm ở cột đầu tiên có nghĩa của bảng (VD: 'Doanh thu thuần', 'Chi phí hoạt động')
         year: Năm báo cáo tài chính (VD: '2023')
         report_type: Loại báo cáo ('separate' | 'consolidated')
         top_k: Số lượng bảng tìm kiếm từ hybrid search
@@ -553,19 +590,26 @@ def search_by_company_and_content(
     if not results:
         return []
 
-    # 4. Kiểm tra độ khớp nội dung ở cột 0 để ưu tiên bảng chứa content ở cột 0
+    # 4. Kiểm tra độ khớp nội dung ở CỘT ĐẦU TIÊN CÓ NGHĨA để ưu tiên bảng chứa content
     if content:
         content_lower = content.lower().strip()
         for r in results:
             csv_path = r.get("csv_path", "")
             if csv_path and os.path.exists(csv_path):
                 try:
-                    df_sample = pd.read_csv(csv_path, nrows=50)
+                    df_sample = pd.read_csv(csv_path, nrows=100)
                     if not df_sample.empty:
-                        first_col = df_sample.iloc[:, 0].astype(str).str.lower()
-                        if first_col.str.contains(content_lower, regex=False).any():
+                        col_name, col_series = get_first_meaningful_column(df_sample)
+                        col_str = col_series.dropna().astype(str).str.strip()
+                        col_str_lower = col_str.str.lower()
+
+                        mask = col_str_lower.str.contains(content_lower, regex=False)
+                        if mask.any():
+                            matched_series = col_str[mask]
                             r["rrf_score"] = round(r["rrf_score"] + 0.1, 6)
                             r["content_matched"] = True
+                            r["matched_col_name"] = str(col_name)
+                            r["matched_sample"] = str(matched_series.iloc[0])
                 except Exception:
                     pass
 

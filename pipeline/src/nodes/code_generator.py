@@ -158,35 +158,38 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             if muc_tieu == "trich_xuat":
                 human_content += (
                     f"HƯỚNG DẪN CỤ THỂ:\n"
-                    f"1. Đọc file CSV.\n"
-                    f"2. Filter dòng chứa '{noi_dung}' ở cột '{label_col}'.\n"
+                    f"1. Đọc file CSV bằng pd.read_csv(file_path).\n"
+                    f"2. Filter dòng chứa '{noi_dung}' ở cột '{label_col}'. Nếu rỗng, thử filter với từ khóa chính (VD: 'Tiền').\n"
                     f"3. Lấy giá trị ở cột '{value_col}', clean bằng clean_val().\n"
                     f"4. Gán vào biến result.\n"
                 )
             elif muc_tieu == "tinh_tong":
                 human_content += (
                     f"HƯỚNG DẪN CỤ THỂ:\n"
-                    f"1. Đọc file CSV.\n"
-                    f"2. Tìm dòng có chứa 'Tổng' hoặc 'Cộng' kèm '{noi_dung}' ở cột '{label_col}'.\n"
-                    f"3. Nếu tìm thấy → lấy giá trị đó, clean bằng clean_val(), gán vào result.\n"
+                    f"1. Đọc file CSV bằng pd.read_csv(file_path).\n"
+                    f"2. Tìm dòng có chứa 'Tổng' hoặc 'Cộng' hoặc tên chỉ tiêu '{noi_dung}' ở cột '{label_col}'.\n"
+                    f"3. Nếu tìm thấy → lấy giá trị ở cột '{value_col}', clean bằng clean_val(), gán vào result.\n"
                     f"4. Nếu KHÔNG tìm thấy → tìm các dòng con riêng lẻ liên quan đến '{noi_dung}', "
                     f"cộng tổng giá trị và gán vào result.\n"
                 )
             elif muc_tieu == "so_sanh":
                 human_content += (
-                    f"HƯỚNG DẪN CỤ THỂ:\n"
-                    f"1. Đọc từng file CSV (mỗi file là một năm).\n"
-                    f"2. Từ mỗi file, filter dòng chứa '{noi_dung}' ở cột '{label_col}'.\n"
-                    f"3. Lấy giá trị ở cột '{value_col}', clean bằng clean_val().\n"
-                    f"4. Tính chênh lệch (delta) và phần trăm thay đổi giữa các năm.\n"
-                    f"5. Gán result = dict chứa giá trị từng năm, delta, pct_change.\n"
+                    f"HƯỚNG DẪN CỤ THỂ (TÍNH TỐC ĐỘ TĂNG TRƯỞNG / SO SÁNH NĂM):\n"
+                    f"1. Đọc từng file CSV cho từng năm (ví dụ file_path_2019, file_path_2020, file_path_2021...).\n"
+                    f"2. Từ mỗi file, filter dòng chứa '{noi_dung}' (hoặc từ khóa chính như 'Tiền') ở cột '{label_col}'.\n"
+                    f"3. Lấy giá trị ở cột '{value_col}' của từng năm, clean bằng clean_val().\n"
+                    f"4. Tính tốc độ tăng trưởng phần trăm (%) giữa năm đầu và năm cuối: `growth_rate = ((val_last - val_first) / val_first) * 100`.\n"
+                    f"5. Gán kết quả vào `result` (ví dụ `result = growth_rate` hoặc dict chứa giá trị từng năm và tốc độ tăng trưởng).\n"
                 )
 
             human_content += (
-                f"\n🚨 BẮT BUỘC:\n"
-                f"- Định nghĩa clean_val(val) để parse string số tài chính.\n"
-                f"- Dùng pd.read_csv() để đọc file.\n"
-                f"- Gán kết quả cuối cùng vào biến `result`.\n"
+                f"\n🚨 BẮT BUỘC KHÔNG ĐƯỢC VI PHẠM:\n"
+                f"1. Định nghĩa clean_val(val) để parse string số tài chính thành float.\n"
+                f"2. Đọc file bằng pd.read_csv(file_path...).\n"
+                f"3. Filter dòng chứa chỉ tiêu bằng `.str.contains('{noi_dung}', case=False, na=False)` TRÊN CỘT NHÃN '{label_col}'. KHÔNG TỰ GHÉP SỐ NĂM VÀO CHUỖI TÌM KIẾM.\n"
+                f"4. KHÔNG ĐƯỢC filter theo `df['Ma_Doanh_Nghiep'] == ...` vì dữ liệu đã đúng công ty.\n"
+                f"5. CHỈ ĐƯỢC SỬ DỤNG CÁC BIẾN ĐƯỜNG DẪN FILE ĐÃ ĐƯỢC ĐỊNH NGHĨA Ở TRÊN:\n{paths_str}\n"
+                f"6. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.\n"
             )
 
             messages.append(HumanMessage(content=human_content))
