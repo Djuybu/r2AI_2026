@@ -32,11 +32,16 @@ class TestDataDiscovery(unittest.TestCase):
     def test_data_discovery_node_success(self):
         state: AgentState = {
             "user_query": "Doanh thu năm 2024",
-            "parsed_query": {"file_name": "sample_sales", "intent": "aggregate"},
+            "parsed_query": {
+                "ten_cong_ty": "FPT",
+                "so_nam": ["2024"],
+                "noi_dung": "sample_sales",
+                "thao_tac": "trich_xuat"
+            },
         }
         result = data_discovery_node(state)
         self.assertEqual(result["status"], "pending")
-        self.assertIsNotNone(result["matched_table_path"])
+        self.assertTrue(len(result.get("discovered_tables", [])) > 0 or result.get("matched_table_path") is not None)
         self.assertIn("data_discovery", result["node_latencies"])
 
 
