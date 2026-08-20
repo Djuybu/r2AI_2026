@@ -186,10 +186,11 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 f"\n🚨 BẮT BUỘC KHÔNG ĐƯỢC VI PHẠM:\n"
                 f"1. Định nghĩa clean_val(val) để parse string số tài chính thành float.\n"
                 f"2. Đọc file bằng pd.read_csv(file_path...).\n"
-                f"3. Filter dòng chứa chỉ tiêu bằng `.str.contains('{noi_dung}', case=False, na=False)` TRÊN CỘT NHÃN '{label_col}'. KHÔNG TỰ GHÉP SỐ NĂM VÀO CHUỖI TÌM KIẾM.\n"
-                f"4. KHÔNG ĐƯỢC filter theo `df['Ma_Doanh_Nghiep'] == ...` vì dữ liệu đã đúng công ty.\n"
-                f"5. CHỈ ĐƯỢC SỬ DỤNG CÁC BIẾN ĐƯỜNG DẪN FILE ĐÃ ĐƯỢC ĐỊNH NGHĨA Ở TRÊN:\n{paths_str}\n"
-                f"6. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.\n"
+                f"3. Dùng `df['{label_col}'].astype(str).str.contains(..., case=False, na=False)` để lọc dòng. LUÔN DÙNG .astype(str) trước .str.\n"
+                f"4. Kiểm tra `if not row.empty:` trước khi lấy `.values[0]`. Nếu rỗng, hãy lọc theo từ khóa ngắn hơn (ví dụ 'Tiền' thay vì cả câu dài) hoặc trả về 0.0.\n"
+                f"5. KHÔNG ĐƯỢC filter theo `df['Ma_Doanh_Nghiep'] == ...` vì dữ liệu đã đúng công ty.\n"
+                f"6. CHỈ ĐƯỢC SỬ DỤNG CÁC BIẾN ĐƯỜNG DẪN FILE ĐÃ ĐƯỢC ĐỊNH NGHĨA Ở TRÊN:\n{paths_str}\n"
+                f"7. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.\n"
             )
 
             messages.append(HumanMessage(content=human_content))
@@ -202,6 +203,22 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             print(f"🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần {retry_count})...")
             print(f"   - Traceback Lỗi:\n{error_traceback.strip()}")
 
+            # Extract sample labels from CSV files to guide LLM if IndexError occurred
+            sample_labels = []
+            if discovered_tables:
+                from pathlib import Path
+                for tbl in discovered_tables:
+                    c_path = tbl.get("csv_path")
+                    if c_path and Path(c_path).exists():
+                        try:
+                            sub_df = pd.read_csv(c_path)
+                            if label_col in sub_df.columns:
+                                labels = sub_df[label_col].dropna().astype(str).head(20).tolist()
+                                sample_labels.append(f"Mẫu chỉ tiêu thực tế trong file '{Path(c_path).name}':\n{labels}")
+                        except Exception:
+                            pass
+            sample_labels_str = "\n\n".join(sample_labels) if sample_labels else ""
+
             human_content = (
                 f"Yêu cầu người dùng: {user_query}\n\n"
                 f"MỤC TIÊU: {muc_tieu}\n"
@@ -209,10 +226,17 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 f"DỮ LIỆU:\n{files_context}\n\n"
                 f"CỘT: label='{label_col}', value='{value_col}'\n\n"
                 f"BIẾN ĐƯỜNG DẪN:\n{paths_str}\n\n"
+            )
+            if sample_labels_str:
+                human_content += f"{sample_labels_str}\n\n"
+
+            human_content += (
                 f"Mã Python bị lỗi trước đó:\n```python\n{state.get('generated_code', '')}\n```\n\n"
                 f"Traceback Lỗi:\n{error_traceback}\n\n"
-                f"Hãy sửa lại đoạn mã trên, đảm bảo kết quả cuối cùng lưu vào biến `result`.\n"
-                f"Dùng clean_val() để parse giá trị số. Dùng .str.contains trên cột '{label_col}'.\n"
+                f"HƯỚNG DẪN SỬA LỖI:\n"
+                f"1. Dùng `df['{label_col}'].astype(str).str.contains(..., case=False, na=False)`.\n"
+                f"2. Kiểm tra `if not row.empty:` trước khi truy cập `.values[0]`. Nếu rỗng, thử dùng từ khóa ngắn gọn có trong danh sách chỉ tiêu thực tế ở trên.\n"
+                f"3. Đảm bảo kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.\n"
             )
             messages = [
                 SystemMessage(content=system_prompt),

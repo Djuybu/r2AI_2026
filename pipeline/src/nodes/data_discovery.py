@@ -93,10 +93,17 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
 
     if not so_nam and isinstance(user_query, str):
         so_nam = re.findall(r"\b(20\d{2})\b", user_query)
-    if not ten_cong_ty and isinstance(user_query, str):
-        m_ticker = re.search(r"\b([A-Za-z]{3,5})\b", user_query)
-        if m_ticker:
-            ten_cong_ty = m_ticker.group(1)
+    if isinstance(user_query, str):
+        try:
+            from rag_module.search_engine import _resolve_ticker
+            if ten_cong_ty:
+                ten_cong_ty = _resolve_ticker(ten_cong_ty)
+            else:
+                m_ticker = re.search(r"\b([A-Za-z]{3,5})\b", user_query)
+                if m_ticker:
+                    ten_cong_ty = _resolve_ticker(m_ticker.group(1))
+        except Exception:
+            pass
     if not noi_dung:
         noi_dung = user_query if isinstance(user_query, str) else ""
 

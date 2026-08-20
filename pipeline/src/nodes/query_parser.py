@@ -26,6 +26,35 @@ def load_query_parser_prompt(cfg: Config) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def _normalize_company_name(company_input: str, user_query: str) -> str:
+    """Normalize company name or raw ticker input against code_stock.csv map."""
+    try:
+        from rag_module.search_engine import _ensure_resources, _company_map
+        _ensure_resources()
+        if _company_map:
+            q_lower = user_query.lower()
+            for name, code in _company_map:
+                if name.lower() in q_lower:
+                    return code
+
+            if company_input:
+                c_lower = company_input.lower()
+                for name, code in _company_map:
+                    if name.lower() in c_lower or c_lower in name.lower():
+                        return code
+
+            all_tickers = {code.upper() for _, code in _company_map}
+            if company_input and company_input.upper() in all_tickers:
+                return company_input.upper()
+
+            for w in re.findall(r"\b[A-Za-z]{3,5}\b", user_query):
+                if w.upper() in all_tickers:
+                    return w.upper()
+    except Exception as e:
+        print(f"⚠️ [Query Parser] Stock code normalization error: {e}")
+    return company_input
+
+
 def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     """Fallback rule-based parser when LLM is unreachable."""
     q = user_query.strip()
@@ -49,6 +78,7 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
 
     m_ticker = re.search(r"\b([A-Z]{3,5})\b", q)
     company = m_ticker.group(1) if m_ticker else ""
+    company = _normalize_company_name(company, user_query)
 
     clean_content = re.sub(r"\b(20\d{2})\b", "", q)
     if company:
@@ -153,6 +183,10 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
             parsed_json["noi_dung"] = ""
         if "ten_cong_ty" not in parsed_json:
             parsed_json["ten_cong_ty"] = ""
+        
+        # Normalize stock code / company name against code_stock.csv map
+        parsed_json["ten_cong_ty"] = _normalize_company_name(parsed_json.get("ten_cong_ty", ""), user_query)
+
         if "so_nam" not in parsed_json:
             parsed_json["so_nam"] = []
         if "tieu_chi_phu" not in parsed_json:
