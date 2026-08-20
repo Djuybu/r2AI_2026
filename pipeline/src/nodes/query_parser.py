@@ -27,32 +27,88 @@ def load_query_parser_prompt(cfg: Config) -> Dict[str, Any]:
 
 
 def _normalize_company_name(company_input: str, user_query: str) -> str:
-    """Normalize company name or raw ticker input against code_stock.csv map."""
+    """Normalize company name or raw ticker input against rag_module/code_stock.csv map.
+    
+    Quy tắc:
+    1. Load file rag_module/code_stock.csv.
+    2. Nếu tên/mã đầu vào thuộc cột "Mã CK" -> giữ nguyên (không cần map).
+    3. Nếu thuộc cột "Tên công ty" -> map sang "Mã CK" để thực hiện tra cứu.
+    """
+    company_input = company_input.strip() if company_input else ""
+    user_query = user_query.strip() if user_query else ""
+
     try:
-        from rag_module.search_engine import _ensure_resources, _company_map
-        _ensure_resources()
-        if _company_map:
-            q_lower = user_query.lower()
-            for name, code in _company_map:
-                if name.lower() in q_lower:
+        from pathlib import Path
+        import pandas as pd
+
+        # Tìm đường dẫn tới file code_stock.csv
+        possible_paths = [
+            Path("rag_module/code_stock.csv"),
+            Path("rag_module/ViFinQA/code_stock.csv"),
+            Path("/kaggle/working/r2AI_2026/rag_module/code_stock.csv"),
+            Path(__file__).resolve().parent.parent.parent / "rag_module" / "code_stock.csv",
+            Path(__file__).resolve().parent.parent.parent / "rag_module" / "ViFinQA" / "code_stock.csv",
+        ]
+
+        csv_path = None
+        for p in possible_paths:
+            if p.exists():
+                csv_path = p
+                break
+
+        name_to_code = []
+        all_tickers = set()
+
+        if csv_path:
+            df = pd.read_csv(csv_path, encoding="utf-8-sig", dtype=str)
+            ticker_col = next((c for c in df.columns if "CK" in c.upper()), df.columns[0])
+            name_col = next((c for c in df.columns if "TÊN" in c.upper() or "TEN" in c.upper()), df.columns[1])
+
+            for _, row in df.iterrows():
+                code = str(row[ticker_col]).strip().upper() if pd.notna(row[ticker_col]) else ""
+                name = str(row[name_col]).strip() if pd.notna(row[name_col]) else ""
+                if code:
+                    all_tickers.add(code)
+                if code and name:
+                    name_to_code.append((name, code))
+        else:
+            # Fallback sang search_engine nếu không đọc được file CSV
+            from rag_module.search_engine import _ensure_resources, _company_map
+            _ensure_resources()
+            if _company_map:
+                name_to_code = list(_company_map)
+                all_tickers = {code.upper() for _, code in _company_map}
+
+        # 1. Kiểm tra xem company_input có nằm ở cột "Mã CK" hay không -> Nếu có thì KHÔNG CẦN MAP
+        if company_input and company_input.upper() in all_tickers:
+            return company_input.upper()
+
+        # Sắp xếp danh sách tên công ty theo độ dài giảm dần (longest-match first)
+        name_to_code.sort(key=lambda x: len(x[0]), reverse=True)
+
+        # 2. Nếu tên trong nội dung user_query nằm ở "Tên công ty" -> map sang "Mã CK"
+        q_lower = user_query.lower()
+        for name, code in name_to_code:
+            if name.lower() in q_lower:
+                return code
+
+        # 3. Nếu tên trong company_input nằm ở "Tên công ty" -> map sang "Mã CK"
+        if company_input:
+            c_lower = company_input.lower()
+            for name, code in name_to_code:
+                if name.lower() in c_lower or c_lower in name.lower():
                     return code
 
-            if company_input:
-                c_lower = company_input.lower()
-                for name, code in _company_map:
-                    if name.lower() in c_lower or c_lower in name.lower():
-                        return code
+        # 4. Tra cứu các từ 3-5 ký tự xuất hiện trong câu hỏi có thuộc cột "Mã CK"
+        for w in re.findall(r"\b[A-Za-z]{3,5}\b", user_query):
+            if w.upper() in all_tickers:
+                return w.upper()
 
-            all_tickers = {code.upper() for _, code in _company_map}
-            if company_input and company_input.upper() in all_tickers:
-                return company_input.upper()
-
-            for w in re.findall(r"\b[A-Za-z]{3,5}\b", user_query):
-                if w.upper() in all_tickers:
-                    return w.upper()
     except Exception as e:
         print(f"⚠️ [Query Parser] Stock code normalization error: {e}")
+
     return company_input
+
 
 
 def _fallback_parse_query(user_query: str) -> Dict[str, Any]:

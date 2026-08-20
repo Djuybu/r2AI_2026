@@ -1,6 +1,7 @@
 """Node 4: Code Generation & Reflection Node.
 Sinh code Python/Pandas dựa trên mục tiêu (trich_xuat/tinh_tong/so_sanh),
 cột mapping, và bảng dữ liệu đã tìm được.
+Tất cả các prompt, quy tắc và template được nạp từ file prompts/code_generator.yaml & prompts/reflection.yaml.
 """
 
 import re
@@ -29,13 +30,11 @@ def clean_python_code(raw_code: str) -> str:
     if not raw_code:
         return ""
 
-    # Match ```python ... ``` or ``` ... ```
     pattern = r"```(?:python)?\s*\n?(.*?)\n?```"
     matches = re.findall(pattern, raw_code, re.DOTALL)
     if matches:
         return matches[0].strip()
 
-    # If no markdown block, clean trailing quotes
     cleaned = raw_code.strip()
     if cleaned.startswith("```") and cleaned.endswith("```"):
         cleaned = cleaned[3:-3].strip()
@@ -69,8 +68,7 @@ def _build_files_context(
 def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
     """LangGraph Node 4: Sinh code Pandas hoặc sửa code lỗi (Reflection Loop).
 
-    Đọc parsed_query format mới (muc_tieu, noi_dung, ten_cong_ty, so_nam, tieu_chi_phu)
-    và discovered_tables để sinh code phù hợp.
+    Nạp prompt và hướng dẫn từ YAML, hỗ trợ các mục tiêu (trich_xuat, tinh_tong, so_sanh).
 
     Args:
         state: Current AgentState
@@ -121,6 +119,8 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             prompt_data = load_yaml_prompt(cfg, "code_generator.yaml")
             system_prompt = prompt_data["system_prompt"]
             few_shots = prompt_data.get("few_shot_examples", [])
+            goal_descs = prompt_data.get("goal_descriptions", {})
+            goal_instructions = prompt_data.get("goal_instructions", {})
 
             messages = [SystemMessage(content=system_prompt)]
             for ex in few_shots:
@@ -133,64 +133,27 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 )
                 messages.append(SystemMessage(content=ex["generated_code"]))
 
-            # Build human message with structured instructions
-            muc_tieu_desc = {
-                "trich_xuat": "TRÍCH XUẤT giá trị cụ thể",
-                "tinh_tong": "TÍNH TỔNG (tìm dòng Tổng/Cộng trước, nếu không có thì cộng các dòng con)",
-                "so_sanh": "SO SÁNH giá trị giữa nhiều năm/công ty",
-            }
+            # Retrieve goal description and goal instruction from YAML
+            goal_desc = goal_descs.get(muc_tieu, muc_tieu)
+            goal_inst_template = goal_instructions.get(muc_tieu, "")
+            goal_inst = goal_inst_template.format(
+                noi_dung=noi_dung, label_col=label_col, value_col=value_col
+            ) if goal_inst_template else ""
 
-            human_content = (
-                f"Yêu cầu người dùng: {user_query}\n\n"
-                f"MỤC TIÊU: {muc_tieu_desc.get(muc_tieu, muc_tieu)}\n"
-                f"NỘI DUNG cần tìm (ở cột label): '{noi_dung}'\n"
-                f"Công ty: {ten_cong_ty}\n"
-                f"Năm: {so_nam}\n"
-                f"Tiêu chí phụ: {tieu_chi_phu or '(không có)'}\n\n"
-                f"DỮ LIỆU CÓ SẴN:\n{files_context}\n\n"
-                f"CỘT QUAN TRỌNG:\n"
-                f"- Cột nhãn (chứa tên chỉ tiêu): '{label_col}'\n"
-                f"- Cột giá trị: '{value_col}'\n\n"
-                f"BIẾN ĐƯỜNG DẪN FILE:\n{paths_str}\n\n"
-            )
-
-            # Add specific instructions based on muc_tieu
-            if muc_tieu == "trich_xuat":
-                human_content += (
-                    f"HƯỚNG DẪN CỤ THỂ:\n"
-                    f"1. Đọc file CSV bằng pd.read_csv(file_path).\n"
-                    f"2. Filter dòng chứa '{noi_dung}' ở cột '{label_col}'. Nếu rỗng, thử filter với từ khóa chính (VD: 'Tiền').\n"
-                    f"3. Lấy giá trị ở cột '{value_col}', clean bằng clean_val().\n"
-                    f"4. Gán vào biến result.\n"
-                )
-            elif muc_tieu == "tinh_tong":
-                human_content += (
-                    f"HƯỚNG DẪN CỤ THỂ:\n"
-                    f"1. Đọc file CSV bằng pd.read_csv(file_path).\n"
-                    f"2. Tìm dòng có chứa 'Tổng' hoặc 'Cộng' hoặc tên chỉ tiêu '{noi_dung}' ở cột '{label_col}'.\n"
-                    f"3. Nếu tìm thấy → lấy giá trị ở cột '{value_col}', clean bằng clean_val(), gán vào result.\n"
-                    f"4. Nếu KHÔNG tìm thấy → tìm các dòng con riêng lẻ liên quan đến '{noi_dung}', "
-                    f"cộng tổng giá trị và gán vào result.\n"
-                )
-            elif muc_tieu == "so_sanh":
-                human_content += (
-                    f"HƯỚNG DẪN CỤ THỂ (TÍNH TỐC ĐỘ TĂNG TRƯỞNG / SO SÁNH NĂM):\n"
-                    f"1. Đọc từng file CSV cho từng năm (ví dụ file_path_2019, file_path_2020, file_path_2021...).\n"
-                    f"2. Từ mỗi file, filter dòng chứa '{noi_dung}' (hoặc từ khóa chính như 'Tiền') ở cột '{label_col}'.\n"
-                    f"3. Lấy giá trị ở cột '{value_col}' của từng năm, clean bằng clean_val().\n"
-                    f"4. Tính tốc độ tăng trưởng phần trăm (%) giữa năm đầu và năm cuối: `growth_rate = ((val_last - val_first) / val_first) * 100`.\n"
-                    f"5. Gán kết quả vào `result` (ví dụ `result = growth_rate` hoặc dict chứa giá trị từng năm và tốc độ tăng trưởng).\n"
-                )
-
-            human_content += (
-                f"\n🚨 BẮT BUỘC KHÔNG ĐƯỢC VI PHẠM:\n"
-                f"1. Định nghĩa clean_val(val) để parse string số tài chính thành float.\n"
-                f"2. Đọc file bằng pd.read_csv(file_path...).\n"
-                f"3. Dùng `df['{label_col}'].astype(str).str.contains(..., case=False, na=False)` để lọc dòng. LUÔN DÙNG .astype(str) trước .str.\n"
-                f"4. Kiểm tra `if not row.empty:` trước khi lấy `.values[0]`. Nếu rỗng, hãy lọc theo từ khóa ngắn hơn (ví dụ 'Tiền' thay vì cả câu dài) hoặc trả về 0.0.\n"
-                f"5. KHÔNG ĐƯỢC filter theo `df['Ma_Doanh_Nghiep'] == ...` vì dữ liệu đã đúng công ty.\n"
-                f"6. CHỈ ĐƯỢC SỬ DỤNG CÁC BIẾN ĐƯỜNG DẪN FILE ĐÃ ĐƯỢC ĐỊNH NGHĨA Ở TRÊN:\n{paths_str}\n"
-                f"7. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.\n"
+            # Format user prompt from YAML template
+            user_template = prompt_data.get("user_prompt_template", "")
+            human_content = user_template.format(
+                user_query=user_query,
+                muc_tieu_desc=goal_desc,
+                noi_dung=noi_dung,
+                ten_cong_ty=ten_cong_ty,
+                so_nam=so_nam,
+                tieu_chi_phu=tieu_chi_phu or "(không có)",
+                files_context=files_context,
+                label_col=label_col,
+                value_col=value_col,
+                paths_str=paths_str,
+                goal_instruction=goal_inst,
             )
 
             messages.append(HumanMessage(content=human_content))
@@ -203,7 +166,6 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             print(f"🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần {retry_count})...")
             print(f"   - Traceback Lỗi:\n{error_traceback.strip()}")
 
-            # Extract sample labels from CSV files to guide LLM if IndexError occurred
             sample_labels = []
             if discovered_tables:
                 from pathlib import Path
@@ -219,25 +181,20 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                             pass
             sample_labels_str = "\n\n".join(sample_labels) if sample_labels else ""
 
-            human_content = (
-                f"Yêu cầu người dùng: {user_query}\n\n"
-                f"MỤC TIÊU: {muc_tieu}\n"
-                f"NỘI DUNG: '{noi_dung}'\n"
-                f"DỮ LIỆU:\n{files_context}\n\n"
-                f"CỘT: label='{label_col}', value='{value_col}'\n\n"
-                f"BIẾN ĐƯỜNG DẪN:\n{paths_str}\n\n"
+            user_template = prompt_data.get("user_prompt_template", "")
+            human_content = user_template.format(
+                user_query=user_query,
+                muc_tieu=muc_tieu,
+                noi_dung=noi_dung,
+                files_context=files_context,
+                label_col=label_col,
+                value_col=value_col,
+                paths_str=paths_str,
+                sample_labels_str=sample_labels_str,
+                previous_code=state.get('generated_code', ''),
+                error_traceback=error_traceback,
             )
-            if sample_labels_str:
-                human_content += f"{sample_labels_str}\n\n"
 
-            human_content += (
-                f"Mã Python bị lỗi trước đó:\n```python\n{state.get('generated_code', '')}\n```\n\n"
-                f"Traceback Lỗi:\n{error_traceback}\n\n"
-                f"HƯỚNG DẪN SỬA LỖI:\n"
-                f"1. Dùng `df['{label_col}'].astype(str).str.contains(..., case=False, na=False)`.\n"
-                f"2. Kiểm tra `if not row.empty:` trước khi truy cập `.values[0]`. Nếu rỗng, thử dùng từ khóa ngắn gọn có trong danh sách chỉ tiêu thực tế ở trên.\n"
-                f"3. Đảm bảo kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.\n"
-            )
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=human_content)
