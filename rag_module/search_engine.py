@@ -60,11 +60,14 @@ BM25_PATH       = _DEFAULT_BM25 if _DEFAULT_BM25.exists() else _TEST_BM25
 _DEFAULT_CSV = _HERE / "ViFinQA" / "code_stock.csv"
 CODE_STOCK_CSV = _DEFAULT_CSV if _DEFAULT_CSV.exists() else _HERE / "code_stock.csv"
 
-# --- KAGGLE paths (uncomment and set your Kaggle dataset name) ---
-# _KAGGLE_ROOT       = Path("/kaggle/input/your-dataset-name/rag_module")
-# QDRANT_DB_PATH     = _KAGGLE_ROOT / "qdrant_local_db"
-# BM25_PATH          = _KAGGLE_ROOT / "bm25_index.pkl"
-# CODE_STOCK_CSV     = _KAGGLE_ROOT / "code_stock.csv"
+# --- KAGGLE paths (auto-detect Kaggle dataset path) ---
+_KAGGLE_DATA_DIR = Path("/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data")
+if (_KAGGLE_DATA_DIR / "qdrant_local_db").exists():
+    QDRANT_DB_PATH = _KAGGLE_DATA_DIR / "qdrant_local_db"
+if (_KAGGLE_DATA_DIR / "bm25_index.pkl").exists():
+    BM25_PATH = _KAGGLE_DATA_DIR / "bm25_index.pkl"
+if (_KAGGLE_DATA_DIR / "code_stock.csv").exists():
+    CODE_STOCK_CSV = _KAGGLE_DATA_DIR / "code_stock.csv"
 
 COLLECTION_NAME      = "financial_tables"
 EMBEDDING_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
@@ -518,6 +521,36 @@ def is_meaningful_text_column(series: pd.Series) -> bool:
     return (meaningful_count / total) >= 0.25 if total > 0 else False
 
 
+def _resolve_local_csv_path(csv_path_str: str) -> Optional[Path]:
+    """Resolve raw csv_path from index payload to an existing file path on local or Kaggle disk."""
+    if not csv_path_str:
+        return None
+    p_str = csv_path_str.replace("\\", "/")
+    direct = Path(p_str).resolve()
+    if direct.exists():
+        return direct
+
+    idx_fin = p_str.find("ViFinQA")
+    if idx_fin != -1:
+        rel = p_str[idx_fin:]
+        bases = [
+            _HERE,
+            _HERE.parent,
+            Path.cwd(),
+            Path("/kaggle/working/r2AI_2026"),
+            Path("/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data"),
+            Path("/kaggle/input/datasets/duymcminh/r2-ai-output"),
+        ]
+        for base in bases:
+            c1 = (base / rel).resolve()
+            if c1.exists():
+                return c1
+            c2 = (base / "rag_module" / rel).resolve()
+            if c2.exists():
+                return c2
+    return None
+
+
 def get_first_meaningful_column(df: pd.DataFrame) -> Tuple[Optional[str], pd.Series]:
     """Tìm cột ĐẦU TIÊN CÓ NGHĨA trong DataFrame (bỏ qua metadata và các cột STT/Mã số thuần số)."""
     candidate_cols = [c for c in df.columns if c not in METADATA_HEADER_COLUMNS]
@@ -605,10 +638,11 @@ def search_by_company_and_content(
             # 3. Thu thập tất cả các dòng chỉ tiêu ở Cột đầu tiên từ ~100 bảng này
             row_items: List[Dict[str, Any]] = []
             for doc in candidates:
-                csv_path = doc.get("csv_path", "")
-                if csv_path and os.path.exists(csv_path):
+                raw_csv_path = doc.get("csv_path", "")
+                csv_path_resolved = _resolve_local_csv_path(raw_csv_path)
+                if csv_path_resolved and csv_path_resolved.exists():
                     try:
-                        df_sample = pd.read_csv(csv_path, nrows=100)
+                        df_sample = pd.read_csv(csv_path_resolved, nrows=100)
                         if not df_sample.empty:
                             col_name, col_series = get_first_meaningful_column(df_sample)
                             for r_idx, val in col_series.dropna().items():
@@ -619,10 +653,10 @@ def search_by_company_and_content(
                                         "col_name": str(col_name),
                                         "row_idx": r_idx,
                                         "doc": doc,
-                                        "csv_path": csv_path,
+                                        "csv_path": str(csv_path_resolved),
                                     })
                     except Exception as exc:
-                        logger.debug("Error reading CSV %s: %s", csv_path, exc)
+                        logger.debug("Error reading CSV %s: %s", csv_path_resolved, exc)
 
             if row_items:
                 logger.info("Collected %d line items from Column 0 across candidate tables. Running On-the-fly Hybrid Search...", len(row_items))
