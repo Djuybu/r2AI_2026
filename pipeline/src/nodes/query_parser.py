@@ -111,6 +111,46 @@ def _normalize_company_name(company_input: str, user_query: str) -> str:
 
 
 
+def _clean_financial_content(text: str) -> str:
+    """Clean action phrases, measurement prefixes, and query noise from financial content string."""
+    if not text:
+        return ""
+
+    cleaned = text.strip()
+
+    # Strip leading action/measurement phrases
+    strip_patterns = [
+        r"^tốc\s+độ\s+tăng\s+trưởng\s*%\s*",
+        r"^tốc\s+độ\s+tăng\s+trưởng\s*",
+        r"^tăng\s+trưởng\s*%\s*",
+        r"^tăng\s+trưởng\s*",
+        r"^tỷ\s+lệ\s+tăng\s+trưởng\s*",
+        r"^tỷ\s+lệ\s*",
+        r"^tỷ\s+trọng\s*",
+        r"^mức\s+biến\s+động\s*",
+        r"^chênh\s+lệch\s*",
+        r"^so\s+sánh\s*",
+        r"^tính\s+tổng\s*",
+        r"^trích\s+xuất\s*",
+        r"^cho\s+biết\s*",
+    ]
+
+    for pattern in strip_patterns:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+
+    # Strip trailing question/noise phrases
+    trailing_patterns = [
+        r"\s*là\s+bao\s+nhiêu\??$",
+        r"\s*bao\s+nhiêu\??$",
+        r"\s*thay\s+đổi\s+như\s+thế\s+nào\??$",
+        r"\s*như\s+thế\s+nào\??$",
+    ]
+    for pattern in trailing_patterns:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+
+    return cleaned.strip()
+
+
 def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     """Fallback rule-based parser when LLM is unreachable."""
     q = user_query.strip()
@@ -149,7 +189,7 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     for word in stop_phrases:
         clean_content = re.sub(rf"\b{re.escape(word)}\b", "", clean_content, flags=re.IGNORECASE)
     
-    clean_content = re.sub(r"\s+", " ", clean_content).strip()
+    clean_content = _clean_financial_content(clean_content or q)
 
     return {
         "ten_cong_ty": company,
@@ -235,8 +275,10 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         parsed_json["thao_tac"] = thao_tac
         parsed_json["muc_tieu"] = thao_tac
 
-        if "noi_dung" not in parsed_json:
-            parsed_json["noi_dung"] = ""
+        # Clean and extract core financial content
+        raw_noi_dung = parsed_json.get("noi_dung", "")
+        parsed_json["noi_dung"] = _clean_financial_content(raw_noi_dung) or raw_noi_dung
+
         if "ten_cong_ty" not in parsed_json:
             parsed_json["ten_cong_ty"] = ""
         

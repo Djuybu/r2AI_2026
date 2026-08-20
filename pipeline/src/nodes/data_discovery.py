@@ -113,10 +113,14 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     print(f"   - Nội dung cần tìm: '{noi_dung}'")
     print(f"   - Thao tác: {thao_tac}")
 
-    # Determine report type
-    report_type = "separate"
-    if isinstance(user_query, str) and "hợp nhất" in user_query.lower():
-        report_type = "consolidated"
+    # Determine report type: mặc định None để tìm kiếm trên CẢ 2 loại báo cáo (consolidated & separate)
+    report_type = None
+    if isinstance(user_query, str):
+        q_lower = user_query.lower()
+        if "hợp nhất" in q_lower and "riêng" not in q_lower:
+            report_type = "consolidated"
+        elif "báo cáo riêng" in q_lower:
+            report_type = "separate"
 
     all_discovered_tables: List[Dict[str, Any]] = []
 
@@ -136,21 +140,32 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 report_type=report_type,
                 top_k=5,
             )
+            if not results and report_type is not None:
+                results = search_by_company_and_content(
+                    company_name=ten_cong_ty,
+                    content=noi_dung,
+                    year=None,
+                    report_type=None,
+                    top_k=5,
+                )
             if results:
                 _log_candidates(results)
-                best_match = results[0]
-                csv_path = _resolve_csv_path(best_match.get("csv_path", ""), cfg)
-                if csv_path:
-                    table_entry = {
-                        "csv_path": str(csv_path),
-                        "Ten_Bang": best_match.get("Ten_Bang", ""),
-                        "rrf_score": best_match.get("rrf_score", 0.0),
-                        "Ma_Doanh_Nghiep": best_match.get("Ma_Doanh_Nghiep", ten_cong_ty),
-                        "Nam_Tai_Chinh": best_match.get("Nam_Tai_Chinh", ""),
-                        "Loai_Bao_Cao": best_match.get("Loai_Bao_Cao", report_type),
-                    }
-                    all_discovered_tables.append(table_entry)
-                    print(f"   🏆 Bảng khớp CAO NHẤT: {csv_path.name} — {table_entry['Ten_Bang']} (RRF: {table_entry['rrf_score']:.6f})")
+                for match in results[:3]:
+                    csv_path = _resolve_csv_path(match.get("csv_path", ""), cfg)
+                    if csv_path:
+                        table_entry = {
+                            "csv_path": str(csv_path),
+                            "Ten_Bang": match.get("Ten_Bang", ""),
+                            "rrf_score": match.get("rrf_score", 0.0),
+                            "Ma_Doanh_Nghiep": match.get("Ma_Doanh_Nghiep", ten_cong_ty),
+                            "Nam_Tai_Chinh": match.get("Nam_Tai_Chinh", ""),
+                            "Loai_Bao_Cao": match.get("Loai_Bao_Cao", ""),
+                        }
+                        if not any(t["csv_path"] == str(csv_path) for t in all_discovered_tables):
+                            all_discovered_tables.append(table_entry)
+                if all_discovered_tables:
+                    best = all_discovered_tables[0]
+                    print(f"   🏆 Bảng khớp CAO NHẤT: {Path(best['csv_path']).name} — {best['Ten_Bang']} (RRF: {best['rrf_score']:.6f})")
         else:
             for year in so_nam:
                 print(f"   - Tra cứu bảng cho năm {year}...")
@@ -161,21 +176,32 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                     report_type=report_type,
                     top_k=5,
                 )
+                if not results and report_type is not None:
+                    results = search_by_company_and_content(
+                        company_name=ten_cong_ty,
+                        content=noi_dung,
+                        year=str(year),
+                        report_type=None,
+                        top_k=5,
+                    )
                 if results:
                     _log_candidates(results, year_label=str(year))
-                    best_match = results[0]
-                    csv_path = _resolve_csv_path(best_match.get("csv_path", ""), cfg)
-                    if csv_path:
-                        table_entry = {
-                            "csv_path": str(csv_path),
-                            "Ten_Bang": best_match.get("Ten_Bang", ""),
-                            "rrf_score": best_match.get("rrf_score", 0.0),
-                            "Ma_Doanh_Nghiep": best_match.get("Ma_Doanh_Nghiep", ten_cong_ty),
-                            "Nam_Tai_Chinh": str(year),
-                            "Loai_Bao_Cao": best_match.get("Loai_Bao_Cao", report_type),
-                        }
-                        all_discovered_tables.append(table_entry)
-                        print(f"   🏆 Năm {year} - Bảng khớp CAO NHẤT: {csv_path.name} — {best_match.get('Ten_Bang', '?')} (RRF: {table_entry['rrf_score']:.6f})")
+                    for match in results[:3]:
+                        csv_path = _resolve_csv_path(match.get("csv_path", ""), cfg)
+                        if csv_path:
+                            table_entry = {
+                                "csv_path": str(csv_path),
+                                "Ten_Bang": match.get("Ten_Bang", ""),
+                                "rrf_score": match.get("rrf_score", 0.0),
+                                "Ma_Doanh_Nghiep": match.get("Ma_Doanh_Nghiep", ten_cong_ty),
+                                "Nam_Tai_Chinh": str(year),
+                                "Loai_Bao_Cao": match.get("Loai_Bao_Cao", ""),
+                            }
+                            if not any(t["csv_path"] == str(csv_path) for t in all_discovered_tables):
+                                all_discovered_tables.append(table_entry)
+                    if all_discovered_tables:
+                        best = all_discovered_tables[0]
+                        print(f"   🏆 Năm {year} - Bảng khớp CAO NHẤT: {Path(best['csv_path']).name} — {best['Ten_Bang']} (RRF: {best['rrf_score']:.6f})")
 
     except Exception as e:
         print(f"⚠️ [Data Discovery] Lỗi/Không dùng được Search Engine: {e}. Thử DataRegistry fallback...")

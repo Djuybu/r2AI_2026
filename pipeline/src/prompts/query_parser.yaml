@@ -4,10 +4,11 @@ system_prompt: |
 
   1. "ten_cong_ty": Tên công ty hoặc mã chứng khoán được nhắc đến trong câu hỏi (nếu không có thì để "").
   2. "so_nam": Danh sách các năm liên quan dưới dạng danh sách chuỗi (ví dụ: ["2023"], ["2021", "2022", "2023"]). Nếu câu hỏi đề cập khoảng năm (ví dụ: "từ năm 2021 đến năm 2023"), hãy liệt kê đầy đủ tất cả các năm trong khoảng đó.
-  3. "noi_dung": Nội dung hoặc chỉ tiêu tài chính cần tìm kiếm (ví dụ: "Doanh thu thuần", "Lợi nhuận sau thuế", "Tài sản ngắn hạn").
+  3. "noi_dung": Khái niệm hoặc tên chỉ tiêu tài chính cốt lõi cần tìm kiếm (ví dụ: "tổng tiền và các khoản tương đương tiền", "Doanh thu thuần", "Lợi nhuận sau thuế", "Tài sản ngắn hạn").
+     BẮT BUỘC BỎ các từ chỉ hành động/thao tác/đo lường như "Tốc độ tăng trưởng %", "Tốc độ tăng trưởng", "Tỷ lệ", "Tỷ trọng", "So sánh", "Biến động", "Cho biết", "Là bao nhiêu".
   4. "thao_tac": Thao tác cần thực hiện, BẮT BUỘC chọn 1 trong 2 loại:
      - "trich_xuat": Trích xuất một hoặc nhiều giá trị / chỉ tiêu từ báo cáo tài chính
-     - "so_sanh": So sánh cùng một số liệu giữa nhiều năm (theo từng năm) hoặc nhiều công ty
+     - "so_sanh": So sánh cùng một số liệu giữa nhiều năm (theo từng năm) hoặc nhiều công ty, hoặc tính tốc độ tăng trưởng / chênh lệch giữa các năm.
   5. "tieu_chi_phu": Tiêu chí phụ bổ sung (ví dụ: mô tả tiêu chí theo từng năm thường chứa từ "đến" như "từ năm 2021 đến năm 2023", "31/12/2022", hoặc null nếu không có).
 
   BẮT BUỘC CHỈ TRẢ VỀ JSON. KHÔNG GIẢI THÍCH.
@@ -16,7 +17,7 @@ json_schema: |
   {
     "ten_cong_ty": "tên công ty hoặc mã chứng khoán",
     "so_nam": ["2023"],
-    "noi_dung": "nội dung cần tìm kiếm",
+    "noi_dung": "khái niệm / chỉ tiêu tài chính cốt lõi",
     "thao_tac": "trich_xuat | so_sanh",
     "tieu_chi_phu": "tiêu chí phụ hoặc null"
   }
@@ -30,6 +31,15 @@ few_shot_examples:
         "noi_dung": "Doanh thu thuần",
         "thao_tac": "trich_xuat",
         "tieu_chi_phu": null
+      }
+  - user_query: "Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền từ năm 2021 đến năm 2023 của FPT"
+    parsed_output: |
+      {
+        "ten_cong_ty": "FPT",
+        "so_nam": ["2021", "2022", "2023"],
+        "noi_dung": "tổng tiền và các khoản tương đương tiền",
+        "thao_tac": "so_sanh",
+        "tieu_chi_phu": "từ năm 2021 đến năm 2023"
       }
   - user_query: "Tổng tài sản ngắn hạn của FPT năm 2022 là bao nhiêu?"
     parsed_output: |
