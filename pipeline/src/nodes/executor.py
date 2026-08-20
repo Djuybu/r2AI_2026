@@ -134,6 +134,12 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
             "file_path": file_path,
             "df": df_loaded,
         }
+        for tbl in discovered_tables:
+            csv_p = tbl.get("csv_path", "")
+            nam = tbl.get("Nam_Tai_Chinh", "")
+            if csv_p:
+                if nam:
+                    exec_globals[f"file_path_{nam}"] = csv_p
         # Step 3: Execute code with unified globals/locals dict to resolve function scoping in exec
         exec(code_str, exec_globals)
 

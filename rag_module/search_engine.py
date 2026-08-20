@@ -540,20 +540,25 @@ def search_by_company_and_content(
     top_k: int = 5,
 ) -> List[RRFResult]:
     """
-    Tra cứu bảng báo cáo tài chính dựa trên tên công ty (hoặc mã chứng khoán)
-    và nội dung nằm ở cột đầu tiên có nghĩa (chỉ tiêu).
+    Tra cứu bảng báo cáo tài chính theo Hướng A (On-the-fly Hybrid Search trên Cột 0):
+    1. Giới hạn/lọc toàn bộ danh sách bảng theo tên công ty (mã chứng khoán) & năm tài chính.
+    2. Rút ra tất cả các dòng chỉ tiêu ở CỘT ĐẦU TIÊN CÓ NGHĨA của ~100 bảng đã lọc.
+    3. Thực thi On-the-fly Hybrid Search (BM25 + SentenceTransformer Vector + RRF) trực tiếp trên tập dòng chỉ tiêu này.
+    4. Xếp hạng các bảng dựa theo chỉ tiêu có điểm số cao nhất trong từng bảng.
 
     Args:
         company_name: Tên công ty hoặc mã chứng khoán (VD: 'Vinamilk', 'VNM', 'FPT')
-        content: Nội dung nằm ở cột đầu tiên có nghĩa của bảng (VD: 'Doanh thu thuần', 'Chi phí hoạt động')
+        content: Nội dung/chỉ tiêu nằm ở cột đầu tiên có nghĩa (VD: 'Doanh thu thuần')
         year: Năm báo cáo tài chính (VD: '2023')
         report_type: Loại báo cáo ('separate' | 'consolidated')
-        top_k: Số lượng bảng tìm kiếm từ hybrid search
+        top_k: Số lượng bảng kết quả tốt nhất cần trả về
 
     Returns:
-        Danh sách các bảng kết quả tìm kiếm đã sắp xếp theo rrf_score.
+        Danh sách các bảng kết quả tìm kiếm đã sắp xếp theo độ khớp.
     """
     _ensure_resources()
+    from rank_bm25 import BM25Okapi
+    import numpy as np
 
     # 1. Xác định ticker từ company_name
     ticker = ""
@@ -574,13 +579,104 @@ def search_by_company_and_content(
             t_parsed, _, _ = parse_query(company_name, _company_map)
             ticker = t_parsed
 
-    # 2. Xây dựng search query kết hợp tên công ty và nội dung
+    logger.info("Direction A Search: Company='%s' (Ticker='%s') | Year=%s | Content='%s'",
+                company_name, ticker, year, content)
+
+    content_clean = content.strip() if content else ""
+    content_lower = content_clean.lower()
+
+    # 2. Lọc toàn bộ danh sách ~100 bảng thuộc về (Ticker, Year)
+    if ticker and _doc_mapping and content_clean:
+        candidates = []
+        for doc in _doc_mapping:
+            if doc.get("Ma_Doanh_Nghiep", "").strip() != ticker:
+                continue
+            if year and str(doc.get("Nam_Tai_Chinh", "")).strip() != str(year):
+                continue
+            if report_type:
+                val = doc.get("Loai_Bao_Cao", "").strip()
+                if val not in (report_type, "unknown"):
+                    continue
+            candidates.append(doc)
+
+        logger.info("Found %d candidate tables for ticker='%s', year='%s'", len(candidates), ticker, year)
+
+        if candidates:
+            # 3. Thu thập tất cả các dòng chỉ tiêu ở Cột đầu tiên từ ~100 bảng này
+            row_items: List[Dict[str, Any]] = []
+            for doc in candidates:
+                csv_path = doc.get("csv_path", "")
+                if csv_path and os.path.exists(csv_path):
+                    try:
+                        df_sample = pd.read_csv(csv_path, nrows=100)
+                        if not df_sample.empty:
+                            col_name, col_series = get_first_meaningful_column(df_sample)
+                            for r_idx, val in col_series.dropna().items():
+                                val_str = str(val).strip()
+                                if len(val_str) >= 2:
+                                    row_items.append({
+                                        "text": val_str,
+                                        "col_name": str(col_name),
+                                        "row_idx": r_idx,
+                                        "doc": doc,
+                                        "csv_path": csv_path,
+                                    })
+                    except Exception as exc:
+                        logger.debug("Error reading CSV %s: %s", csv_path, exc)
+
+            if row_items:
+                logger.info("Collected %d line items from Column 0 across candidate tables. Running On-the-fly Hybrid Search...", len(row_items))
+
+                # --- A. BM25 Search trên các dòng chỉ tiêu ---
+                corpus_tokens = [tokenize(item["text"]) for item in row_items]
+                bm25_model = BM25Okapi(corpus_tokens)
+                query_tokens = tokenize(content_clean)
+                bm25_scores = bm25_model.get_scores(query_tokens)
+                sparse_ranked_indices = np.argsort(bm25_scores)[::-1]
+                sparse_rank_map = {idx: rank + 1 for rank, idx in enumerate(sparse_ranked_indices)}
+
+                # --- B. Dense Vector Search trên các dòng chỉ tiêu ---
+                query_vec = _embed_model.encode(content_clean, normalize_embeddings=True, convert_to_numpy=True)
+                line_texts = [item["text"] for item in row_items]
+                line_vecs = _embed_model.encode(line_texts, batch_size=256, normalize_embeddings=True, convert_to_numpy=True)
+                dense_scores = np.dot(line_vecs, query_vec)  # Cosine similarity
+                dense_ranked_indices = np.argsort(dense_scores)[::-1]
+                dense_rank_map = {idx: rank + 1 for rank, idx in enumerate(dense_ranked_indices)}
+
+                # --- C. Reciprocal Rank Fusion (RRF) trên từng chỉ tiêu ---
+                line_fusion: Dict[str, Dict[str, Any]] = {}
+                for idx, item in enumerate(row_items):
+                    csv_path = item["csv_path"]
+                    d_rank = dense_rank_map[idx]
+                    s_rank = sparse_rank_map[idx]
+                    rrf = (1.0 / (RRF_K + d_rank)) + (1.0 / (RRF_K + s_rank))
+
+                    # Cộng thưởng nếu chuỗi exact substring khớp
+                    if content_lower in item["text"].lower():
+                        rrf += 0.1
+
+                    # Mỗi bảng giữ chỉ tiêu có điểm RRF cao nhất
+                    if csv_path not in line_fusion or rrf > line_fusion[csv_path]["rrf_score"]:
+                        line_fusion[csv_path] = {
+                            "csv_path": csv_path,
+                            "rrf_score": round(rrf, 6),
+                            "dense_rank": d_rank,
+                            "sparse_rank": s_rank,
+                            "content_matched": True,
+                            "matched_col_name": item["col_name"],
+                            "matched_sample": item["text"],
+                            "matched_row_idx": item["row_idx"],
+                            **item["doc"]
+                        }
+
+                fused_tables = sorted(line_fusion.values(), key=lambda x: x["rrf_score"], reverse=True)
+                if fused_tables:
+                    logger.info("Direction A Hybrid Search successfully ranked %d tables.", len(fused_tables))
+                    return fused_tables[:top_k]
+
+    # 4. Fallback: Dùng standard Hybrid Search nếu không lọc được theo (Company, Year)
+    logger.info("Fallback to standard Hybrid Search...")
     query = f"{company_name} {content}".strip() if company_name else content
-
-    logger.info("Search by company & content: Company='%s' (Ticker='%s') | Content='%s' | Year=%s",
-                company_name, ticker, content, year)
-
-    # 3. Thực hiện hybrid search
     results = run_hybrid_search(
         query=query,
         top_k=top_k,
@@ -589,9 +685,7 @@ def search_by_company_and_content(
         report_type=report_type or None,
     )
 
-    # Fallback: nếu không tìm thấy kết quả cho năm cụ thể, thử lại không giới hạn year
     if not results and year:
-        logger.info("No search results for year='%s'. Retrying without year restriction...", year)
         results = run_hybrid_search(
             query=query,
             top_k=top_k,
@@ -600,36 +694,9 @@ def search_by_company_and_content(
             report_type=report_type or None,
         )
 
-    if not results:
-        return []
-
-    # 4. Kiểm tra độ khớp nội dung ở CỘT ĐẦU TIÊN CÓ NGHĨA để ưu tiên bảng chứa content
-    if content:
-        content_lower = content.lower().strip()
-        for r in results:
-            csv_path = r.get("csv_path", "")
-            if csv_path and os.path.exists(csv_path):
-                try:
-                    df_sample = pd.read_csv(csv_path, nrows=100)
-                    if not df_sample.empty:
-                        col_name, col_series = get_first_meaningful_column(df_sample)
-                        col_str = col_series.dropna().astype(str).str.strip()
-                        col_str_lower = col_str.str.lower()
-
-                        mask = col_str_lower.str.contains(content_lower, regex=False)
-                        if mask.any():
-                            matched_series = col_str[mask]
-                            r["rrf_score"] = round(r["rrf_score"] + 0.1, 6)
-                            r["content_matched"] = True
-                            r["matched_col_name"] = str(col_name)
-                            r["matched_sample"] = str(matched_series.iloc[0])
-                except Exception:
-                    pass
-
-        # Re-sort theo score đã cập nhật
-        results = sorted(results, key=lambda x: x["rrf_score"], reverse=True)
-
     return results
+
+
 
 
 

@@ -1,0 +1,1701 @@
+[1/10] ❓ Câu hỏi ID 655: Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền của VIC từ năm 2019 đến năm 2021 là bao nhiêu?
+------------------------------------------------------------
+
+🔍 [Query Parser] Đang phân tích câu hỏi: 'Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền của VIC từ năm 2019 đến năm 2021 là bao nhiêu?'
+📊 [Kết quả - Query Parser]:
+   Công ty: VICB
+   Năm: ['2019', '2020', '2021']
+   Nội dung: Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền
+   Thao tác: trich_xuat
+   Tiêu chí phụ: None
+
+   📍 Node: [QUERY_PARSER] (Thời gian chạy: 1.138s)
+
+🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...
+   - Công ty: 'VICB'
+   - Số năm: ['2019', '2020', '2021']
+   - Nội dung cần tìm: 'Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền'
+   - Thao tác: trich_xuat
+
+Directory /kaggle/working/r2AI_2026/rag_module/qdrant_local_db is read-only. Copying database to writable location: /tmp/qdrant_db_qdrant_local_db
+/kaggle/working/r2AI_2026/rag_module/search_engine.py:160: UserWarning: Local mode is not recommended for collections with more than 20,000 points. Collection <financial_tables> contains 146246 points. Consider using Qdrant in Docker or Qdrant Cloud for better performance with large datasets.
+  return QdrantClient(path=str(test_path))
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+modules.json: 100%
+ 229/229 [00:00<00:00, 23.1kB/s]
+config_sentence_transformers.json: 100%
+ 122/122 [00:00<00:00, 14.4kB/s]
+README.md: 100%
+ 3.89k/3.89k [00:00<00:00, 457kB/s]
+sentence_bert_config.json: 100%
+ 53.0/53.0 [00:00<00:00, 6.13kB/s]
+config.json: 100%
+ 645/645 [00:00<00:00, 66.2kB/s]
+model.safetensors: reconstructing file: 100%
+  471MB /  471MB, 44.4MB/s  
+model.safetensors: downloading bytes: 
+  446MB, 40.7MB/s  
+Loading weights: 100%
+ 199/199 [00:00<00:00, 2342.73it/s]
+tokenizer_config.json: 100%
+ 526/526 [00:00<00:00, 62.5kB/s]
+tokenizer.json: reconstructing file: 100%
+ 9.08MB / 9.08MB,  882kB/s  
+tokenizer.json: downloading bytes: 
+ 5.42MB,  526kB/s  
+special_tokens_map.json: 100%
+ 239/239 [00:00<00:00, 27.5kB/s]
+config.json: 100%
+ 190/190 [00:00<00:00, 16.6kB/s]
+
+   - Tra cứu bảng cho năm 2019...
+   📋 Danh sách 10 bảng ứng viên Top-K từ Search Engine (Năm 2019):
+      #1 RRF: 0.016393 | DenseRank: 1 | SparseRank: None
+         File: BAB_financial_statements_2019_separate_table_42.csv
+         Tên bảng: i): Trong năm 2019, Ngân hàng thực hiện tăng vốn điều lệ từ 5.500 tỷ đồng lên 6.500 tỷ đồng theo Nghị Quyết số 02/2019/NQ/HĐCD-BACABANK ii): Ngân hàng thực hiện phân phối lợi nhuận năm 2018 theo nghị quyết Đại hội Cổ đông Ngân hàng TMCP Bắc Á
+      #2 RRF: 0.016393 | DenseRank: None | SparseRank: 1
+         File: MML_financial_statements_2019_separate_table_7.csv
+         Tên bảng: ngày 22 tháng 12 năm 2014 của Bộ Tài chính 4. Tiền và các khoản tương đương tiền
+      #3 RRF: 0.016129 | DenseRank: 2 | SparseRank: None
+         File: VPB_financial_statements_2019_separate_table_98.csv
+         Tên bảng: 44. THUYẾT MINH VỀ BIẾN ĐỘNG LỢI NHUẬN Lợi nhuận trước thuế riêng lẻ của VPBank cho năm tài chính kết thúc ngày 31 tháng 12 năm 2019 tăng 692.681 triệu đồng so với lợi nhuận trước thuế cho năm tài chính kết thúc ngày 31 tháng 12 năm 2018, tương đương 8,73% do các nguyên nhân sau
+      #4 RRF: 0.016129 | DenseRank: None | SparseRank: 2
+         File: MCH_financial_statements_2019_separate_table_8.csv
+         Tên bảng: Các công ty liên quan bao gồm công ty mẹ, công ty mẹ cấp cao, các công ty con và công ty liên kết của các công ty này 4. Tiền và các khoản tương đương tiền
+      #5 RRF: 0.015873 | DenseRank: 3 | SparseRank: None
+         File: BSR_financial_statements_2019_separate_table_26.csv
+         Tên bảng: Các khoản vay dài hạn của Công ty được dùng để đầu tư, mua sắm và xây dựng tài sản cố định. Lãi suất trong năm là 3,6%/năm đến 4,39%/năm đối với Đô la Mỹ. Các khoản vay được phân loại theo đồng tiền vay, hình thức bảo đảm, và lãi suất vay như sau Các khoản vay dài hạn được hoàn trả theo lịch biểu sau
+      #6 RRF: 0.015873 | DenseRank: None | SparseRank: 3
+         File: MBB_financial_statements_2019_separate_table_76.csv
+         Tên bảng: 34. TIỀN VÀ CÁC KHOÀN TƯƠNG ĐƯƠNG TIỀN Tiền và các khoản tương đương tiền thể hiện trên báo cáo lưu chuyển tiền tệ riêng bao gồm các khoản trên bằng cân đối kế toán riêng sau đây
+      #7 RRF: 0.015625 | DenseRank: 4 | SparseRank: None
+         File: VPI_financial_statements_2019_separate_table_10.csv
+         Tên bảng: i) Khoản tương đương tiền thể hiện các khoản tiền gửi có kỳ hạn dưới 3 tháng tại các ngân hàng thương mại với lãi suất tiền gửi từ 4,7%-4,8%/năm trong đó có 300 tỷ VND đang được dùng để đảm bảo cho việc thực hiện toàn bộ nghĩa vụ với người sở hữu trái phiếu Công ty phát hành như đã trình bày tại Thuyết minh số 21 5. PHẢI THU KHÁCH HÀNG NGẮN HẠN
+      #8 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: VNM_financial_statements_2019_separate_table_11.csv
+         Tên bảng: Ban hành theo Thông tư số 200/2014/TT-BTC ngày 22 tháng 12 năm 2014 của Bộ Tài chính
+      #9 RRF: 0.015385 | DenseRank: 5 | SparseRank: None
+         File: HDB_financial_statements_2019_separate_table_86.csv
+         Tên bảng: *) Chênh lệch giữa thu nhập thuần từ khoản đầu tư vào trái phiếu Chính phủ (bao gồm thu nhập lãi và thu nhập thuần từ mua bán) và chi phí huy động bình quân của các khoản tiền gửi có kỳ hạn sử dụng để mua trái phiếu Chính phủ là 195.080 triệu đồng (Năm trước: 116.829 triệu đồng 29. LÃI THUÂN TỪ HOẠT ĐỘNG KHÁC
+      #10 RRF: 0.015385 | DenseRank: None | SparseRank: 5
+         File: VIB_financial_statements_2019_separate_table_67.csv
+         Tên bảng: 29. TIỀN VÀ CÁC KHOÀN TƯƠNG ĐƯƠNG TIỀN Tiền và các khoản tương đương tiền thuần thế hiện trên báo cáo lưu chuyển tiền tệ riêng bao gồm các khoản trên bằng cân đối kế toán riêng dưới đây
+   🏆 Năm 2019 - Bảng khớp CAO NHẤT: BAB_financial_statements_2019_separate_table_42.csv — i): Trong năm 2019, Ngân hàng thực hiện tăng vốn điều lệ từ 5.500 tỷ đồng lên 6.500 tỷ đồng theo Nghị Quyết số 02/2019/NQ/HĐCD-BACABANK ii): Ngân hàng thực hiện phân phối lợi nhuận năm 2018 theo nghị quyết Đại hội Cổ đông Ngân hàng TMCP Bắc Á (RRF: 0.016393)
+   - Tra cứu bảng cho năm 2020...
+   📋 Danh sách 10 bảng ứng viên Top-K từ Search Engine (Năm 2020):
+      #1 RRF: 0.016393 | DenseRank: 1 | SparseRank: None
+         File: VPB_financial_statements_2020_separate_table_99.csv
+         Tên bảng: 51. Thuyết minh về biến động lợi nhuận Lợi nhuận riêng trước thuế của Ngân hàng cho năm kết thúc ngày 31 tháng 12 năm 2020 tăng 681.137 triệu VND so với lợi nhuận riêng trước thuế cho năm kết thúc ngày 31 tháng 12 năm 2019, tương đương 7,90% do các nguyên nhân sau
+      #2 RRF: 0.016393 | DenseRank: None | SparseRank: 1
+         File: MPC_financial_statements_2020_separate_table_15.csv
+         Tên bảng: Toàn bộ chi tiêu vốn trong năm phát sinh tại Việt Nam 5. Tiền và các khoản tương đương tiền
+      #3 RRF: 0.016129 | DenseRank: 2 | SparseRank: None
+         File: HDB_financial_statements_2020_separate_table_83.csv
+         Tên bảng: *) Chênh lệch giữa thu nhập thuần từ khoản đầu tư vào trái phiếu Chính phủ (bao gồm thu nhập lãi và thu nhập thuần từ mua bán) và chi phí huy động bình quân của các khoản tiền gửi có kỳ hạn sử dụng để mua trái phiếu Chính phủ là 128.623 triệu đồng (trong năm tài chính kết thúc ngày 31 tháng 12 năm 2019 là: 195.080 triệu đồng 29. LÃI THUÀN TỪ HOẠT ĐỘNG KHÁC
+      #4 RRF: 0.016129 | DenseRank: None | SparseRank: 2
+         File: MBB_financial_statements_2020_separate_table_77.csv
+         Tên bảng: 35. TIÊN VÀ CÁC KHOÀN TƯƠNG ĐƯƠNG TIÊN Tiền và các khoản tương đương tiền thể hiện trên báo cáo lưu chuyển tiền tệ riêng bao gồm các khoản trên bằng cân đối kế toán riêng sau đây
+      #5 RRF: 0.015873 | DenseRank: 3 | SparseRank: None
+         File: MBB_financial_statements_2020_separate_table_90.csv
+         Tên bảng: 45. THUYÊT MINH VÊ BIÊN ĐỘNG LỢI NHUẠN Lợi nhuận trước thuế của Ngân hàng cho năm tài chính kết thúc ngày 31 tháng 12 năm 2020 so với cùng kỳ năm 2019 tăng 412.275 triệu đồng, tương đương mức tăng 4,44% do các nguyên nhân sau
+      #6 RRF: 0.015873 | DenseRank: None | SparseRank: 3
+         File: DPM_financial_statements_2020_separate_table_12.csv
+         Tên bảng: MÃU SỐ B 09-DN 4. TIÊN VÀ CÁC KHOẢN TƯƠNG ĐƯƠNG TIÊN
+      #7 RRF: 0.015625 | DenseRank: 4 | SparseRank: None
+         File: MPC_financial_statements_2020_separate_table_55.csv
+         Tên bảng: 27. Doanh thu hoạt động tài chính
+      #8 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: NLG_financial_statements_2020_separate_table_12.csv
+         Tên bảng: vào ngày 31 tháng 12 năm 2020 và cho năm tài chính kết thúc cùng ngày 5. TIỀN VÀ CÁC KHOẢN TƯƠNG ĐƯƠNG TIỀN
+      #9 RRF: 0.015385 | DenseRank: 5 | SparseRank: None
+         File: HDB_financial_statements_2020_separate_table_54.csv
+         Tên bảng: ii) Đây là các khoản phải thu liên quan đến việc chuyển nhượng tài sản cho một tổ chức kinh tế với tổng giá trị bán ban đầu là 738.000 triệu đồng, được thanh toán trong vòng 7 năm với lãi suất 7%/năm. Gốc và lãi trả chậm được thanh toán hằng năm iii) Tạm ứng mua sắm TSCĐ bao gồm
+      #10 RRF: 0.015385 | DenseRank: None | SparseRank: 5
+         File: MSR_financial_statements_2020_separate_table_5.csv
+         Tên bảng: 4. Tiền và các khoản tương đương tiền
+   🏆 Năm 2020 - Bảng khớp CAO NHẤT: VPB_financial_statements_2020_separate_table_99.csv — 51. Thuyết minh về biến động lợi nhuận Lợi nhuận riêng trước thuế của Ngân hàng cho năm kết thúc ngày 31 tháng 12 năm 2020 tăng 681.137 triệu VND so với lợi nhuận riêng trước thuế cho năm kết thúc ngày 31 tháng 12 năm 2019, tương đương 7,90% do các nguyên nhân sau (RRF: 0.016393)
+   - Tra cứu bảng cho năm 2021...
+   📋 Danh sách 10 bảng ứng viên Top-K từ Search Engine (Năm 2021):
+      #1 RRF: 0.016393 | DenseRank: 1 | SparseRank: None
+         File: MBB_financial_statements_2021_separate_table_93.csv
+         Tên bảng: 47. THUYẾT MINH VỀ BIÉN ĐỘNG LỢI NHUẬN Lợi nhuận trước thuế của Ngân hàng cho năm tài chính kết thúc ngày 31 tháng 12 năm 2021 so với cùng kỳ năm 2020 tăng 4.699.684 triệu đồng, tương đương mức tăng 48,46% do các nguyên nhân sau
+      #2 RRF: 0.016393 | DenseRank: None | SparseRank: 1
+         File: HPG_financial_statements_2021_separate_table_8.csv
+         Tên bảng: 4. Tiền và các khoản tương đương tiền 4.1 Tiền và các khoản tương đương tiền
+      #3 RRF: 0.016129 | DenseRank: 2 | SparseRank: None
+         File: HDB_financial_statements_2021_separate_table_85.csv
+         Tên bảng: *) Chênh lệch giữa thu nhập thuần từ khoản đầu tư vào trái phiếu Chính phủ (bao gồm thu nhập lãi và thu nhập thuần từ mua bán) và chí phí huy động bình quân của các khoản tiền gửi có kỳ hạn sử dụng để mua trái phiếu Chính phủ là 118.014 triệu đồng (năm 2020 là: 128.623 triệu đồng 29. LÃI THUẦN TỪ HOẠT ĐỘNG KHÁC
+      #4 RRF: 0.016129 | DenseRank: None | SparseRank: 2
+         File: DPM_financial_statements_2021_separate_table_12.csv
+         Tên bảng: MÃU SỐ B 09-DN 4. TIỀN VÀ CÁC KHOẢN TƯƠNG ĐƯƠNG TIỀN
+      #5 RRF: 0.015873 | DenseRank: 3 | SparseRank: None
+         File: SJG_financial_statements_2021_separate_table_59.csv
+         Tên bảng: 2. Giá vốn hàng bán 3. Doanh thu hoạt động tài chính
+      #6 RRF: 0.015873 | DenseRank: None | SparseRank: 3
+         File: HPG_financial_statements_2021_separate_table_9.csv
+         Tên bảng: 4.1 Tiền và các khoản tương đương tiền 4.2 Ngoại tệ bao gồm trong tiền và các khoản tương đương tiền
+      #7 RRF: 0.015625 | DenseRank: 4 | SparseRank: None
+         File: SAB_financial_statements_2021_separate_table_59.csv
+         Tên bảng: 31. Doanh thu hoạt động tài chính 32. Chi phí tài chính
+      #8 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: MBB_financial_statements_2021_separate_table_80.csv
+         Tên bảng: 37. TIỀN VÀ CÁC KHOÀN TƯƠNG ĐƯƠNG TIỀN Tiền và các khoản tương đương tiền thể hiện trên báo cáo lưu chuyển tiền tệ riêng bao gồm các khoản trên bằng cân đối kế toán riêng sau đây
+      #9 RRF: 0.015385 | DenseRank: 5 | SparseRank: None
+         File: VPB_financial_statements_2021_separate_table_102.csv
+         Tên bảng: 51. Thuyết minh về biến động lợi nhuận Lợi nhuận chưa hợp nhất trước thuế của Ngân hàng cho năm kết thúc ngày 31 tháng 12 năm 2021 tăng 28.655.328 triệu VND so với lợi nhuận chưa hợp nhất trước thuế cho năm kết thúc ngày 31 tháng 12 năm 2020, tương đương 307,87% do các nguyên nhân sau
+      #10 RRF: 0.015385 | DenseRank: None | SparseRank: 5
+         File: ABB_financial_statements_2021_separate_table_9.csv
+         Tên bảng: cho năm tài chính kết thúc ngày 31 tháng 12 năm 2021 B04/TCTD
+   🏆 Năm 2021 - Bảng khớp CAO NHẤT: MBB_financial_statements_2021_separate_table_93.csv — 47. THUYẾT MINH VỀ BIÉN ĐỘNG LỢI NHUẬN Lợi nhuận trước thuế của Ngân hàng cho năm tài chính kết thúc ngày 31 tháng 12 năm 2021 so với cùng kỳ năm 2020 tăng 4.699.684 triệu đồng, tương đương mức tăng 48,46% do các nguyên nhân sau (RRF: 0.016393)
+
+📊 [Kết quả - Data Discovery]: Đã chọn 3 bảng có độ khớp cao nhất.
+
+   📍 Node: [DATA_DISCOVERY] (Thời gian chạy: 63.396s)
+
+🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...
+   - Tiêu chí phụ: (không có)
+   - Cột trong bảng: ['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']
+   - Cột nhãn (chỉ tiêu): '0'
+   - Cột giá trị: '1'
+
+📊 [Kết quả - Schema Mapper]: {'label_column': '0', 'value_column': '1', 'all_columns': "['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']"}
+
+   📍 Node: [SCHEMA_MAPPER] (Thời gian chạy: 0.01s)
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+df = pd.read_csv(file_path_2021)
+row = df[df['0'].str.contains('Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.061s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (1/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.003s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 1)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 11, in <module>
+NameError: name 'file_path_2021' is not defined
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path_2019 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/BAB/2019/BAB_financial_statements_2019_separate/BAB_financial_statements_2019_separate_table_42.csv'
+file_path_2020 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/VPB/2020/VPB_financial_statements_2020_separate/VPB_financial_statements_2020_separate_table_99.csv'
+file_path_2021 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/MBB/2021/MBB_financial_statements_2021_separate/MBB_financial_statements_2021_separate_table_93.csv'
+
+df = pd.read_csv(file_path_2021)
+row = df[df['0'].str.contains('Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 3.574s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (2/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.011s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 2)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 17, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path_2019 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/BAB/2019/BAB_financial_statements_2019_separate/BAB_financial_statements_2019_separate_table_42.csv'
+file_path_2020 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/VPB/2020/VPB_financial_statements_2020_separate/VPB_financial_statements_2020_separate_table_99.csv'
+file_path_2021 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/MBB/2021/MBB_financial_statements_2021_separate/MBB_financial_statements_2021_separate_table_93.csv'
+
+df = pd.read_csv(file_path_2021)
+row = df[df['0'].str.contains('Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 3.336s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+   🏁 Trạng thái kết thúc: ERROR
+   ❌ Thất bại! Chi tiết lỗi: Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 17, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+
+
+[2/10] ❓ Câu hỏi ID 115: Tổng chi phí hoạt động của công ty mẹ Ngân hàng TMCP Công Thương Việt Nam năm 2019 là bao nhiêu triệu đồng?
+------------------------------------------------------------
+
+🔍 [Query Parser] Đang phân tích câu hỏi: 'Tổng chi phí hoạt động của công ty mẹ Ngân hàng TMCP Công Thương Việt Nam năm 2019 là bao nhiêu triệu đồng?'
+📊 [Kết quả - Query Parser]:
+   Công ty: Ngân hàng TMCP Công Thương Việt Nam
+   Năm: ['2019']
+   Nội dung: Tổng chi phí hoạt động
+   Thao tác: trich_xuat
+   Tiêu chí phụ: từ ngày 31/12/2019
+
+   📍 Node: [QUERY_PARSER] (Thời gian chạy: 1.024s)
+
+🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...
+   - Công ty: 'Ngân hàng TMCP Công Thương Việt Nam'
+   - Số năm: ['2019']
+   - Nội dung cần tìm: 'Tổng chi phí hoạt động'
+   - Thao tác: trich_xuat
+   - Tra cứu bảng cho năm 2019...
+   📋 Danh sách 9 bảng ứng viên Top-K từ Search Engine (Năm 2019):
+      #1 RRF: 0.031754 | DenseRank: 2 | SparseRank: 4
+         File: CTG_financial_statements_2019_separate_table_55.csv
+         Tên bảng: 25. THU NHẬP LÃI VÀ CÁC KHOÀN THU NHẬP TƯƠNG Tự 26. CHI PHÍ LÃI VÀ CÁC CHI PHÍ TƯƠNG Tự
+      #2 RRF: 0.016393 | DenseRank: 1 | SparseRank: None
+         File: CTG_financial_statements_2019_separate_table_46.csv
+         Tên bảng: 20. VỐN TÀI TRỘ, ỦY THÁC ĐẦU TƯ, CHO VAY TCTD CHỊU RÙI RO 21. PHÁT HÀNH GIÁY TỜ CÓ GIÁ
+      #3 RRF: 0.016393 | DenseRank: None | SparseRank: 1
+         File: CTG_financial_statements_2019_separate_table_62.csv
+         Tên bảng: tại ngày 31 tháng 12 năm 2019 và cho năm tài chính kết thúc cùng ngày 33. TỔNG CHI PHÍ HOẠT ĐỘNG
+      #4 RRF: 0.016129 | DenseRank: None | SparseRank: 2
+         File: CTG_financial_statements_2019_separate_table_60.csv
+         Tên bảng: 30. (Lỗ)/LÃI THUẦN TỪ MUA BÁN CHỨNG KHOÁN ĐẦU TƯ 31. LÃI THUÂN TỪ HOẠT ĐỘNG KHÁC
+      #5 RRF: 0.015873 | DenseRank: 3 | SparseRank: None
+         File: CTG_financial_statements_2019_separate_table_15.csv
+         Tên bảng: 5. TIÊN MẶT, VÀNG BẠC, ĐÁ QUÝ 6. TIỀN GỦI TẠI NGÂN HÀNG NHÀ NƯỚC
+      #6 RRF: 0.015873 | DenseRank: None | SparseRank: 3
+         File: CTG_financial_statements_2019_separate_table_79.csv
+         Tên bảng: 44. SÓ LIỆU SO SÁNH (tiếp theo Trích từ Báo cáo kết quả hoạt động kinh doanh
+      #7 RRF: 0.015625 | DenseRank: 4 | SparseRank: None
+         File: CTG_financial_statements_2019_separate_table_58.csv
+         Tên bảng: 28. LÃI THUÂN TỪ HOẠT ĐỘNG KINH DOANH NGOẠI HỐI 29. LÃI THUẦN TỪ MUA BÁN CHỨNG KHOÁN KINH DOANH
+      #8 RRF: 0.015385 | DenseRank: 5 | SparseRank: None
+         File: CTG_financial_statements_2019_separate_table_50.csv
+         Tên bảng: *) Chi tiết các khoản phải trả bên ngoài như sau 23. TÌNH HÌNH THỰC HIỆN NGHĨA VỤ VỚI NGÂN SÁCH NHÀ NƯỚC
+      #9 RRF: 0.015385 | DenseRank: None | SparseRank: 5
+         File: CTG_financial_statements_2019_separate_table_34.csv
+         Tên bảng: 13. GÓP VÔN, ĐẦU TƯ DÀI HẠN (tiếp theo 13.1 Đầu tư vào công ty con
+   🏆 Năm 2019 - Bảng khớp CAO NHẤT: CTG_financial_statements_2019_separate_table_55.csv — 25. THU NHẬP LÃI VÀ CÁC KHOÀN THU NHẬP TƯƠNG Tự 26. CHI PHÍ LÃI VÀ CÁC CHI PHÍ TƯƠNG Tự (RRF: 0.031754)
+
+📊 [Kết quả - Data Discovery]: Đã chọn 1 bảng có độ khớp cao nhất.
+
+   📍 Node: [DATA_DISCOVERY] (Thời gian chạy: 2.84s)
+
+🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...
+   - Tiêu chí phụ: từ ngày 31/12/2019
+   - Cột trong bảng: ['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']
+   - Cột nhãn (chỉ tiêu): '0'
+   - Cột giá trị: '1'
+
+📊 [Kết quả - Schema Mapper]: {'label_column': '0', 'value_column': '1', 'all_columns': "['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']"}
+
+   📍 Node: [SCHEMA_MAPPER] (Thời gian chạy: 0.006s)
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng chi phí hoạt động', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 1.717s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (1/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.007s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 1)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 13, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/CTG/2019/CTG_financial_statements_2019_separate/CTG_financial_statements_2019_separate_table_55.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng chi phí hoạt động', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.124s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (2/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 2)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/CTG/2019/CTG_financial_statements_2019_separate/CTG_financial_statements_2019_separate_table_55.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng chi phí hoạt động', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 1.991s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+   🏁 Trạng thái kết thúc: ERROR
+   ❌ Thất bại! Chi tiết lỗi: Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+
+
+[3/10] ❓ Câu hỏi ID 26: Lãi vay phải trả của CTCP Tập đoàn Đức Long Gia Lai (DLG) cuối năm 2023 là bao nhiêu triệu đồng?
+------------------------------------------------------------
+
+🔍 [Query Parser] Đang phân tích câu hỏi: 'Lãi vay phải trả của CTCP Tập đoàn Đức Long Gia Lai (DLG) cuối năm 2023 là bao nhiêu triệu đồng?'
+📊 [Kết quả - Query Parser]:
+   Công ty: CTCP Tập đoàn Đức Long Gia Lai (DLG)
+   Năm: ['2023']
+   Nội dung: Lãi vay phải trả
+   Thao tác: trich_xuat
+   Tiêu chí phụ: None
+
+   📍 Node: [QUERY_PARSER] (Thời gian chạy: 0.891s)
+
+🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...
+   - Công ty: 'CTCP Tập đoàn Đức Long Gia Lai (DLG)'
+   - Số năm: ['2023']
+   - Nội dung cần tìm: 'Lãi vay phải trả'
+   - Thao tác: trich_xuat
+   - Tra cứu bảng cho năm 2023...
+   📋 Danh sách 8 bảng ứng viên Top-K từ Search Engine (Năm 2023):
+      #1 RRF: 0.032787 | DenseRank: 1 | SparseRank: 1
+         File: DLG_financial_statements_2023_separate_table_35.csv
+         Tên bảng: *) Trong đó, nợ quá hạn chưa thanh toán với số tiền là 414.405.659.695 đồng 18. Phải trả ngắn hạn khác
+      #2 RRF: 0.031754 | DenseRank: 4 | SparseRank: 2
+         File: DLG_financial_statements_2023_separate_table_62.csv
+         Tên bảng: Công ty CP Đầu tư và Phát triển Điện năng DLGL Công ty CP Đầu tư Xây dựng Đức Long Gia Lai
+      #3 RRF: 0.016129 | DenseRank: 2 | SparseRank: None
+         File: DLG_financial_statements_2023_separate_table_31.csv
+         Tên bảng: *) Trong đó, nợ quá hạn chưa thanh toán với số tiền là 160.571.464.951 đồng 15. Người mua trả tiền trước ngắn hạn
+      #4 RRF: 0.015873 | DenseRank: 3 | SparseRank: None
+         File: DLG_financial_statements_2023_separate_table_65.csv
+         Tên bảng: Ông Bùi Pháp Ông Võ Mộng Hùng
+      #5 RRF: 0.015873 | DenseRank: None | SparseRank: 3
+         File: DLG_financial_statements_2023_separate_table_60.csv
+         Tên bảng: Giao dịch giữa Công ty với các bên liên quan khác Công ty CP Bến xe Liên tỉnh Phía Nam Thành phố Đà Nẵng
+      #6 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: DLG_financial_statements_2023_separate_table_34.csv
+         Tên bảng: Thuế TNDN phải nộp trong kỳ được dự tính như sau 17. Chi phí phải trả ngắn hạn
+      #7 RRF: 0.015385 | DenseRank: 5 | SparseRank: None
+         File: DLG_financial_statements_2023_separate_table_64.csv
+         Tên bảng: Công ty CP Tập đoàn Alpha Seven Ông Bùi Pháp
+      #8 RRF: 0.015385 | DenseRank: None | SparseRank: 5
+         File: DLG_financial_statements_2023_separate_table_61.csv
+         Tên bảng: Cho năm tài chính kết thúc ngày 31 tháng 12 năm 2023 Công ty CP Đầu tư và Phát triển Điện năng DLGL
+   🏆 Năm 2023 - Bảng khớp CAO NHẤT: DLG_financial_statements_2023_separate_table_35.csv — *) Trong đó, nợ quá hạn chưa thanh toán với số tiền là 414.405.659.695 đồng 18. Phải trả ngắn hạn khác (RRF: 0.032787)
+
+📊 [Kết quả - Data Discovery]: Đã chọn 1 bảng có độ khớp cao nhất.
+
+   📍 Node: [DATA_DISCOVERY] (Thời gian chạy: 2.784s)
+
+🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...
+   - Tiêu chí phụ: (không có)
+   - Cột trong bảng: ['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']
+   - Cột nhãn (chỉ tiêu): '0'
+   - Cột giá trị: '1'
+
+📊 [Kết quả - Schema Mapper]: {'label_column': '0', 'value_column': '1', 'all_columns': "['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']"}
+
+   📍 Node: [SCHEMA_MAPPER] (Thời gian chạy: 0.007s)
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Lãi vay phải trả', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 1.665s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (1/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.009s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 1)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 13, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/DLG/2023/DLG_financial_statements_2023_separate/DLG_financial_statements_2023_separate_table_35.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Lãi vay phải trả', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.091s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (2/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.007s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 2)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/DLG/2023/DLG_financial_statements_2023_separate/DLG_financial_statements_2023_separate_table_35.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Lãi vay phải trả', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 1.96s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.011s)
+   🏁 Trạng thái kết thúc: ERROR
+   ❌ Thất bại! Chi tiết lỗi: Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+
+
+[4/10] ❓ Câu hỏi ID 760: Chênh lệch chi phí cho nhân viên năm 2024 của Ngân hàng TMCP Bắc Á so với Ngân hàng TMCP Quốc Dân là bao nhiêu triệu đồng?
+------------------------------------------------------------
+
+🔍 [Query Parser] Đang phân tích câu hỏi: 'Chênh lệch chi phí cho nhân viên năm 2024 của Ngân hàng TMCP Bắc Á so với Ngân hàng TMCP Quốc Dân là bao nhiêu triệu đồng?'
+📊 [Kết quả - Query Parser]:
+   Công ty: Ngân hàng TMCP Bắc Á
+   Năm: ['2024']
+   Nội dung: Chi phí cho nhân viên
+   Thao tác: so_sanh
+   Tiêu chí phụ: từ năm 2021 đến năm 2023
+
+   📍 Node: [QUERY_PARSER] (Thời gian chạy: 0.959s)
+
+🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...
+   - Công ty: 'Ngân hàng TMCP Bắc Á'
+   - Số năm: ['2024']
+   - Nội dung cần tìm: 'Chi phí cho nhân viên'
+   - Thao tác: so_sanh
+   - Tra cứu bảng cho năm 2024...
+   📋 Danh sách 7 bảng ứng viên Top-K từ Search Engine (Năm 2024):
+      #1 RRF: 0.032787 | DenseRank: 1 | SparseRank: 1
+         File: BAB_financial_statements_2024_separate_table_56.csv
+         Tên bảng: 30 . Thu nhập từ góp vốn, mua cổ phần 31 . Chi phí hoạt động
+      #2 RRF: 0.032002 | DenseRank: 2 | SparseRank: 3
+         File: BAB_financial_statements_2024_separate_table_59.csv
+         Tên bảng: 33 . Tiền và các khoản tương đương tiền 34 . Tỉnh hình thu nhập của cán bộ, công nhân viên
+      #3 RRF: 0.032002 | DenseRank: 3 | SparseRank: 2
+         File: BAB_financial_statements_2024_separate_table_60.csv
+         Tên bảng: 34 . Tỉnh hình thu nhập của cán bộ, công nhân viên 35 . Tỉnh hình thực hiện nghĩa vụ với ngân sách Nhà nước
+      #4 RRF: 0.015625 | DenseRank: 4 | SparseRank: None
+         File: BAB_financial_statements_2024_separate_table_44.csv
+         Tên bảng: Tại ngày 31 tháng 12 năm 2023 22. Các khoản phải trả và công nợ khác
+      #5 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: BAB_financial_statements_2024_separate_table_10.csv
+         Tên bảng: Công ty con Tại ngày 31 tháng 12 năm 2024, Ngân hàng có các công ty con như sau
+      #6 RRF: 0.015385 | DenseRank: 5 | SparseRank: None
+         File: BAB_financial_statements_2024_separate_table_38.csv
+         Tên bảng: năm tài chính kết thúc 16.2. Các khoản lãi, phí phải thu
+      #7 RRF: 0.015385 | DenseRank: None | SparseRank: 5
+         File: BAB_financial_statements_2024_separate_table_24.csv
+         Tên bảng: Phân tích dư nợ cho vay theo ngành (tiếp theo Phân tích dư nợ cho vay theo đối tượng khách hàng và theo loại hình doanh nghiệp
+   🏆 Năm 2024 - Bảng khớp CAO NHẤT: BAB_financial_statements_2024_separate_table_56.csv — 30 . Thu nhập từ góp vốn, mua cổ phần 31 . Chi phí hoạt động (RRF: 0.032787)
+
+📊 [Kết quả - Data Discovery]: Đã chọn 1 bảng có độ khớp cao nhất.
+
+   📍 Node: [DATA_DISCOVERY] (Thời gian chạy: 2.636s)
+
+🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...
+   - Tiêu chí phụ: từ năm 2021 đến năm 2023
+   - Cột trong bảng: ['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']
+   - Cột nhãn (chỉ tiêu): '0'
+   - Cột giá trị: '1'
+
+📊 [Kết quả - Schema Mapper]: {'label_column': '0', 'value_column': '1', 'all_columns': "['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']"}
+
+   📍 Node: [SCHEMA_MAPPER] (Thời gian chạy: 0.006s)
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+def so_sanh(file_path, company_name, year):
+    df = pd.read_csv(file_path)
+    row = df[df['0'].str.contains(company_name, case=False, na=False)]
+    raw_val = row['1'].values[0]
+    result = clean_val(raw_val)
+    return result
+
+# Sử dụng hàm so_sanh để tìm giá trị cho ngân hàng TMCP Bắc Á năm 2024
+result = so_sanh(file_path, 'Ngân hàng TMCP Bắc Á', '2024')
+print(result)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.264s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (1/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.011s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 1)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 19, in <module>
+  File "<string>", line 14, in so_sanh
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+def so_sanh(file_path, company_name, year):
+    df = pd.read_csv(file_path)
+    row = df[df['0'].str.contains(company_name, case=False, na=False)]
+    raw_val = row['1'].values[0]
+    result = clean_val(raw_val)
+    return result
+
+# Sử dụng hàm so_sanh để tìm giá trị cho ngân hàng TMCP Bắc Á năm 2024
+result = so_sanh(file_path, 'Ngân hàng TMCP Bắc Á', '2024')
+print(result)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.169s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (2/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.008s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 2)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 19, in <module>
+  File "<string>", line 14, in so_sanh
+IndexError: index 0 is out of bounds for axis 0 with size 0
+💭 [Tư duy - Code Generator]:
+  Để sửa lại đoạn mã và đảm bảo không bị lỗi, chúng ta cần thực hiện các bước sau:
+  
+  1. Đọc dữ liệu từ file CSV.
+  2. Tìm dòng trong dữ liệu chứa tên công ty 'Ngân hàng TMCP Bắc Á' và năm 2024.
+  3. Lấy giá trị số từ dòng đó.
+  4. Sử dụng hàm `clean_val()` để parse giá trị số.
+  5. Lưu kết quả vào biến `result`.
+  
+  Dưới đây là mã Python sửa lại:
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+def so_sanh(file_path, company_name, year):
+    df = pd.read_csv(file_path)
+    row = df[(df['0'].str.contains(company_name, case=False, na=False)) & (df['Nam_Tai_Chinh'] == year)]
+    if row.empty:
+        return None
+    raw_val = row['1'].values[0]
+    result = clean_val(raw_val)
+    return result
+
+# Sử dụng hàm so_sanh để tìm giá trị cho ngân hàng TMCP Bắc Á năm 2024
+result = so_sanh(file_path, 'Ngân hàng TMCP Bắc Á', '2024')
+print(result)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 5.764s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+None
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.008s)
+   🏁 Trạng thái kết thúc: ERROR
+   ❌ Thất bại! Chi tiết lỗi: Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 145, in executor_node
+    raise ValueError("Biến `result` không được tìm thấy sau khi thực thi mã.")
+ValueError: Biến `result` không được tìm thấy sau khi thực thi mã.
+
+
+[5/10] ❓ Câu hỏi ID 282: Tổng trả trước cho người bán ngắn hạn đến ngày 31 tháng 12 năm 2016 của công ty mẹ CTCP Tập đoàn Đầu tư Địa ốc No Va (NVL) là bao nhiêu trăm tỷ đồng?
+------------------------------------------------------------
+
+🔍 [Query Parser] Đang phân tích câu hỏi: 'Tổng trả trước cho người bán ngắn hạn đến ngày 31 tháng 12 năm 2016 của công ty mẹ CTCP Tập đoàn Đầu tư Địa ốc No Va (NVL) là bao nhiêu trăm tỷ đồng?'
+📊 [Kết quả - Query Parser]:
+   Công ty: CTCP Tập đoàn Đầu tư Địa ốc No Va
+   Năm: ['2016']
+   Nội dung: Tổng trả trước cho người bán ngắn hạn đến ngày 31 tháng 12 năm 2016
+   Thao tác: trich_xuat
+   Tiêu chí phụ: 31/12/2016
+
+   📍 Node: [QUERY_PARSER] (Thời gian chạy: 1.145s)
+
+🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...
+   - Công ty: 'CTCP Tập đoàn Đầu tư Địa ốc No Va'
+   - Số năm: ['2016']
+   - Nội dung cần tìm: 'Tổng trả trước cho người bán ngắn hạn đến ngày 31 tháng 12 năm 2016'
+   - Thao tác: trich_xuat
+   - Tra cứu bảng cho năm 2016...
+   📋 Danh sách 8 bảng ứng viên Top-K từ Search Engine (Năm 2016):
+      #1 RRF: 0.031778 | DenseRank: 1 | SparseRank: 5
+         File: NVL_financial_statements_2016_separate_table_32.csv
+         Tên bảng: 11 CHI PHÍ TRÀ TRƯỚC a) Chi phí trả trước ngắn hạn
+      #2 RRF: 0.031778 | DenseRank: 5 | SparseRank: 1
+         File: NVL_financial_statements_2016_separate_table_92.csv
+         Tên bảng: i) Phải thu ngắn hạn của khách hàng (Thuyết minh 5 ii) Trả trước cho người bán ngắn hạn (Thuyết minh 6
+      #3 RRF: 0.016129 | DenseRank: 2 | SparseRank: None
+         File: NVL_financial_statements_2016_separate_table_98.csv
+         Tên bảng: 38 CAM KẾT THUÊ HOẠT ĐỘNG Các hợp đồng thuê hoạt động không hủy ngang, Công ty phải trả mức tối thiểu trong tương lai như sau
+      #4 RRF: 0.016129 | DenseRank: None | SparseRank: 2
+         File: NVL_financial_statements_2016_separate_table_40.csv
+         Tên bảng: Tại ngày 31 tháng 12 năm 2016 và 31 tháng 12 năm 2015, không có đối tượng nào chiếm hơn 10% trong tổng số dư người mua trả tiền trước ngắn hạn 18 THUẾ VÀ CÁC KHOÀN PHẢI NỘP NGÂN SÁCH NHÀ NƯỚC
+      #5 RRF: 0.015873 | DenseRank: 3 | SparseRank: None
+         File: NVL_financial_statements_2016_separate_table_90.csv
+         Tên bảng: xi) Các khoản chi cho các nhân sự quản lý chủ chốt b) Số dư cuối năm với các bên liên quan
+      #6 RRF: 0.015873 | DenseRank: None | SparseRank: 3
+         File: NVL_financial_statements_2016_separate_table_39.csv
+         Tên bảng: Biến động chi phí xây dựng cơ bản đồ dang trong năm như sau 16 PHẢI TRẢ NGƯỜI BÁN NGẮN HẠN
+      #7 RRF: 0.015625 | DenseRank: 4 | SparseRank: None
+         File: NVL_financial_statements_2016_separate_table_83.csv
+         Tên bảng: a) Giao dịch với các bên liên quan (tiếp theo v) Nhận tiền hợp tác kinh doanh
+      #8 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: NVL_financial_statements_2016_separate_table_22.csv
+         Tên bảng: Tại ngày 31 tháng 12 năm 2016 và 31 tháng 12 năm 2015, không có khách hàng bên thứ ba nào có số dư chiếm trên 10% trong tổng khoản phải thu ngắn hạn của khách hàng. Ngoài ra, Công ty không có khoản phải thu ngắn hạn của khách hàng nào quá hạn hoặc chưa quá hạn nhưng khó có khả năng thu hồi 6 TRÀ TRƯỚC CHO NGƯỜI BÁN NGẮN HẠN
+   🏆 Năm 2016 - Bảng khớp CAO NHẤT: NVL_financial_statements_2016_separate_table_32.csv — 11 CHI PHÍ TRÀ TRƯỚC a) Chi phí trả trước ngắn hạn (RRF: 0.031778)
+
+📊 [Kết quả - Data Discovery]: Đã chọn 1 bảng có độ khớp cao nhất.
+
+   📍 Node: [DATA_DISCOVERY] (Thời gian chạy: 3.687s)
+
+🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...
+   - Tiêu chí phụ: 31/12/2016
+   - Cột trong bảng: ['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']
+   - Cột nhãn (chỉ tiêu): '0'
+   - Cột giá trị: '1'
+
+📊 [Kết quả - Schema Mapper]: {'label_column': '0', 'value_column': '1', 'all_columns': "['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']"}
+
+   📍 Node: [SCHEMA_MAPPER] (Thời gian chạy: 0.005s)
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng trả trước cho người bán ngắn hạn đến ngày 31 tháng 12 năm 2016', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 1.865s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (1/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 1)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 13, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/NVL/2016/NVL_financial_statements_2016_separate/NVL_financial_statements_2016_separate_table_32.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng trả trước cho người bán ngắn hạn đến ngày 31 tháng 12 năm 2016', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.326s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (2/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.005s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 2)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/NVL/2016/NVL_financial_statements_2016_separate/NVL_financial_statements_2016_separate_table_32.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng trả trước cho người bán ngắn hạn đến ngày 31 tháng 12 năm 2016', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.14s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+   🏁 Trạng thái kết thúc: ERROR
+   ❌ Thất bại! Chi tiết lỗi: Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+
+
+[6/10] ❓ Câu hỏi ID 251: Tiền và tương đương tiền cuối năm 2019 của công ty mẹ PRT là bao nhiêu tỷ đồng?
+------------------------------------------------------------
+
+🔍 [Query Parser] Đang phân tích câu hỏi: 'Tiền và tương đương tiền cuối năm 2019 của công ty mẹ PRT là bao nhiêu tỷ đồng?'
+📊 [Kết quả - Query Parser]:
+   Công ty: PRT
+   Năm: ['2019']
+   Nội dung: Tiền và tương đương tiền cuối năm 2019
+   Thao tác: trich_xuat
+   Tiêu chí phụ: 31/12/2019
+
+   📍 Node: [QUERY_PARSER] (Thời gian chạy: 0.968s)
+
+🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...
+   - Công ty: 'PRT'
+   - Số năm: ['2019']
+   - Nội dung cần tìm: 'Tiền và tương đương tiền cuối năm 2019'
+   - Thao tác: trich_xuat
+   - Tra cứu bảng cho năm 2019...
+   📋 Danh sách 10 bảng ứng viên Top-K từ Search Engine (Năm 2019):
+      #1 RRF: 0.016393 | DenseRank: 1 | SparseRank: None
+         File: PRT_financial_statements_2019_separate_table_54.csv
+         Tên bảng: Chi phí đi vay Số dư tại ngày kết thúc năm tài chính
+      #2 RRF: 0.016393 | DenseRank: None | SparseRank: 1
+         File: PRT_financial_statements_2019_separate_table_11.csv
+         Tên bảng: Hoạt động kinh doanh chính của Tổng Công ty là đầu tư tài chính và diễn ra trên lãnh thổ Việt Nam. Do đó, Tổng Công ty không trình bày Báo cáo bộ phận theo lĩnh vực kinh doanh và theo khu vực địa lý 3 . TIỀN VÀ CÁC KHOẢN TƯƠNG ĐƯƠNG TIỀN
+      #3 RRF: 0.016129 | DenseRank: 2 | SparseRank: None
+         File: PRT_financial_statements_2019_separate_table_28.csv
+         Tên bảng: Cho năm tài chính kết thúc 19 . CHI PHÍ PHẢI TRẢ NGẮN HẠN
+      #4 RRF: 0.016129 | DenseRank: None | SparseRank: 2
+         File: PRT_financial_statements_2019_separate_table_46.csv
+         Tên bảng: Các loại công cụ tài chính của Tổng Công ty bao gồm Giá trị ghi sô ké toán
+      #5 RRF: 0.015873 | DenseRank: 3 | SparseRank: None
+         File: PRT_financial_statements_2019_separate_table_40.csv
+         Tên bảng: Cho năm tài chính kết thúc 26 . CHI PHÍ TÀI CHÍNH
+      #6 RRF: 0.015873 | DenseRank: None | SparseRank: 3
+         File: PRT_financial_statements_2019_separate_table_47.csv
+         Tên bảng: Rủi ro tín dụng Rủi ro tín dụng là rủi ro mà một bên tham gia trong một công cụ tài chính hoặc hợp đồng không có khả năng thực hiện được nghĩa vụ của mình dẫn đến tổn thất về tài chính cho Tổng Công ty. Tổng Công ty có các rủi ro tín dụng từ hoạt động động sản xuất kính doanh (chủ yếu đối với các khoản phải thu khách hàng) và hoạt động tài chính (bao gồm tiền gửi ngân hàng, cho vay và các công cụ tài chính khác
+      #7 RRF: 0.015625 | DenseRank: 4 | SparseRank: None
+         File: PRT_financial_statements_2019_separate_table_23.csv
+         Tên bảng: Cho năm tài chính kết thúc 14 . TÀI SẢN CÓ ĐỊNH VÔ HÌNH
+      #8 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: PRT_financial_statements_2019_separate_table_32.csv
+         Tên bảng: Cho năm tài chính kết thúc c) Các giao dịch về vốn với các chủ sở hữu và phân chia lợi nhuận
+      #9 RRF: 0.015385 | DenseRank: 5 | SparseRank: None
+         File: PRT_financial_statements_2019_separate_table_22.csv
+         Tên bảng: Cho năm tài chính kết thúc 13. TÀI SẢN CỔ ĐỊNH HỮU HÌNH
+      #10 RRF: 0.015385 | DenseRank: None | SparseRank: 5
+         File: PRT_financial_statements_2019_separate_table_8.csv
+         Tên bảng: Năm 2019 Theo phương pháp gián tiếp
+   🏆 Năm 2019 - Bảng khớp CAO NHẤT: PRT_financial_statements_2019_separate_table_54.csv — Chi phí đi vay Số dư tại ngày kết thúc năm tài chính (RRF: 0.016393)
+
+📊 [Kết quả - Data Discovery]: Đã chọn 1 bảng có độ khớp cao nhất.
+
+   📍 Node: [DATA_DISCOVERY] (Thời gian chạy: 2.555s)
+
+🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...
+   - Tiêu chí phụ: 31/12/2019
+   - Cột trong bảng: ['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2', '3']
+   - Cột nhãn (chỉ tiêu): '0'
+   - Cột giá trị: '1'
+
+📊 [Kết quả - Schema Mapper]: {'label_column': '0', 'value_column': '1', 'all_columns': "['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2', '3']"}
+
+   📍 Node: [SCHEMA_MAPPER] (Thời gian chạy: 0.008s)
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tiền và tương đương tiền cuối năm 2019', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 1.779s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (1/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.009s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 1)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 13, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/PRT/2019/PRT_financial_statements_2019_separate/PRT_financial_statements_2019_separate_table_54.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tiền và tương đương tiền cuối năm 2019', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.25s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (2/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 2)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/PRT/2019/PRT_financial_statements_2019_separate/PRT_financial_statements_2019_separate_table_54.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tiền và tương đương tiền cuối năm 2019', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.064s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+   🏁 Trạng thái kết thúc: ERROR
+   ❌ Thất bại! Chi tiết lỗi: Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+
+
+[7/10] ❓ Câu hỏi ID 229: Tổng giá trị đầu tư vào công ty liên kết của Tổng Công ty Sông Đà - CTCP đến ngày 31/12/2020 là bao nhiêu tỷ đồng?
+------------------------------------------------------------
+
+🔍 [Query Parser] Đang phân tích câu hỏi: 'Tổng giá trị đầu tư vào công ty liên kết của Tổng Công ty Sông Đà - CTCP đến ngày 31/12/2020 là bao nhiêu tỷ đồng?'
+📊 [Kết quả - Query Parser]:
+   Công ty: Tổng Công ty Sông Đà - CTCP
+   Năm: ['2020']
+   Nội dung: Tổng giá trị đầu tư vào công ty liên kết
+   Thao tác: trich_xuat
+   Tiêu chí phụ: từ ngày 31/12/2020
+
+   📍 Node: [QUERY_PARSER] (Thời gian chạy: 1.095s)
+
+🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...
+   - Công ty: 'Tổng Công ty Sông Đà - CTCP'
+   - Số năm: ['2020']
+   - Nội dung cần tìm: 'Tổng giá trị đầu tư vào công ty liên kết'
+   - Thao tác: trich_xuat
+   - Tra cứu bảng cho năm 2020...
+   📋 Danh sách 7 bảng ứng viên Top-K từ Search Engine (Năm 2020):
+      #1 RRF: 0.032787 | DenseRank: 1 | SparseRank: 1
+         File: SJG_financial_statements_2020_separate_table_19.csv
+         Tên bảng: Bản thuyết minh Báo cáo tài chính tổng hợp (tiếp theo 2c. Đầu tư góp vốn vào đơn vị khác
+      #2 RRF: 0.031746 | DenseRank: 3 | SparseRank: 3
+         File: SJG_financial_statements_2020_separate_table_71.csv
+         Tên bảng: 1b. Giao dịch và số dư với các bên liên quan khác Các bên liên quan khác với Tổng công ty gồm
+      #3 RRF: 0.031514 | DenseRank: 5 | SparseRank: 2
+         File: SJG_financial_statements_2020_separate_table_42.csv
+         Tên bảng: 14. Phải trả người bán 14a. Phải trả người bán ngắn hạn
+      #4 RRF: 0.016129 | DenseRank: 2 | SparseRank: None
+         File: SJG_financial_statements_2020_separate_table_11.csv
+         Tên bảng: 6. Câu trúc Tổng công ty Các Công ty con
+      #5 RRF: 0.015625 | DenseRank: 4 | SparseRank: None
+         File: SJG_financial_statements_2020_separate_table_21.csv
+         Tên bảng: i) Các khoản đầu tư có giá trị ghi số là 5.174.201.267.494 VND đã được thế chấp để đảm bảo cho Trái phiếu Sông Đà và khoản vay tại các Ngân hàng ii) Trong đó, các khoản đầu tư từ vốn nhận ủy thác như sau
+      #6 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: SJG_financial_statements_2020_separate_table_23.csv
+         Tên bảng: Giao dịch với các công ty con và công ty liên doanh, liên kết Các giao dịch trọng yếu giữa Tổng công ty với các công ty con và công ty liên doanh, liên kết như sau
+      #7 RRF: 0.015385 | DenseRank: None | SparseRank: 5
+         File: SJG_financial_statements_2020_separate_table_43.csv
+         Tên bảng: Bản thuyết minh Báo cáo tài chính tổng hợp (tiếp theo 14b. Phải trả người bán dài hạn
+   🏆 Năm 2020 - Bảng khớp CAO NHẤT: SJG_financial_statements_2020_separate_table_19.csv — Bản thuyết minh Báo cáo tài chính tổng hợp (tiếp theo 2c. Đầu tư góp vốn vào đơn vị khác (RRF: 0.032787)
+
+📊 [Kết quả - Data Discovery]: Đã chọn 1 bảng có độ khớp cao nhất.
+
+   📍 Node: [DATA_DISCOVERY] (Thời gian chạy: 3.177s)
+
+🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...
+   - Tiêu chí phụ: từ ngày 31/12/2020
+   - Cột trong bảng: ['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2', '3', '4']
+   - Cột nhãn (chỉ tiêu): '0'
+   - Cột giá trị: '1'
+
+📊 [Kết quả - Schema Mapper]: {'label_column': '0', 'value_column': '1', 'all_columns': "['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2', '3', '4']"}
+
+   📍 Node: [SCHEMA_MAPPER] (Thời gian chạy: 0.006s)
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng giá trị đầu tư vào công ty liên kết', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 1.782s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (1/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.007s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 1)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 13, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/SJG/2020/SJG_financial_statements_2020_separate/SJG_financial_statements_2020_separate_table_19.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng giá trị đầu tư vào công ty liên kết', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.287s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (2/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 2)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/SJG/2020/SJG_financial_statements_2020_separate/SJG_financial_statements_2020_separate_table_19.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng giá trị đầu tư vào công ty liên kết', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.116s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.007s)
+   🏁 Trạng thái kết thúc: ERROR
+   ❌ Thất bại! Chi tiết lỗi: Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+
+
+[8/10] ❓ Câu hỏi ID 143: Tổng cộng tài sản đầu năm 2022 của CTCP Tập đoàn F.I.T (FIT) là bao nhiêu nghìn tỷ đồng?
+------------------------------------------------------------
+
+🔍 [Query Parser] Đang phân tích câu hỏi: 'Tổng cộng tài sản đầu năm 2022 của CTCP Tập đoàn F.I.T (FIT) là bao nhiêu nghìn tỷ đồng?'
+📊 [Kết quả - Query Parser]:
+   Công ty: CTCP Tập đoàn F.I.T (FIT)
+   Năm: ['2022']
+   Nội dung: Tổng tài sản đầu năm
+   Thao tác: trich_xuat
+   Tiêu chí phụ: từ ngày 01/01/2022
+
+   📍 Node: [QUERY_PARSER] (Thời gian chạy: 1.053s)
+
+🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...
+   - Công ty: 'CTCP Tập đoàn F.I.T (FIT)'
+   - Số năm: ['2022']
+   - Nội dung cần tìm: 'Tổng tài sản đầu năm'
+   - Thao tác: trich_xuat
+   - Tra cứu bảng cho năm 2022...
+   📋 Danh sách 9 bảng ứng viên Top-K từ Search Engine (Năm 2022):
+      #1 RRF: 0.031514 | DenseRank: 2 | SparseRank: 5
+         File: FIT_financial_statements_2022_separate_table_43.csv
+         Tên bảng: 1. Doanh thu bán hàng và cung cấp dịch vụ la. Tổng doanh thu
+      #2 RRF: 0.016393 | DenseRank: 1 | SparseRank: None
+         File: FIT_financial_statements_2022_separate_table_41.csv
+         Tên bảng: Thực hiện Giấy chứng nhận đăng ký chào bán thêm cổ phiếu ra công chúng số 73/GCN-UBCK 13b. Chi tiết vốn góp của chủ sở hữu
+      #3 RRF: 0.016393 | DenseRank: None | SparseRank: 1
+         File: FIT_financial_statements_2022_separate_table_30.csv
+         Tên bảng: 7. Bất động sản đầu tư cho thuê Là nhà cửa vật kiến trúc cho thuê
+      #4 RRF: 0.016129 | DenseRank: None | SparseRank: 2
+         File: FIT_financial_statements_2022_separate_table_0.csv
+         Tên bảng: nan
+      #5 RRF: 0.015873 | DenseRank: 3 | SparseRank: None
+         File: FIT_financial_statements_2022_separate_table_42.csv
+         Tên bảng: 13b. Chi tiết vốn góp của chủ sở hữu 13c. Có phiếu
+      #6 RRF: 0.015873 | DenseRank: None | SparseRank: 3
+         File: FIT_financial_statements_2022_separate_table_7.csv
+         Tên bảng: Cho năm tài chính kết thúc ngày 31 tháng 12 năm 2022 Bảng cân đối kế toán (tiếp theo
+      #7 RRF: 0.015625 | DenseRank: 4 | SparseRank: None
+         File: FIT_financial_statements_2022_separate_table_51.csv
+         Tên bảng: 1b. Giao dịch và số dư với các bên liên quan khác Các bên liên quan khác với Công ty gồm
+      #8 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: FIT_financial_statements_2022_separate_table_9.csv
+         Tên bảng: Cho năm tài chính kết thúc ngày 31 tháng 12 năm 2022 Bảng cân đổi kế toán (tiếp theo
+      #9 RRF: 0.015385 | DenseRank: 5 | SparseRank: None
+         File: FIT_financial_statements_2022_separate_table_18.csv
+         Tên bảng: 2. Các khoản đầu tư tài chính 2a. Chứng khoản kinh doanh
+   🏆 Năm 2022 - Bảng khớp CAO NHẤT: FIT_financial_statements_2022_separate_table_43.csv — 1. Doanh thu bán hàng và cung cấp dịch vụ la. Tổng doanh thu (RRF: 0.031514)
+
+📊 [Kết quả - Data Discovery]: Đã chọn 1 bảng có độ khớp cao nhất.
+
+   📍 Node: [DATA_DISCOVERY] (Thời gian chạy: 2.612s)
+
+🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...
+   - Tiêu chí phụ: từ ngày 01/01/2022
+   - Cột trong bảng: ['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']
+   - Cột nhãn (chỉ tiêu): '0'
+   - Cột giá trị: '1'
+
+📊 [Kết quả - Schema Mapper]: {'label_column': '0', 'value_column': '1', 'all_columns': "['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']"}
+
+   📍 Node: [SCHEMA_MAPPER] (Thời gian chạy: 0.005s)
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng tài sản đầu năm', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 1.735s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (1/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 1)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 13, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/FIT/2022/FIT_financial_statements_2022_separate/FIT_financial_statements_2022_separate_table_43.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng tài sản đầu năm', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.283s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (2/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.005s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 2)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/FIT/2022/FIT_financial_statements_2022_separate/FIT_financial_statements_2022_separate_table_43.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Tổng tài sản đầu năm', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.067s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+   🏁 Trạng thái kết thúc: ERROR
+   ❌ Thất bại! Chi tiết lỗi: Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+
+
+[9/10] ❓ Câu hỏi ID 755: Đến ngày 31/12/2025, chênh lệch về mức chênh nhạy cảm với lãi suất nội bảng giữa Ngân hàng TMCP Đầu tư và Phát triển Việt Nam và Ngân hàng TMCP Sài Gòn Tài Lộc là bao nhiêu triệu đồng.
+------------------------------------------------------------
+
+🔍 [Query Parser] Đang phân tích câu hỏi: 'Đến ngày 31/12/2025, chênh lệch về mức chênh nhạy cảm với lãi suất nội bảng giữa Ngân hàng TMCP Đầu tư và Phát triển Việt Nam và Ngân hàng TMCP Sài Gòn Tài Lộc là bao nhiêu triệu đồng.'
+📊 [Kết quả - Query Parser]:
+   Công ty: Vinamilk
+   Năm: ['2025']
+   Nội dung: Doanh thu thuần tính đến ngày 31/12/2025
+   Thao tác: trich_xuat
+   Tiêu chí phụ: 31/12/2025
+
+   📍 Node: [QUERY_PARSER] (Thời gian chạy: 1.05s)
+
+🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...
+   - Công ty: 'Vinamilk'
+   - Số năm: ['2025']
+   - Nội dung cần tìm: 'Doanh thu thuần tính đến ngày 31/12/2025'
+   - Thao tác: trich_xuat
+   - Tra cứu bảng cho năm 2025...
+   📋 Danh sách 10 bảng ứng viên Top-K từ Search Engine (Năm 2025):
+      #1 RRF: 0.016393 | DenseRank: 1 | SparseRank: None
+         File: VRE_financial_statements_2025_separate_table_5.csv
+         Tên bảng: BÁO CÁO KẾT QUẢ HOẠT ĐỘNG KINH DOANH Cho năm tài chính kết thúc ngày 31 tháng 12 năm 2025
+      #2 RRF: 0.016393 | DenseRank: None | SparseRank: 1
+         File: VSC_financial_statements_2025_separate_table_33.csv
+         Tên bảng: Tại ngày 31 tháng 12 năm 2025, khoản mục tiền và các khoản tương đương tiền đã bao gồm số ngoại tệ 2.807,62 Đô la Mỹ (tại ngày 31 tháng 12 năm 2024: 584,68 Đô la Mỹ 19 DOANH THU THUẦN VỀ BÁN HÀNG VÀ CUNG CẤP DỊCH VỤ
+      #3 RRF: 0.016129 | DenseRank: 2 | SparseRank: None
+         File: VRE_financial_statements_2025_separate_table_6.csv
+         Tên bảng: BÁO CÁO LƯU CHUYÊN TIỀN TỆ Cho năm tài chính kết thúc ngày 31 tháng 12 năm 2025
+      #4 RRF: 0.016129 | DenseRank: None | SparseRank: 2
+         File: FPT_financial_statements_2025_separate_table_33.csv
+         Tên bảng: CHO NĂM TÀI CHÍNH KẾT THỨC NGÀY 31 THÁNG 12 NĂM 2025 18 DOANH THU THUẦN VỀ CUNG CẤP ĐỊCH VỤ
+      #5 RRF: 0.015873 | DenseRank: 3 | SparseRank: None
+         File: VRE_financial_statements_2025_separate_table_7.csv
+         Tên bảng: BÁO CÁO LƯU CHUYÊN TIỀN TỆ (Tiếp theo Cho năm tài chính kết thúc ngày 31 tháng 12 năm 2025
+      #6 RRF: 0.015873 | DenseRank: None | SparseRank: 3
+         File: BAB_financial_statements_2025_separate_table_49.csv
+         Tên bảng: Cho năm tài chính kết thúc ngày 31 tháng 12 năm 2025 6.4. Lãi/(lỗ) thuần từ hoạt động kinh doanh ngoại hối
+      #7 RRF: 0.015625 | DenseRank: 4 | SparseRank: None
+         File: AAA_financial_statements_2025_separate_table_43.csv
+         Tên bảng: vào ngày 31 tháng 12 năm 2025 và cho năm tài chính kết thúc cùng ngày 24. GIÁ VÓN HÀNG BÁN VÀ DỊCH VỤ CUNG CÁP
+      #8 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: MBS_financial_statements_2025_table_25.csv
+         Tên bảng: Công ty có các bộ phận kinh doanh chính: Môi giới và dịch vụ khách hàng, tự doanh, ngân hàng đầu tư và các bộ phận khác Cho năm kết thúc ngày 31 tháng 12 năm 2025
+      #9 RRF: 0.015385 | DenseRank: 5 | SparseRank: None
+         File: VRE_financial_statements_2025_separate_table_53.csv
+         Tên bảng: THUYẾT MINH BÁO CÁO TÀI CHÍNH RIÊNG (Tiếp theo MÃU SỐ B 09-DN
+      #10 RRF: 0.015385 | DenseRank: None | SparseRank: 5
+         File: VSF_financial_statements_2025_aggregated_table_49.csv
+         Tên bảng: Cho năm tài chính kết thúc 6.6 Thu nhập khác/Chỉ phí khác
+   🏆 Năm 2025 - Bảng khớp CAO NHẤT: VRE_financial_statements_2025_separate_table_5.csv — BÁO CÁO KẾT QUẢ HOẠT ĐỘNG KINH DOANH Cho năm tài chính kết thúc ngày 31 tháng 12 năm 2025 (RRF: 0.016393)
+
+📊 [Kết quả - Data Discovery]: Đã chọn 1 bảng có độ khớp cao nhất.
+
+   📍 Node: [DATA_DISCOVERY] (Thời gian chạy: 2.744s)
+
+🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...
+   - Tiêu chí phụ: 31/12/2025
+   - Cột trong bảng: ['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2', '3', '4', '5']
+   - Cột nhãn (chỉ tiêu): '0'
+   - Cột giá trị: '1'
+
+📊 [Kết quả - Schema Mapper]: {'label_column': '0', 'value_column': '1', 'all_columns': "['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2', '3', '4', '5']"}
+
+   📍 Node: [SCHEMA_MAPPER] (Thời gian chạy: 0.005s)
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Doanh thu thuần tính đến ngày 31/12/2025', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 1.919s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (1/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 1)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 12, in <module>
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/generic.py", line 6321, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/accessor.py", line 224, in __get__
+    accessor_obj = self._accessor(obj)
+                   ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/strings/accessor.py", line 194, in __init__
+    self._inferred_dtype = self._validate(data)
+                           ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/strings/accessor.py", line 248, in _validate
+    raise AttributeError("Can only use .str accessor with string values!")
+AttributeError: Can only use .str accessor with string values!. Did you mean: 'std'?
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/VRE/2025/VRE_financial_statements_2025_separate/VRE_financial_statements_2025_separate_table_5.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Doanh thu thuần tính đến ngày 31/12/2025', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+print(result)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.465s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (2/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 2)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 14, in <module>
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/generic.py", line 6321, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/accessor.py", line 224, in __get__
+    accessor_obj = self._accessor(obj)
+                   ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/strings/accessor.py", line 194, in __init__
+    self._inferred_dtype = self._validate(data)
+                           ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/strings/accessor.py", line 248, in _validate
+    raise AttributeError("Can only use .str accessor with string values!")
+AttributeError: Can only use .str accessor with string values!. Did you mean: 'std'?
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/VRE/2025/VRE_financial_statements_2025_separate/VRE_financial_statements_2025_separate_table_5.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Doanh thu thuần tính đến ngày 31/12/2025', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+print(result)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.28s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+   🏁 Trạng thái kết thúc: ERROR
+   ❌ Thất bại! Chi tiết lỗi: Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 14, in <module>
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/generic.py", line 6321, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/accessor.py", line 224, in __get__
+    accessor_obj = self._accessor(obj)
+                   ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/strings/accessor.py", line 194, in __init__
+    self._inferred_dtype = self._validate(data)
+                           ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/pandas/core/strings/accessor.py", line 248, in _validate
+    raise AttributeError("Can only use .str accessor with string values!")
+AttributeError: Can only use .str accessor with string values!. Did you mean: 'std'?
+
+
+[10/10] ❓ Câu hỏi ID 105: Lãi thuần từ hoạt động dịch vụ của Ngân hàng TMCP Xuất nhập khẩu Việt Nam năm 2020 là bao nhiêu triệu đồng?
+------------------------------------------------------------
+
+🔍 [Query Parser] Đang phân tích câu hỏi: 'Lãi thuần từ hoạt động dịch vụ của Ngân hàng TMCP Xuất nhập khẩu Việt Nam năm 2020 là bao nhiêu triệu đồng?'
+📊 [Kết quả - Query Parser]:
+   Công ty: Ngân hàng TMCP Xuất nhập khẩu Việt Nam
+   Năm: ['2020']
+   Nội dung: Lãi thuần từ hoạt động dịch vụ
+   Thao tác: trich_xuat
+   Tiêu chí phụ: từ ngày 31/12/2020
+
+   📍 Node: [QUERY_PARSER] (Thời gian chạy: 1.095s)
+
+🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...
+   - Công ty: 'Ngân hàng TMCP Xuất nhập khẩu Việt Nam'
+   - Số năm: ['2020']
+   - Nội dung cần tìm: 'Lãi thuần từ hoạt động dịch vụ'
+   - Thao tác: trich_xuat
+   - Tra cứu bảng cho năm 2020...
+   📋 Danh sách 9 bảng ứng viên Top-K từ Search Engine (Năm 2020):
+      #1 RRF: 0.031754 | DenseRank: 4 | SparseRank: 2
+         File: EIB_financial_statements_2020_separate_table_70.csv
+         Tên bảng: 22. CHI PHÍ LÃI VÀ CÁC CHI PHÍ TƯƠNG TỰ 23. LÃI THUÂN TỪ HOẠT ĐỘNG DỊCH VỤ
+      #2 RRF: 0.016393 | DenseRank: 1 | SparseRank: None
+         File: EIB_financial_statements_2020_separate_table_19.csv
+         Tên bảng: 5. TIÊN MẠT VÀ VÀNG 6. TIỀN GỦI TẠI NGÂN HÀNG NHÀ NƯỚC VIỆT NAM
+      #3 RRF: 0.016393 | DenseRank: None | SparseRank: 1
+         File: EIB_financial_statements_2020_separate_table_8.csv
+         Tên bảng: cho năm tài chính kết thúc ngày 31 tháng 12 năm 2020 B03/TCTD
+      #4 RRF: 0.016129 | DenseRank: 2 | SparseRank: None
+         File: EIB_financial_statements_2020_separate_table_54.csv
+         Tên bảng: 16. TIÊN GỦI VÀ VAY CÁC TCTD KHÁC 16.1 Tiền gửi của các TCTD khác
+      #5 RRF: 0.015873 | DenseRank: 3 | SparseRank: None
+         File: EIB_financial_statements_2020_separate_table_7.csv
+         Tên bảng: B02/TCTD CÁC CHỈ TIÊU NGOÀI BÀNG CÂN ĐỐI KẾ TOÁN RIÊNG
+      #6 RRF: 0.015873 | DenseRank: None | SparseRank: 3
+         File: EIB_financial_statements_2020_separate_table_73.csv
+         Tên bảng: 25. LÃI THUÀN TỪ MUA BÁN CHỨNG KHOÁN ĐẦU TƯ 26. LÃI THUẦN TỪ HOẠT ĐỘNG KHÁC
+      #7 RRF: 0.015625 | DenseRank: None | SparseRank: 4
+         File: EIB_financial_statements_2020_separate_table_74.csv
+         Tên bảng: 26. LÃI THUẦN TỪ HOẠT ĐỘNG KHÁC 27. THU NHẬP TỪ GÓP VỐN, MUA CÓ PHẦN
+      #8 RRF: 0.015385 | DenseRank: 5 | SparseRank: None
+         File: EIB_financial_statements_2020_separate_table_21.csv
+         Tên bảng: 7. TIÊN GỦI TẠI VÀ CHO VAY CÁC TỔ CHỨC TÍN DỤNG ("TCTD") KHÁC 7.1 Tiền gửi tại các TCTD khác
+      #9 RRF: 0.015385 | DenseRank: None | SparseRank: 5
+         File: EIB_financial_statements_2020_separate_table_71.csv
+         Tên bảng: 23. LÃI THUÂN TỪ HOẠT ĐỘNG DỊCH VỤ 24. LÃI THUÀN TỪ HOẠT ĐỘNG KINH DOANH NGOẠI HỐI
+   🏆 Năm 2020 - Bảng khớp CAO NHẤT: EIB_financial_statements_2020_separate_table_70.csv — 22. CHI PHÍ LÃI VÀ CÁC CHI PHÍ TƯƠNG TỰ 23. LÃI THUÂN TỪ HOẠT ĐỘNG DỊCH VỤ (RRF: 0.031754)
+
+📊 [Kết quả - Data Discovery]: Đã chọn 1 bảng có độ khớp cao nhất.
+
+   📍 Node: [DATA_DISCOVERY] (Thời gian chạy: 3.061s)
+
+🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...
+   - Tiêu chí phụ: từ ngày 31/12/2020
+   - Cột trong bảng: ['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']
+   - Cột nhãn (chỉ tiêu): '0'
+   - Cột giá trị: '1'
+
+📊 [Kết quả - Schema Mapper]: {'label_column': '0', 'value_column': '1', 'all_columns': "['Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', '0', '1', '2']"}
+
+   📍 Node: [SCHEMA_MAPPER] (Thời gian chạy: 0.005s)
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Lãi thuần từ hoạt động dịch vụ', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 1.807s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (1/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.006s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 1)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 13, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/EIB/2020/EIB_financial_statements_2020_separate/EIB_financial_statements_2020_separate_table_70.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Lãi thuần từ hoạt động dịch vụ', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.327s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+🔄 Reflection Loop Activated! Retrying code generation (2/3)...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.005s)
+🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần 2)...
+   - Traceback Lỗi:
+Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+📊 [Kết quả - Code Generator] Mã Python sinh ra:
+```python
+import pandas as pd
+
+def clean_val(val):
+    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
+        return 0.0
+    val_str = str(val).strip().replace('.', '')
+    if '(' in val_str and ')' in val_str:
+        val_str = '-' + val_str.replace('(', '').replace(')', '')
+    return float(val_str)
+
+file_path = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/EIB/2020/EIB_financial_statements_2020_separate/EIB_financial_statements_2020_separate_table_70.csv'
+
+df = pd.read_csv(file_path)
+row = df[df['0'].str.contains('Lãi thuần từ hoạt động dịch vụ', case=False, na=False)]
+raw_val = row['1'].values[0]
+result = clean_val(raw_val)
+```
+
+   📍 Node: [CODE_GENERATOR] (Thời gian chạy: 2.121s)
+⚙️ [Executor] Đang thực thi mã Pandas...
+   📍 Node: [EXECUTOR] (Thời gian chạy: 0.005s)
+   🏁 Trạng thái kết thúc: ERROR
+   ❌ Thất bại! Chi tiết lỗi: Traceback (most recent call last):
+  File "/kaggle/working/r2AI_2026/pipeline/src/nodes/executor.py", line 138, in executor_node
+    exec(code_str, exec_globals)
+  File "<string>", line 15, in <module>
+IndexError: index 0 is out of bounds for axis 0 with size 0
+
+
+================================================================================
+📊 TỔNG HỢP KẾT QUẢ KIỂM THỬ:
+================================================================================
+Tổng số câu hỏi: 10 | Thành công: 0 | Thất bại: 10
+❌ ID 655: FAILED
+❌ ID 115: FAILED
+❌ ID 26: FAILED
+❌ ID 760: FAILED
+❌ ID 282: FAILED
+❌ ID 251: FAILED
+❌ ID 229: FAILED
+❌ ID 143: FAILED
+❌ ID 755: FAILED
+❌ ID 105: FAILED

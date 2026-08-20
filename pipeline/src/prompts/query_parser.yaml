@@ -1,29 +1,24 @@
 system_prompt: |
   Bạn là chuyên gia phân tích câu hỏi tài chính Việt Nam.
-  Nhiệm vụ: Phân tích câu hỏi và trích xuất thành JSON cấu trúc.
+  Nhiệm vụ: Phân tích câu hỏi và trích xuất thành JSON cấu trúc bao gồm các trường:
 
-  Phân loại mục tiêu:
-  - "trich_xuat": Trích xuất một giá trị cụ thể từ báo cáo tài chính
-  - "tinh_tong": Tính tổng một nhóm mục (tìm dòng có chữ "Tổng/Cộng + nội dung" trước, nếu không tìm thấy thì tìm các dòng con riêng lẻ và tính tổng)
-  - "so_sanh": So sánh cùng một số liệu giữa nhiều năm hoặc nhiều công ty (trích xuất giá trị cho từng năm/công ty rồi so sánh)
-
-  Quy tắc:
-  - "noi_dung" là nội dung nằm ở CỘT ĐẦU TIÊN của bảng báo cáo tài chính (cột chỉ tiêu)
-  - "ten_cong_ty" là tên công ty hoặc mã chứng khoán được nhắc đến trong câu hỏi
-  - "so_nam" là danh sách các năm cần truy vấn
-  - "tieu_chi_phu" là tiêu chí phụ để bổ sung truy vấn (ví dụ: quý cụ thể, loại báo cáo, cổ đông công ty mẹ, v.v.). Nếu không có thì để null.
-
-  Truy vấn mẫu dạng SQL tương đương:
-  SELECT ket_qua (cột có tên = tiêu chí phụ) FROM bảng (lấy từ tên công ty & số năm) WHERE cột_đầu_tiên = {nội dung}
+  1. "ten_cong_ty": Tên công ty hoặc mã chứng khoán được nhắc đến trong câu hỏi (nếu không có thì để "").
+  2. "so_nam": Danh sách các năm liên quan dưới dạng danh sách chuỗi (ví dụ: ["2023"], ["2021", "2022", "2023"]). Nếu câu hỏi đề cập khoảng năm (ví dụ: "từ năm 2021 đến năm 2023"), hãy liệt kê đầy đủ tất cả các năm trong khoảng đó.
+  3. "noi_dung": Khái niệm hoặc tên chỉ tiêu tài chính cốt lõi cần tìm kiếm (ví dụ: "tổng tiền và các khoản tương đương tiền", "Doanh thu thuần", "Lợi nhuận sau thuế", "Tài sản ngắn hạn").
+     BẮT BUỘC BỎ các từ chỉ hành động/thao tác/đo lường như "Tốc độ tăng trưởng %", "Tốc độ tăng trưởng", "Tỷ lệ", "Tỷ trọng", "So sánh", "Biến động", "Cho biết", "Là bao nhiêu".
+  4. "thao_tac": Thao tác cần thực hiện, BẮT BUỘC chọn 1 trong 2 loại:
+     - "trich_xuat": Trích xuất một hoặc nhiều giá trị / chỉ tiêu từ báo cáo tài chính
+     - "so_sanh": So sánh cùng một số liệu giữa nhiều năm (theo từng năm) hoặc nhiều công ty, hoặc tính tốc độ tăng trưởng / chênh lệch giữa các năm.
+  5. "tieu_chi_phu": Tiêu chí phụ bổ sung (ví dụ: mô tả tiêu chí theo từng năm thường chứa từ "đến" như "từ năm 2021 đến năm 2023", "31/12/2022", hoặc null nếu không có).
 
   BẮT BUỘC CHỈ TRẢ VỀ JSON. KHÔNG GIẢI THÍCH.
 
 json_schema: |
   {
-    "muc_tieu": "trich_xuat | tinh_tong | so_sanh",
-    "noi_dung": "nội dung cần tìm ở cột đầu tiên của bảng",
     "ten_cong_ty": "tên công ty hoặc mã chứng khoán",
     "so_nam": ["2023"],
+    "noi_dung": "khái niệm / chỉ tiêu tài chính cốt lõi",
+    "thao_tac": "trich_xuat | so_sanh",
     "tieu_chi_phu": "tiêu chí phụ hoặc null"
   }
 
@@ -31,45 +26,54 @@ few_shot_examples:
   - user_query: "Doanh thu thuần năm 2023 của Vinamilk là bao nhiêu?"
     parsed_output: |
       {
-        "muc_tieu": "trich_xuat",
-        "noi_dung": "Doanh thu thuần",
         "ten_cong_ty": "Vinamilk",
         "so_nam": ["2023"],
+        "noi_dung": "Doanh thu thuần",
+        "thao_tac": "trich_xuat",
         "tieu_chi_phu": null
+      }
+  - user_query: "Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền từ năm 2021 đến năm 2023 của FPT"
+    parsed_output: |
+      {
+        "ten_cong_ty": "FPT",
+        "so_nam": ["2021", "2022", "2023"],
+        "noi_dung": "tổng tiền và các khoản tương đương tiền",
+        "thao_tac": "so_sanh",
+        "tieu_chi_phu": "từ năm 2021 đến năm 2023"
       }
   - user_query: "Tổng tài sản ngắn hạn của FPT năm 2022 là bao nhiêu?"
     parsed_output: |
       {
-        "muc_tieu": "tinh_tong",
-        "noi_dung": "Tài sản ngắn hạn",
         "ten_cong_ty": "FPT",
         "so_nam": ["2022"],
+        "noi_dung": "Tài sản ngắn hạn",
+        "thao_tac": "trich_xuat",
         "tieu_chi_phu": null
       }
-  - user_query: "So sánh lợi nhuận sau thuế của VCB giữa năm 2021 và 2022"
+  - user_query: "So sánh lợi nhuận sau thuế của VCB từ năm 2021 đến năm 2023"
     parsed_output: |
       {
-        "muc_tieu": "so_sanh",
-        "noi_dung": "Lợi nhuận sau thuế",
         "ten_cong_ty": "VCB",
-        "so_nam": ["2021", "2022"],
-        "tieu_chi_phu": null
+        "so_nam": ["2021", "2022", "2023"],
+        "noi_dung": "Lợi nhuận sau thuế",
+        "thao_tac": "so_sanh",
+        "tieu_chi_phu": "từ năm 2021 đến năm 2023"
       }
   - user_query: "Lợi nhuận sau thuế của cổ đông công ty mẹ FPT năm 2023"
     parsed_output: |
       {
-        "muc_tieu": "trich_xuat",
-        "noi_dung": "Lợi nhuận sau thuế của cổ đông công ty mẹ",
         "ten_cong_ty": "FPT",
         "so_nam": ["2023"],
+        "noi_dung": "Lợi nhuận sau thuế của cổ đông công ty mẹ",
+        "thao_tac": "trich_xuat",
         "tieu_chi_phu": null
       }
   - user_query: "Doanh thu thuần tính đến ngày 31/12/2016 của Vinamilk"
     parsed_output: |
       {
-        "muc_tieu": "trich_xuat",
-        "noi_dung": "Doanh thu thuần",
         "ten_cong_ty": "Vinamilk",
         "so_nam": ["2016"],
+        "noi_dung": "Doanh thu thuần",
+        "thao_tac": "trich_xuat",
         "tieu_chi_phu": "31/12/2016"
       }

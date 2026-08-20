@@ -1,6 +1,6 @@
 """Node 1: Query Parser Node.
 Phân tích câu hỏi tài chính thành cấu trúc JSON chuẩn.
-Output format mới: muc_tieu, noi_dung, ten_cong_ty, so_nam, tieu_chi_phu.
+Output format: ten_cong_ty, so_nam, noi_dung, thao_tac (muc_tieu: trich_xuat | so_sanh), tieu_chi_phu.
 Không thực hiện tìm bảng — việc này do Data Discovery xử lý.
 """
 
@@ -26,21 +26,155 @@ def load_query_parser_prompt(cfg: Config) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def _normalize_company_name(company_input: str, user_query: str) -> str:
+    """Normalize company name or raw ticker input against rag_module/code_stock.csv map.
+    
+    Quy tắc:
+    1. Load file rag_module/code_stock.csv.
+    2. Nếu tên/mã đầu vào thuộc cột "Mã CK" -> giữ nguyên (không cần map).
+    3. Nếu thuộc cột "Tên công ty" -> map sang "Mã CK" để thực hiện tra cứu.
+    """
+    company_input = company_input.strip() if company_input else ""
+    user_query = user_query.strip() if user_query else ""
+
+    try:
+        from pathlib import Path
+        import pandas as pd
+
+        # Tìm đường dẫn tới file code_stock.csv
+        possible_paths = [
+            Path("rag_module/code_stock.csv"),
+            Path("rag_module/ViFinQA/code_stock.csv"),
+            Path("/kaggle/working/r2AI_2026/rag_module/code_stock.csv"),
+            Path(__file__).resolve().parent.parent.parent / "rag_module" / "code_stock.csv",
+            Path(__file__).resolve().parent.parent.parent / "rag_module" / "ViFinQA" / "code_stock.csv",
+        ]
+
+        csv_path = None
+        for p in possible_paths:
+            if p.exists():
+                csv_path = p
+                break
+
+        name_to_code = []
+        all_tickers = set()
+
+        if csv_path:
+            df = pd.read_csv(csv_path, encoding="utf-8-sig", dtype=str)
+            ticker_col = next((c for c in df.columns if "CK" in c.upper()), df.columns[0])
+            name_col = next((c for c in df.columns if "TÊN" in c.upper() or "TEN" in c.upper()), df.columns[1])
+
+            for _, row in df.iterrows():
+                code = str(row[ticker_col]).strip().upper() if pd.notna(row[ticker_col]) else ""
+                name = str(row[name_col]).strip() if pd.notna(row[name_col]) else ""
+                if code:
+                    all_tickers.add(code)
+                if code and name:
+                    name_to_code.append((name, code))
+        else:
+            # Fallback sang search_engine nếu không đọc được file CSV
+            from rag_module.search_engine import _ensure_resources, _company_map
+            _ensure_resources()
+            if _company_map:
+                name_to_code = list(_company_map)
+                all_tickers = {code.upper() for _, code in _company_map}
+
+        # 1. Kiểm tra xem company_input có nằm ở cột "Mã CK" hay không -> Nếu có thì KHÔNG CẦN MAP
+        if company_input and company_input.upper() in all_tickers:
+            return company_input.upper()
+
+        # Sắp xếp danh sách tên công ty theo độ dài giảm dần (longest-match first)
+        name_to_code.sort(key=lambda x: len(x[0]), reverse=True)
+
+        # 2. Nếu tên trong nội dung user_query nằm ở "Tên công ty" -> map sang "Mã CK"
+        q_lower = user_query.lower()
+        for name, code in name_to_code:
+            if name.lower() in q_lower:
+                return code
+
+        # 3. Nếu tên trong company_input nằm ở "Tên công ty" -> map sang "Mã CK"
+        if company_input:
+            c_lower = company_input.lower()
+            for name, code in name_to_code:
+                if name.lower() in c_lower or c_lower in name.lower():
+                    return code
+
+        # 4. Tra cứu các từ 3-5 ký tự xuất hiện trong câu hỏi có thuộc cột "Mã CK"
+        for w in re.findall(r"\b[A-Za-z]{3,5}\b", user_query):
+            if w.upper() in all_tickers:
+                return w.upper()
+
+    except Exception as e:
+        print(f"⚠️ [Query Parser] Stock code normalization error: {e}")
+
+    return company_input
+
+
+
+def _clean_financial_content(text: str) -> str:
+    """Clean action phrases, measurement prefixes, and query noise from financial content string."""
+    if not text:
+        return ""
+
+    cleaned = text.strip()
+
+    # Strip leading action/measurement phrases
+    strip_patterns = [
+        r"^tốc\s+độ\s+tăng\s+trưởng\s*%\s*",
+        r"^tốc\s+độ\s+tăng\s+trưởng\s*",
+        r"^tăng\s+trưởng\s*%\s*",
+        r"^tăng\s+trưởng\s*",
+        r"^tỷ\s+lệ\s+tăng\s+trưởng\s*",
+        r"^tỷ\s+lệ\s*",
+        r"^tỷ\s+trọng\s*",
+        r"^mức\s+biến\s+động\s*",
+        r"^chênh\s+lệch\s*",
+        r"^so\s+sánh\s*",
+        r"^tính\s+tổng\s*",
+        r"^trích\s+xuất\s*",
+        r"^cho\s+biết\s*",
+    ]
+
+    for pattern in strip_patterns:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+
+    # Strip trailing question/noise phrases
+    trailing_patterns = [
+        r"\s*là\s+bao\s+nhiêu\??$",
+        r"\s*bao\s+nhiêu\??$",
+        r"\s*thay\s+đổi\s+như\s+thế\s+nào\??$",
+        r"\s*như\s+thế\s+nào\??$",
+    ]
+    for pattern in trailing_patterns:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+
+    return cleaned.strip()
+
+
 def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     """Fallback rule-based parser when LLM is unreachable."""
     q = user_query.strip()
-    years = re.findall(r"\b(20\d{2})\b", q)
+    
+    # Check for range pattern e.g. "từ năm 2021 đến năm 2023" or "từ 2021 đến 2023"
+    range_match = re.search(r"từ\s*(?:năm\s*)?(\d{4})\s*đến\s*(?:năm\s*)?(\d{4})", q, re.IGNORECASE)
+    if range_match:
+        y1, y2 = int(range_match.group(1)), int(range_match.group(2))
+        start_y, end_y = min(y1, y2), max(y1, y2)
+        years = [str(y) for y in range(start_y, end_y + 1)]
+        tieu_chi_phu = range_match.group(0)
+    else:
+        years = re.findall(r"\b(20\d{2})\b", q)
+        tieu_chi_phu = None
 
     q_lower = q.lower()
-    if "so sánh" in q_lower or "thay đổi" in q_lower or "tăng trưởng" in q_lower or "từ năm" in q_lower:
-        muc_tieu = "so_sanh"
-    elif "tổng" in q_lower or "cộng" in q_lower:
-        muc_tieu = "tinh_tong"
+    if "so sánh" in q_lower or "thay đổi" in q_lower or "tăng trưởng" in q_lower or "từ năm" in q_lower or "đến năm" in q_lower:
+        thao_tac = "so_sanh"
     else:
-        muc_tieu = "trich_xuat"
+        thao_tac = "trich_xuat"
 
     m_ticker = re.search(r"\b([A-Z]{3,5})\b", q)
     company = m_ticker.group(1) if m_ticker else ""
+    company = _normalize_company_name(company, user_query)
 
     clean_content = re.sub(r"\b(20\d{2})\b", "", q)
     if company:
@@ -55,21 +189,22 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     for word in stop_phrases:
         clean_content = re.sub(rf"\b{re.escape(word)}\b", "", clean_content, flags=re.IGNORECASE)
     
-    clean_content = re.sub(r"\s+", " ", clean_content).strip()
+    clean_content = _clean_financial_content(clean_content or q)
 
     return {
-        "muc_tieu": muc_tieu,
-        "noi_dung": clean_content or q,
         "ten_cong_ty": company,
         "so_nam": years,
-        "tieu_chi_phu": None,
+        "noi_dung": clean_content or q,
+        "thao_tac": thao_tac,
+        "muc_tieu": thao_tac,
+        "tieu_chi_phu": tieu_chi_phu,
     }
 
 
 def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
     """LangGraph Node 1: Phân tích câu hỏi thành cấu trúc truy vấn.
 
-    Trích xuất: muc_tieu, noi_dung, ten_cong_ty, so_nam, tieu_chi_phu.
+    Trích xuất: ten_cong_ty, so_nam, noi_dung, thao_tac (muc_tieu: trich_xuat | so_sanh), tieu_chi_phu.
     KHÔNG tìm bảng — Data Discovery sẽ xử lý.
 
     Args:
@@ -132,19 +267,30 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         # Parse output JSON
         parsed_json = safe_parse_json(raw_content)
 
-        # Ensure minimal structure with new fields
-        if "muc_tieu" not in parsed_json:
-            parsed_json["muc_tieu"] = "trich_xuat"
-        if "noi_dung" not in parsed_json:
-            parsed_json["noi_dung"] = ""
+        # Ensure minimal structure and sync thao_tac / muc_tieu (only trich_xuat or so_sanh)
+        thao_tac = parsed_json.get("thao_tac") or parsed_json.get("muc_tieu") or "trich_xuat"
+        if thao_tac not in ["trich_xuat", "so_sanh"]:
+            thao_tac = "trich_xuat"
+        
+        parsed_json["thao_tac"] = thao_tac
+        parsed_json["muc_tieu"] = thao_tac
+
+        # Clean and extract core financial content
+        raw_noi_dung = parsed_json.get("noi_dung", "")
+        parsed_json["noi_dung"] = _clean_financial_content(raw_noi_dung) or raw_noi_dung
+
         if "ten_cong_ty" not in parsed_json:
             parsed_json["ten_cong_ty"] = ""
+        
+        # Normalize stock code / company name against code_stock.csv map
+        parsed_json["ten_cong_ty"] = _normalize_company_name(parsed_json.get("ten_cong_ty", ""), user_query)
+
         if "so_nam" not in parsed_json:
             parsed_json["so_nam"] = []
         if "tieu_chi_phu" not in parsed_json:
             parsed_json["tieu_chi_phu"] = None
 
-        # Ensure so_nam is always a list
+        # Ensure so_nam is always a list of strings
         if isinstance(parsed_json["so_nam"], str):
             parsed_json["so_nam"] = [parsed_json["so_nam"]]
         elif isinstance(parsed_json["so_nam"], (int, float)):
@@ -152,24 +298,12 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
 
         print(
             f"📊 [Kết quả - Query Parser]:\n"
-            f"   Mục tiêu: {parsed_json.get('muc_tieu')}\n"
-            f"   Nội dung: {parsed_json.get('noi_dung')}\n"
             f"   Công ty: {parsed_json.get('ten_cong_ty')}\n"
             f"   Năm: {parsed_json.get('so_nam')}\n"
+            f"   Nội dung: {parsed_json.get('noi_dung')}\n"
+            f"   Thao tác: {parsed_json.get('thao_tac')}\n"
             f"   Tiêu chí phụ: {parsed_json.get('tieu_chi_phu')}\n"
         )
-        # Ensure rag_search_query is present; fall back to cleaned user query
-        if not parsed_json.get("rag_search_query"):
-            import re as _re
-            _q = _re.sub(r"\b20\d{2}\b", "", user_query)
-            _q = _re.sub(r"\s+", " ", _q).strip()
-            parsed_json["rag_search_query"] = _q
-
-        # Ensure required_tables is present with at least one entry
-        if not parsed_json.get("required_tables"):
-            parsed_json["required_tables"] = ["income_statement"]
-
-        print(f"📊 [Kết quả - Query Parser]: Intent={parsed_json.get('intent')}, File={parsed_json.get('file_name')}, Tables={parsed_json.get('required_tables')}, RAG Query='{parsed_json.get('rag_search_query')}'\n")
 
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})
@@ -192,10 +326,11 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
 
         print(
             f"📊 [Kết quả Fallback - Query Parser]:\n"
-            f"   Mục tiêu: {parsed_json.get('muc_tieu')}\n"
-            f"   Nội dung: {parsed_json.get('noi_dung')}\n"
             f"   Công ty: {parsed_json.get('ten_cong_ty')}\n"
             f"   Năm: {parsed_json.get('so_nam')}\n"
+            f"   Nội dung: {parsed_json.get('noi_dung')}\n"
+            f"   Thao tác: {parsed_json.get('thao_tac')}\n"
+            f"   Tiêu chí phụ: {parsed_json.get('tieu_chi_phu')}\n"
         )
 
         return {
