@@ -32,7 +32,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from qdrant_client import QdrantClient
-from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
+from qdrant_client.models import (
+    FieldCondition,
+    Filter,
+    MatchAny,
+    MatchValue,
+    SearchParams,
+    QuantizationSearchParams,
+)
 from sentence_transformers import SentenceTransformer
 
 # =============================================================================
@@ -321,6 +328,12 @@ def qdrant_search(
         query_filter=Filter(must=must),
         limit=top_k,
         with_payload=True,
+        search_params=SearchParams(
+            quantization=QuantizationSearchParams(
+                rescore=True,
+                oversampling=2.0,
+            )
+        ),
     )
 
     results: List[SearchResult] = []

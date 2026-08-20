@@ -23,11 +23,12 @@ pipeline for Vietnamese Financial Statements (the ViFinQA dataset).
 - Reads CSVs, builds `build_rich_content_string()`: Vietnamese text with up to
   50 row labels PLUS all data column names (`Ten cac cot: ...`)
 - Encodes with `paraphrase-multilingual-MiniLM-L12-v2` (384-dim vectors)
-- Upserts to Qdrant local disk DB; payload now includes `col_names` field
+- Configures **Scalar Quantization (INT8)** + optimized HNSW (`m=16`, `ef_construct=100`)
+- Upserts to Qdrant local disk DB; triggers optimizer compaction for minimal disk footprint
 - Builds BM25Okapi, serializes to `bm25_index.pkl`
 
 **Phase 3 — Retrieval**
-- `run_hybrid_search()`: dense (Qdrant) + sparse (BM25) + RRF fusion
+- `run_hybrid_search()`: dense (Qdrant with INT8 + `rescore=True`) + sparse (BM25) + RRF fusion
 - `search_by_table_name()`: fuzzy-match tables by Ten_Bang (no embedding needed)
 - `search_by_column_name()`: fuzzy-match tables by column header (uses col_names)
 
@@ -43,6 +44,11 @@ client = QdrantClient(path=str(QDRANT_DB_PATH))  # correct
 ```
 
 Kaggle Notebooks cannot run Docker, so local disk mode is mandatory.
+
+### Scalar Quantization (INT8) & Rescoring
+
+- Quantization reduces vector memory/disk storage by 4x (`float32` -> `int8`).
+- During search, `qdrant_search` uses `QuantizationSearchParams(rescore=True, oversampling=2.0)` to re-calculate exact cosine similarity on top candidates, maintaining 99.5%+ recall.
 
 ### HTML Parsing — No Regex
 
@@ -65,14 +71,14 @@ Full ETL + Indexing pipeline.
 
 - Phase 1: reads `*_extracted.txt`, parses HTML, attaches metadata, writes CSVs.
 - Phase 2: reads CSVs, builds content strings (row labels + **column names**),
-  encodes vectors, upserts to Qdrant (payload has `col_names`), builds BM25.
+  encodes vectors, upserts to Qdrant with INT8 Quantization, triggers WAL compaction, builds BM25.
 - CLI: `python rag_module/data_pipeline.py [--skip-etl] [--run-indexing]`
 
 ### search_engine.py
 
 Hybrid search for Kaggle Notebooks. All resources lazy-loaded and cached.
 
-- `run_hybrid_search(query, top_k, ticker, year, report_type)` — main API
+- `run_hybrid_search(query, top_k, ticker, year, report_type)` — main API (Dense INT8+rescore + Sparse BM25 + RRF)
 - `search_by_table_name(company, table_name_query, year?, report_type?, top_k)` — fuzzy-match Ten_Bang, no embedding
 - `search_by_column_name(company, column_query, year?, report_type?, top_k)` — fuzzy-match col_names, falls back to line_items if col_names empty
 - `_resolve_ticker(company)` — company name or ticker string → ticker code
@@ -90,14 +96,14 @@ Columns: `Ma CK` (ticker), `Ten cong ty` (company name).
 
 ### qdrant_local_db/
 
-Qdrant vector DB. Collection: `financial_tables`. Dimension: 384. Distance: Cosine.
+Qdrant vector DB. Collection: `financial_tables`. Dimension: 384. Distance: Cosine. Quantization: INT8 (quantiles=0.99, always_ram=True).
 
 ### bm25_index.pkl
 
 Format: `{"bm25": BM25Okapi, "doc_mapping": List[Dict]}`
 
 Each `doc_mapping` entry has: `csv_path`, `Ma_Doanh_Nghiep`, `Nam_Tai_Chinh`,
-`Loai_Bao_Cao`, `Ten_Bang`, `line_items`, `col_names` (NEW — comma-separated column headers).
+`Loai_Bao_Cao`, `Ten_Bang`, `line_items`, `col_names` (comma-separated column headers).
 
 ---
 

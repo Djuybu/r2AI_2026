@@ -51,7 +51,16 @@ import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup, Tag
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    PointStruct,
+    VectorParams,
+    ScalarQuantization,
+    ScalarQuantizationConfig,
+    ScalarType,
+    HnswConfigDiff,
+    OptimizersConfigDiff,
+)
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
@@ -1119,7 +1128,7 @@ def tokenize(text: str) -> List[str]:
 # ---------------------------------------------------------------------------
 
 def setup_qdrant_collection(client: QdrantClient, name: str, dim: int) -> None:
-    """Delete (if exists) and recreate a Qdrant collection with Cosine distance."""
+    """Delete (if exists) and recreate a Qdrant collection with Cosine distance, INT8 Scalar Quantization, and optimized HNSW."""
     existing = [c.name for c in client.get_collections().collections]
     if name in existing:
         logger.warning("Collection '%s' exists — deleting and recreating.", name)
@@ -1127,8 +1136,22 @@ def setup_qdrant_collection(client: QdrantClient, name: str, dim: int) -> None:
     client.create_collection(
         collection_name=name,
         vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
+        quantization_config=ScalarQuantization(
+            scalar=ScalarQuantizationConfig(
+                type=ScalarType.INT8,
+                quantile=0.99,
+                always_ram=True,
+            )
+        ),
+        hnsw_config=HnswConfigDiff(
+            m=16,
+            ef_construct=100,
+            full_scan_threshold=10000,
+            max_indexing_threads=0,
+            on_disk=False,
+        ),
     )
-    logger.info("Qdrant collection '%s' created (dim=%d, Cosine).", name, dim)
+    logger.info("Qdrant collection '%s' created (dim=%d, Cosine, INT8 Quantization).", name, dim)
 
 
 # ---------------------------------------------------------------------------
@@ -1258,6 +1281,19 @@ def run_indexing(
         uploaded += len(batch_points)
 
     logger.info("Phase 2D complete. %d points uploaded.", uploaded)
+
+    # --- Phase 2D.1: Optimize Qdrant Index & Compact WAL ---
+    logger.info("Phase 2D.1 — Triggering Qdrant index optimization & WAL compaction …")
+    try:
+        qdrant.update_collection(
+            collection_name=collection_name,
+            optimizer_config=OptimizersConfigDiff(
+                indexing_threshold=10000,
+                flush_interval_sec=1,
+            )
+        )
+    except Exception as exc:
+        logger.warning("Could not update optimizer config: %s", exc)
 
     # --- Phase 2E: BM25 ---
     logger.info("Phase 2E — Building BM25 index over %d documents …", len(bm25_corpus))
