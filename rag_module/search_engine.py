@@ -255,12 +255,21 @@ def parse_query(
 
     # --- Ticker via longest company name match ---
     ticker = ""
+    expanded_company_map = []
     for company_name, code in company_map:
+        expanded_company_map.append((company_name, code))
+        clean_name = re.sub(r"\b(CTCP|Tập đoàn|Công ty|Cổ phần|Ngân hàng|TMCP|\-\s*CTCP)\b", "", company_name, flags=re.IGNORECASE).strip(" -")
+        if clean_name and clean_name.lower() != company_name.lower() and len(clean_name) >= 3:
+            expanded_company_map.append((clean_name, code))
+
+    expanded_company_map.sort(key=lambda x: len(x[0]), reverse=True)
+
+    for company_name, code in expanded_company_map:
         if company_name.lower() in q_lower:
             ticker = code
             break
 
-    # Fallback: parenthesised ticker e.g. "(VCB)"
+    # Fallback: parenthesised ticker e.g. "(VCB)" or "(VIC)"
     if not ticker:
         m = re.search(r"\(([A-Z]{2,5})\)", question)
         if m:
@@ -686,8 +695,9 @@ def search_by_company_and_content(
                     s_rank = sparse_rank_map[idx]
                     rrf = (1.0 / (RRF_K + d_rank)) + (1.0 / (RRF_K + s_rank))
 
-                    # Cộng thưởng nếu chuỗi exact substring khớp
-                    if content_lower in item["text"].lower():
+                    # Cộng thưởng nếu chuỗi exact substring khớp (hoặc hàng nhãn chứa trong chuỗi truy vấn)
+                    t_lower = item["text"].lower()
+                    if content_lower in t_lower or (len(t_lower) >= 4 and t_lower in content_lower):
                         rrf += 0.1
 
                     # Mỗi bảng giữ chỉ tiêu có điểm RRF cao nhất

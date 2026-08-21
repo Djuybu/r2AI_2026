@@ -71,6 +71,10 @@ def _normalize_company_name(company_input: str, user_query: str) -> str:
                     all_tickers.add(code)
                 if code and name:
                     name_to_code.append((name, code))
+                    # Thêm các biến thể tên thương hiệu sạch (loại bỏ CTCP, Tập đoàn, Ngân hàng, - CTCP...)
+                    clean_name = re.sub(r"\b(CTCP|Tập đoàn|Công ty|Cổ phần|Ngân hàng|TMCP|\-\s*CTCP)\b", "", name, flags=re.IGNORECASE).strip(" -")
+                    if clean_name and clean_name.lower() != name.lower() and len(clean_name) >= 3:
+                        name_to_code.append((clean_name, code))
         else:
             # Fallback sang search_engine nếu không đọc được file CSV
             from rag_module.search_engine import _ensure_resources, _company_map

@@ -101,6 +101,16 @@ def clean_query_content(noi_dung_input: str, ticker: str = "", so_nam: list = No
     for p in patterns:
         text = re.sub(p, "", text, flags=re.IGNORECASE)
 
+    prefix_patterns = [
+        r"^\s*tổng\s+số\s+",
+        r"^\s*tổng\s+",
+        r"^\s*số\s+dư\s+",
+        r"^\s*giá\s+trị\s+",
+        r"^\s*chỉ\s+tiêu\s+",
+    ]
+    for pp in prefix_patterns:
+        text = re.sub(pp, "", text, flags=re.IGNORECASE)
+
     cleaned = text.strip(" ,.?:;\t\n")
     return cleaned if len(cleaned) >= 2 else noi_dung_input.strip()
 
