@@ -61,7 +61,7 @@ _DEFAULT_CSV = _HERE / "ViFinQA" / "code_stock.csv"
 CODE_STOCK_CSV = _DEFAULT_CSV if _DEFAULT_CSV.exists() else _HERE / "code_stock.csv"
 
 # --- KAGGLE paths (auto-detect Kaggle dataset path) ---
-_KAGGLE_DATA_DIR = Path("/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data")
+_KAGGLE_DATA_DIR = Path("/kaggle/input/r2-ai-output/r2AI_data")
 if (_KAGGLE_DATA_DIR / "qdrant_local_db").exists():
     QDRANT_DB_PATH = _KAGGLE_DATA_DIR / "qdrant_local_db"
 if (_KAGGLE_DATA_DIR / "bm25_index.pkl").exists():
@@ -547,8 +547,8 @@ def _resolve_local_csv_path(csv_path_str: str) -> Optional[Path]:
             _HERE.parent,
             Path.cwd(),
             Path("/kaggle/working/r2AI_2026"),
-            Path("/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data"),
-            Path("/kaggle/input/datasets/duymcminh/r2-ai-output"),
+            Path("/kaggle/input/r2-ai-output/r2AI_data"),
+            Path("/kaggle/input/r2-ai-output"),
         ]
         for base in bases:
             c1 = (base / rel).resolve()
