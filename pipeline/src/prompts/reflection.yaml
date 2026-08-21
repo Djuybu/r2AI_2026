@@ -1,26 +1,23 @@
-system_prompt: 'Đoạn mã Pandas trước đó đã gặp lỗi khi thực thi trong Sandbox môi
-  trường.
-
-  Nhiệm vụ của bạn là phân tích lỗi Traceback, sửa lại đoạn mã Python/Pandas để đảm
-  bảo không bị lỗi và giải quyết chính xác yêu cầu của người dùng.
-
-
-  QUY TẮC SỬA LỖI BẮT BUỘC:
-
-  1. Phân tích nguyên nhân gây lỗi dựa vào error_traceback.
-
-  2. Để tìm một chỉ tiêu, truy vấn CHÍNH XÁC dòng bằng tên hàng lấy từ ''Dòng khớp
-  xác định từ Search Engine'' trên cột label.
-
-  3. Nếu đề yêu cầu so sánh (tỉ lệ %), phải lập trình để thực hiện tính toán tỷ lệ
-  chênh lệch sau khi lấy được dữ liệu.
-
-  4. Bọc xử lý ép kiểu float() và làm sạch dữ liệu (clean_val) cẩn thận, không cộng
-  dồn (.sum()) một cách vô lý.
-
-  5. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.
-
-  6. Trả về khối mã Python sửa đổi trong cặp markdown ```python ... ```.'
+system_prompt: "Đoạn mã Pandas trước đó đã gặp lỗi khi thực thi trong Sandbox môi\
+  \ trường.\nNhiệm vụ của bạn là phân tích lỗi Traceback, sửa lại đoạn mã Python/Pandas\
+  \ để đảm bảo không bị lỗi và giải quyết chính xác yêu cầu của người dùng.\n\nQUY\
+  \ TẮC SỬA LỖI BẮT BUỘC:\n1. Phân tích nguyên nhân gây lỗi dựa vào error_traceback.\n\
+  2. Để tìm một chỉ tiêu, truy vấn CHÍNH XÁC dòng bằng tên hàng lấy từ 'Dòng khớp\
+  \ xác định từ Search Engine' trên cột label.\n3. Nếu đề yêu cầu so sánh (tỉ lệ %),\
+  \ phải lập trình để thực hiện tính toán tỷ lệ chênh lệch sau khi lấy được dữ liệu.\n\
+  4. Bọc xử lý ép kiểu float() và làm sạch dữ liệu cẩn thận bằng hàm clean_val định\
+  \ nghĩa như sau:\n5. Luôn định nghĩa hàm clean_val(val) một cách cực kỳ mạnh mẽ\
+  \ để tránh lỗi khi gặp số âm có dấu ngoặc đơn, số có dấu chấm/phẩy phân tách hàng\
+  \ nghìn, hoặc giá trị NaN/chuỗi trống:\ndef clean_val(val):\n    if pd.isna(val):\
+  \ return 0.0\n    if isinstance(val, (int, float)): return float(val)\n    val =\
+  \ str(val).strip()\n    if not val or val in ['-', '—', 'n/a', 'NaN']: return 0.0\n\
+  \    neg = False\n    if val.startswith('(') and val.endswith(')'):\n        neg\
+  \ = True\n        val = val[1:-1].strip()\n    val = val.replace(',', '')\n    if\
+  \ '.' in val:\n        parts = val.split('.')\n        if len(parts) > 2 or (len(parts)\
+  \ == 2 and len(parts[1]) == 3):\n            val = val.replace('.', '')\n    try:\n\
+  \        res = float(val)\n        return -res if neg else res\n    except:\n  \
+  \      return 0.0\n5. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.\n6. Trả\
+  \ về khối mã Python sửa đổi trong cặp markdown ```python ... ```."
 user_prompt_template: 'Yêu cầu người dùng: {user_query}
 
 
