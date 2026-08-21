@@ -125,6 +125,27 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
             except Exception as e:
                 print(f"⚠️ [Executor] Không thể tự động load DataFrame: {e}")
 
+        # Robust clean_val definition to inject as a fail-safe
+        def clean_val(val):
+            if pd.isna(val): return 0.0
+            if isinstance(val, (int, float)): return float(val)
+            val = str(val).strip()
+            if not val or val in ['-', '—', 'n/a', 'NaN']: return 0.0
+            neg = False
+            if val.startswith('(') and val.endswith(')'):
+                neg = True
+                val = val[1:-1].strip()
+            val = val.replace(',', '')
+            if '.' in val:
+                parts = val.split('.')
+                if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3):
+                    val = val.replace('.', '')
+            try:
+                res = float(val)
+                return -res if neg else res
+            except:
+                return 0.0
+
         # Step 2: Prepare execution scope
         exec_globals = {
             "pd": pd,
@@ -133,6 +154,7 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
             "numpy": np,
             "file_path": file_path,
             "df": df_loaded,
+            "clean_val": clean_val,
         }
         for tbl in discovered_tables:
             csv_p = tbl.get("csv_path", "")
