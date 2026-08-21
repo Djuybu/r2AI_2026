@@ -758,7 +758,13 @@ def _resolve_ticker(company: str) -> str:
     Falls back to returning ``company`` uppercased if no match is found.
     """
     _ensure_resources()
+    if not company:
+        return ""
     if _company_map:
+        c_upper = company.upper()
+        all_tickers = {code for _, code in _company_map}
+        if c_upper in all_tickers:
+            return c_upper
         c_lower = company.lower()
         for name, code in _company_map:
             if name.lower() in c_lower or c_lower in name.lower():

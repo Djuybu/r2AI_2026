@@ -141,17 +141,10 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
 
     if not so_nam and isinstance(user_query, str):
         so_nam = re.findall(r"\b(20\d{2})\b", user_query)
-    if isinstance(user_query, str):
-        try:
-            from rag_module.search_engine import _resolve_ticker
-            if ten_cong_ty:
-                ten_cong_ty = _resolve_ticker(ten_cong_ty)
-            else:
-                m_ticker = re.search(r"\b([A-Za-z]{3,5})\b", user_query)
-                if m_ticker:
-                    ten_cong_ty = _resolve_ticker(m_ticker.group(1))
-        except Exception:
-            pass
+    if isinstance(user_query, str) and not ten_cong_ty:
+        m_ticker = re.search(r"\b([A-Za-z]{3,5})\b", user_query)
+        if m_ticker:
+            ten_cong_ty = m_ticker.group(1).upper()
 
     if not noi_dung_raw:
         noi_dung_raw = user_query if isinstance(user_query, str) else ""
@@ -212,6 +205,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                             "Ma_Doanh_Nghiep": match.get("Ma_Doanh_Nghiep", ten_cong_ty),
                             "Nam_Tai_Chinh": match.get("Nam_Tai_Chinh", ""),
                             "Loai_Bao_Cao": match.get("Loai_Bao_Cao", ""),
+                            "matched_sample": match.get("matched_sample", ""),
                         }
                         if not any(t["csv_path"] == str(csv_path) for t in all_discovered_tables):
                             all_discovered_tables.append(table_entry)
@@ -248,6 +242,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                                 "Ma_Doanh_Nghiep": match.get("Ma_Doanh_Nghiep", ten_cong_ty),
                                 "Nam_Tai_Chinh": str(year),
                                 "Loai_Bao_Cao": match.get("Loai_Bao_Cao", ""),
+                            "matched_sample": match.get("matched_sample", ""),
                             }
                             if not any(t["csv_path"] == str(csv_path) for t in all_discovered_tables):
                                 all_discovered_tables.append(table_entry)

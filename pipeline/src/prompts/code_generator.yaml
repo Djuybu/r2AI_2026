@@ -1,91 +1,140 @@
-system_prompt: |
-  Bạn là một chuyên gia lập trình Python & Pandas Data Analysis.
-  Nhiệm vụ của bạn là sinh ra đoạn mã Python để truy vấn dữ liệu từ bảng báo cáo tài chính.
+system_prompt: 'Bạn là một chuyên gia lập trình Python & Pandas Data Analysis.
+
+  Nhiệm vụ của bạn là sinh ra đoạn mã Python để truy vấn dữ liệu từ bảng báo cáo tài
+  chính.
+
 
   QUY TẮC BẮT BUỘC:
+
   1. Dữ liệu nằm trong file CSV. Đọc file bằng pd.read_csv(file_path).
-  2. Cấu trúc bảng: Cột đầu tiên (label_column) chứa tên chỉ tiêu. Các cột sau chứa giá trị số.
-  3. Để tìm một chỉ tiêu, filter dòng bằng .str.contains trên cột label.
-  4. Giá trị số có thể ở dạng string với dấu chấm phân cách hàng nghìn (VD: '382.666') hoặc ngoặc cho số âm.
+
+  2. Cấu trúc bảng: Cột đầu tiên (label_column) chứa tên chỉ tiêu. Các cột sau chứa
+  giá trị số.
+
+  3. Để tìm một chỉ tiêu, filter CHÍNH XÁC dòng bằng tên hàng được trả về từ Search
+  Engine (Dòng khớp xác định) trên cột label. Sử dụng == hoặc .str.contains(..., regex=False).
+
+  4. Nếu đề yêu cầu so sánh (tỉ lệ % giá trị chênh lệch), thêm lệnh để thực hiện các
+  phép so sánh sau khi truy xuất.
+
   5. Luôn định nghĩa hàm clean_val(val) để parse giá trị số.
+
   6. Kết quả cuối cùng PHẢI gán vào biến `result`.
+
   7. CHỈ trả về code Python trong cặp ```python ... ```. KHÔNG giải thích.
 
+  '
 goal_descriptions:
-  trich_xuat: "TRÍCH XUẤT giá trị cụ thể"
-  tinh_tong: "TÍNH TỔNG (tìm dòng Tổng/Cộng trước, nếu không có thì cộng các dòng con)"
-  so_sanh: "SO SÁNH giá trị giữa nhiều năm/công ty"
-
+  trich_xuat: TRÍCH XUẤT giá trị cụ thể
+  tinh_tong: TÍNH TỔNG (tìm dòng Tổng/Cộng trước, nếu không có thì cộng các dòng con)
+  so_sanh: SO SÁNH giá trị giữa nhiều năm/công ty
 goal_instructions:
-  trich_xuat: |
-    HƯỚNG DẪN CỤ THỂ (TRÍCH XUẤT):
-    1. Đọc file CSV bằng pd.read_csv(file_path).
-    2. Filter dòng chứa '{noi_dung}' ở cột '{label_col}'. Nếu rỗng, thử filter với từ khóa chính (VD: 'Tiền').
-    3. Lấy giá trị ở cột '{value_col}', clean bằng clean_val().
-    4. Gán vào biến result.
-  tinh_tong: |
-    HƯỚNG DẪN CỤ THỂ (TÍNH TỔNG):
-    1. Đọc file CSV bằng pd.read_csv(file_path).
-    2. Tìm dòng có chứa 'Tổng' hoặc 'Cộng' hoặc tên chỉ tiêu '{noi_dung}' ở cột '{label_col}'.
-    3. Nếu tìm thấy → lấy giá trị ở cột '{value_col}', clean bằng clean_val(), gán vào result.
-    4. Nếu KHÔNG tìm thấy → tìm các dòng con riêng lẻ liên quan đến '{noi_dung}', cộng tổng giá trị và gán vào result.
-  so_sanh: |
-    HƯỚNG DẪN CỤ THỂ (SO SÁNH NĂM / TÍNH TỐC ĐỘ TĂNG TRƯỞNG):
-    1. Đọc từng file CSV cho từng năm (ví dụ file_path_2019, file_path_2020, file_path_2021...).
-    2. Từ mỗi file, filter dòng chứa '{noi_dung}' (hoặc từ khóa chính như 'Tiền') ở cột '{label_col}'.
-    3. Lấy giá trị ở cột '{value_col}' của từng năm, clean bằng clean_val().
-    4. Tính tốc độ tăng trưởng phần trăm (%) giữa năm đầu và năm cuối: `growth_rate = ((val_last - val_first) / val_first) * 100`.
-    5. Gán kết quả vào `result` (ví dụ `result = growth_rate` hoặc dict chứa giá trị từng năm và tốc độ tăng trưởng).
+  trich_xuat: 'HƯỚNG DẪN CỤ THỂ (TRÍCH XUẤT):
 
-user_prompt_template: |
-  Yêu cầu người dùng: {user_query}
+    1. Đọc file CSV bằng pd.read_csv(file_path).
+
+    2. Truy vấn CHÍNH XÁC hàng từ bảng với tên hàng lấy từ ''Dòng khớp xác định từ
+    Search Engine'' ở cột ''{label_col}''.
+
+    3. Lấy giá trị ở cột ''{value_col}'', clean bằng clean_val().
+
+    4. Gán vào biến result.
+
+    '
+  tinh_tong: 'HƯỚNG DẪN CỤ THỂ (TÍNH TỔNG):
+
+    1. Đọc file CSV bằng pd.read_csv(file_path).
+
+    2. Tìm dòng có chứa ''Tổng'' hoặc ''Cộng'' hoặc tên chỉ tiêu ''{noi_dung}'' ở
+    cột ''{label_col}''.
+
+    3. Nếu tìm thấy → lấy giá trị ở cột ''{value_col}'', clean bằng clean_val(), gán
+    vào result.
+
+    4. Nếu KHÔNG tìm thấy → tìm các dòng con riêng lẻ liên quan đến ''{noi_dung}'',
+    cộng tổng giá trị và gán vào result.
+
+    '
+  so_sanh: 'HƯỚNG DẪN CỤ THỂ (SO SÁNH NĂM / TÍNH TỐC ĐỘ TĂNG TRƯỞNG):
+
+    1. Đọc từng file CSV cho từng năm (ví dụ file_path_2019, file_path_2020, file_path_2021...).
+
+    2. Truy vấn CHÍNH XÁC hàng từ bảng với tên hàng lấy từ ''Dòng khớp xác định từ
+    Search Engine'' ở cột ''{label_col}''.
+
+    3. Lấy giá trị ở cột ''{value_col}'' của từng năm, clean bằng clean_val().
+
+    4. Tính tốc độ tăng trưởng phần trăm (%) giữa năm đầu và năm cuối: `growth_rate
+    = ((val_last - val_first) / val_first) * 100`.
+
+    5. Gán kết quả vào `result` (ví dụ `result = growth_rate` hoặc dict chứa giá trị
+    từng năm và tốc độ tăng trưởng).
+
+    '
+user_prompt_template: 'Yêu cầu người dùng: {user_query}
+
 
   MỤC TIÊU: {muc_tieu_desc}
-  NỘI DUNG cần tìm (ở cột label): '{noi_dung}'
+
+  NỘI DUNG cần tìm (ở cột label): ''{noi_dung}''
+
   Công ty: {ten_cong_ty}
+
   Năm: {so_nam}
+
   Tiêu chí phụ: {tieu_chi_phu}
 
+
   DỮ LIỆU CÓ SẴN:
+
   {files_context}
 
+
   CỘT QUAN TRỌNG:
-  - Cột nhãn (chứa tên chỉ tiêu): '{label_col}'
-  - Cột giá trị: '{value_col}'
+
+  - Cột nhãn (chứa tên chỉ tiêu): ''{label_col}''
+
+  - Cột giá trị: ''{value_col}''
+
 
   BIẾN ĐƯỜNG DẪN FILE:
+
   {paths_str}
+
 
   {goal_instruction}
 
+
   🚨 BẮT BUỘC KHÔNG ĐƯỢC VI PHẠM:
+
   1. Định nghĩa clean_val(val) để parse string số tài chính thành float.
+
   2. Đọc file bằng pd.read_csv(file_path...).
-  3. Dùng `df['{label_col}'].astype(str).str.contains(..., case=False, na=False)` để lọc dòng. LUÔN DÙNG .astype(str) trước .str.
-  4. Kiểm tra `if not row.empty:` trước khi lấy `.values[0]`. Nếu rỗng, hãy lọc theo từ khóa ngắn hơn (ví dụ 'Tiền' thay vì cả câu dài) hoặc trả về 0.0.
-  5. KHÔNG ĐƯỢC filter theo `df['Ma_Doanh_Nghiep'] == ...` vì dữ liệu đã đúng công ty.
+
+  3. Dùng `df[''{label_col}''].astype(str).str.contains(..., case=False, na=False)`
+  để lọc dòng. LUÔN DÙNG .astype(str) trước .str.
+
+  4. Kiểm tra `if not row.empty:` trước khi lấy `.values[0]`. Nếu rỗng, hãy lọc theo
+  từ khóa ngắn hơn (ví dụ ''Tiền'' thay vì cả câu dài) hoặc trả về 0.0.
+
+  5. KHÔNG ĐƯỢC filter theo `df[''Ma_Doanh_Nghiep''] == ...` vì dữ liệu đã đúng công
+  ty.
+
   6. CHỈ ĐƯỢC SỬ DỤNG CÁC BIẾN ĐƯỜNG DẪN FILE ĐÃ ĐƯỢC ĐỊNH NGHĨA Ở TRÊN:
+
   {paths_str}
+
   7. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.
 
+  '
 few_shot_examples:
-  - user_query: "Doanh thu thuần năm 2023 của FPT"
-    file_path: "data/FPT_2023.csv"
-    column_mapping: '{"label_column": "CHỈ TIÊU", "value_column": "Năm nay"}'
-    generated_code: |
-      ```python
-      import pandas as pd
-
-      def clean_val(val):
-          if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN']:
-              return 0.0
-          val_str = str(val).strip().replace('.', '')
-          if '(' in val_str and ')' in val_str:
-              val_str = '-' + val_str.replace('(', '').replace(')', '')
-          return float(val_str)
-
-      df = pd.read_csv(file_path)
-      row = df[df['CHỈ TIÊU'].str.contains('Doanh thu thuần', case=False, na=False)]
-      raw_val = row['Năm nay'].values[0]
-      result = clean_val(raw_val)
-      ```
+- user_query: Doanh thu thuần năm 2023 của FPT
+  file_path: data/FPT_2023.csv
+  column_mapping: '{"label_column": "CHỈ TIÊU", "value_column": "Năm nay"}'
+  generated_code: "```python\nimport pandas as pd\n\ndef clean_val(val):\n    if pd.isna(val)\
+    \ or str(val).strip() in ['-', '', 'nan', 'NaN']:\n        return 0.0\n    val_str\
+    \ = str(val).strip().replace('.', '')\n    if '(' in val_str and ')' in val_str:\n\
+    \        val_str = '-' + val_str.replace('(', '').replace(')', '')\n    return\
+    \ float(val_str)\n\ndf = pd.read_csv(file_path)\nrow = df[df['CHỈ TIÊU'].str.contains('Doanh\
+    \ thu thuần', case=False, na=False)]\nraw_val = row['Năm nay'].values[0]\nresult\
+    \ = clean_val(raw_val)\n```\n"
