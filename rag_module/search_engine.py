@@ -570,12 +570,12 @@ def search_by_company_and_content(
     content: str,
     year: Optional[str] = None,
     report_type: Optional[str] = None,
-    top_k: int = 5,
+    top_k: Optional[int] = None,
 ) -> List[RRFResult]:
     """
     Tra cứu bảng báo cáo tài chính theo Hướng A (On-the-fly Hybrid Search trên Cột 0):
-    1. Giới hạn/lọc toàn bộ danh sách bảng theo tên công ty (mã chứng khoán) & năm tài chính.
-    2. Rút ra tất cả các dòng chỉ tiêu ở CỘT ĐẦU TIÊN CÓ NGHĨA của ~100 bảng đã lọc.
+    1. Giới hạn/lọc toàn bộ danh sách bảng theo tên công ty (mã chứng khoán) & năm tài chính (không giới hạn số bảng).
+    2. Rút ra tất cả các dòng chỉ tiêu ở CỘT ĐẦU TIÊN CÓ NGHĨA của TOÀN BỘ các bảng đã lọc (đọc toàn bộ dòng trong file CSV).
     3. Thực thi On-the-fly Hybrid Search (BM25 + SentenceTransformer Vector + RRF) trực tiếp trên tập dòng chỉ tiêu này.
     4. Xếp hạng các bảng dựa theo chỉ tiêu có điểm số cao nhất trong từng bảng.
 
@@ -584,7 +584,7 @@ def search_by_company_and_content(
         content: Nội dung/chỉ tiêu nằm ở cột đầu tiên có nghĩa (VD: 'Doanh thu thuần')
         year: Năm báo cáo tài chính (VD: '2023')
         report_type: Loại báo cáo ('separate' | 'consolidated')
-        top_k: Số lượng bảng kết quả tốt nhất cần trả về
+        top_k: Số lượng bảng kết quả trả về (Nếu None hoặc <= 0, trả về TOÀN BỘ danh sách bảng đã xếp hạng).
 
     Returns:
         Danh sách các bảng kết quả tìm kiếm đã sắp xếp theo độ khớp.
@@ -618,7 +618,7 @@ def search_by_company_and_content(
     content_clean = content.strip() if content else ""
     content_lower = content_clean.lower()
 
-    # 2. Lọc toàn bộ danh sách ~100 bảng thuộc về (Ticker, Year)
+    # 2. Lọc TOÀN BỘ danh sách bảng thuộc về (Ticker, Year)
     if ticker and _doc_mapping and content_clean:
         candidates = []
         for doc in _doc_mapping:
@@ -635,14 +635,15 @@ def search_by_company_and_content(
         logger.info("Found %d candidate tables for ticker='%s', year='%s'", len(candidates), ticker, year)
 
         if candidates:
-            # 3. Thu thập tất cả các dòng chỉ tiêu ở Cột đầu tiên từ ~100 bảng này
+            # 3. Thu thập tất cả các dòng chỉ tiêu ở Cột đầu tiên từ TOÀN BỘ các bảng ứng viên
             row_items: List[Dict[str, Any]] = []
             for doc in candidates:
                 raw_csv_path = doc.get("csv_path", "")
                 csv_path_resolved = _resolve_local_csv_path(raw_csv_path)
                 if csv_path_resolved and csv_path_resolved.exists():
                     try:
-                        df_sample = pd.read_csv(csv_path_resolved, nrows=100)
+                        # Đọc TOÀN BỘ dòng trong file CSV thay vì giới hạn 100 dòng
+                        df_sample = pd.read_csv(csv_path_resolved)
                         if not df_sample.empty:
                             col_name, col_series = get_first_meaningful_column(df_sample)
                             for r_idx, val in col_series.dropna().items():
@@ -706,7 +707,9 @@ def search_by_company_and_content(
                 fused_tables = sorted(line_fusion.values(), key=lambda x: x["rrf_score"], reverse=True)
                 if fused_tables:
                     logger.info("Direction A Hybrid Search successfully ranked %d tables.", len(fused_tables))
-                    return fused_tables[:top_k]
+                    if top_k is not None and top_k > 0:
+                        return fused_tables[:top_k]
+                    return fused_tables
 
     # 4. Fallback: Dùng standard Hybrid Search nếu không lọc được theo (Company, Year)
     logger.info("Fallback to standard Hybrid Search...")

@@ -67,6 +67,44 @@ def _log_candidates(results: List[Dict[str, Any]], year_label: str = "") -> None
             print(f"         🔍 Minh chứng dòng khớp trong {col_tag}: \"{matched_sample}\"")
 
 
+def clean_query_content(noi_dung_input: str, ticker: str = "", so_nam: list = None) -> str:
+    """Làm sạch chuỗi noi_dung: Loại bỏ tên công ty, mã CK, năm, các từ để hỏi và thông tin thừa
+    để đảm bảo Search Engine nhận đúng từ khóa chỉ tiêu cốt lõi (VD: 'Lãi tiền gửi', 'Quỹ khen thưởng, phúc lợi').
+    """
+    if not noi_dung_input:
+        return ""
+    text = str(noi_dung_input)
+    text = re.sub(r"\([A-Za-z]{2,5}\)", "", text)
+    text = re.sub(r"\b20\d{2}\b", "", text)
+    if ticker:
+        text = re.sub(r"\b" + re.escape(ticker) + r"\b", "", text, flags=re.IGNORECASE)
+
+    patterns = [
+        r"là bao nhiêu.*",
+        r"bao nhiêu.*",
+        r"của công ty mẹ.*",
+        r"của ngân hàng.*",
+        r"của ctcp.*",
+        r"của tập đoàn.*",
+        r"của công ty.*",
+        r"vào ngày.*",
+        r"đến ngày.*",
+        r"tại ngày.*",
+        r"cuối năm.*",
+        r"đầu năm.*",
+        r"trong năm.*",
+        r"năm.*",
+        r"báo cáo tài chính.*",
+        r"báo cáo riêng.*",
+        r"báo cáo hợp nhất.*",
+    ]
+    for p in patterns:
+        text = re.sub(p, "", text, flags=re.IGNORECASE)
+
+    cleaned = text.strip(" ,.?:;\t\n")
+    return cleaned if len(cleaned) >= 2 else noi_dung_input.strip()
+
+
 def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
     """LangGraph Node 2: Tìm kiếm bảng dữ liệu liên quan bằng Search Engine.
 
@@ -88,7 +126,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     # Extract fields from parsed_query
     ten_cong_ty = parsed_query.get("ten_cong_ty", "")
     so_nam = parsed_query.get("so_nam", [])
-    noi_dung = parsed_query.get("noi_dung", "")
+    noi_dung_raw = parsed_query.get("noi_dung", "")
     thao_tac = parsed_query.get("thao_tac") or parsed_query.get("muc_tieu", "trich_xuat")
 
     if not so_nam and isinstance(user_query, str):
@@ -104,13 +142,17 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                     ten_cong_ty = _resolve_ticker(m_ticker.group(1))
         except Exception:
             pass
-    if not noi_dung:
-        noi_dung = user_query if isinstance(user_query, str) else ""
+
+    if not noi_dung_raw:
+        noi_dung_raw = user_query if isinstance(user_query, str) else ""
+
+    # Làm sạch noi_dung trước khi truyền vào Search Engine
+    noi_dung = clean_query_content(noi_dung_raw, ten_cong_ty, so_nam)
 
     print(f"\n🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...")
     print(f"   - Công ty: '{ten_cong_ty}'")
     print(f"   - Số năm: {so_nam}")
-    print(f"   - Nội dung cần tìm: '{noi_dung}'")
+    print(f"   - Nội dung cần tìm (đã làm sạch): '{noi_dung}' (gốc: '{noi_dung_raw}')")
     print(f"   - Thao tác: {thao_tac}")
 
     # Determine report type: mặc định None để tìm kiếm trên CẢ 2 loại báo cáo (consolidated & separate)
