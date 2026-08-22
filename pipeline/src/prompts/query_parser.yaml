@@ -6,14 +6,15 @@ system_prompt: |
 
   ### Bước 1 — Xác định CÔNG TY chủ báo cáo (ten_cong_ty)
   Đây là công ty/ngân hàng SỞ HỮU báo cáo tài chính được hỏi, nhận dạng qua:
-  - Mã chứng khoán (3–5 chữ in hoa): VJC, ACB, FPT, SCR, GVR...
+  - Mã chứng khoán (3–5 chữ in hoa): VJC, ACB, FPT, SCR, GVR, STB, VCB, VIC...
   - Tiền tố tổ chức: "CTCP", "Ngân hàng TMCP", "Tổng Công ty", "Tập đoàn", "công ty mẹ"
   - Tên đầy đủ kèm mã CK trong ngoặc: "CTCP Hàng không Vietjet (VJC)"
+  - Ánh xạ tên công ty sang mã chứng khoán chính xác dựa trên danh mục công ty (code_stock.csv) nếu có.
 
-  ⚠️ PHÂN BIỆT công ty chủ báo cáo với thực thể phụ:
-  Các tổ chức/cá nhân PHỤ xuất hiện bên trong chỉ tiêu KHÔNG PHẢI công ty chủ báo cáo.
-  Ví dụ: "Vay dài hạn với Công ty Cổ phần Hoàng Anh Gia Lai của công ty mẹ CTCP... (HNG)"
-  → ten_cong_ty = "HNG", KHÔNG PHẢI "Hoàng Anh Gia Lai".
+  ⚠️ CHỐNG ẢO GIÁC & CONTEXT LEAK (NGUYÊN TẮC BẮT BUỘC):
+  - TUYỆT ĐỐI KHÔNG mang tên công ty hoặc mã chứng khoán từ các ví dụ hoặc câu hỏi trước vào câu hỏi hiện tại.
+  - CHỈ trích xuất hoặc ánh xạ công ty NẾU công ty đó thực sự xuất hiện trong câu hỏi đầu vào.
+  - Nếu câu hỏi nhắc đến tên công ty (ví dụ: "Ngân hàng TMCP Sài Gòn Thương Tín"), hãy ánh xạ chính xác sang mã tương ứng (STB). Nếu tên công ty không tồn tại hoặc không khớp trong code_stock.csv (ví dụ: "Ngân hàng Sài Gòn Tài Lộc"), hãy giữ nguyên chuỗi tên công ty hoặc để rỗng, TUYỆT ĐỐI KHÔNG được gán nhầm sang mã công ty khác như "VNM" hay "FPT".
 
   ### Bước 2 — Xác định THỜI GIAN (so_nam, tieu_chi_phu)
   Tìm và phân loại tất cả cụm thời gian trong câu:
@@ -34,8 +35,9 @@ system_prompt: |
   ✂️ Từ nối ở RANH GIỚI giữa chỉ tiêu và công ty: "của", "tại", "trong"
   ✂️ Nếu câu hỏi mang tính so sánh/tăng trưởng: bỏ thêm tiền tố chỉ thao tác ("Tốc độ tăng trưởng %", "Tỷ lệ tăng trưởng", "So sánh", "Mức biến động", "Chênh lệch")
 
-  ⚠️ NGUYÊN TẮC QUAN TRỌNG NHẤT:
-  - CHỈ TIÊU phải được TRÍCH NGUYÊN VĂN từ câu hỏi. TUYỆT ĐỐI KHÔNG diễn giải, không đổi từ, không thay bằng khái niệm tương tự.
+  ⚠️ CHỐNG ẢO GIÁC CHỈ TIÊU (NGUYÊN TẮC QUAN TRỌNG NHẤT):
+  - CHỈ TIÊU phải được TRÍCH NGUYÊN VĂN từ câu hỏi đầu vào. TUYỆT ĐỐI KHÔNG diễn giải, không đổi từ.
+  - TUYỆT ĐỐI KHÔNG tự ý đưa ra chỉ tiêu "Tiền và các khoản tương đương tiền" hoặc bất kỳ chỉ tiêu mặc định nào nếu câu hỏi không hỏi về chỉ tiêu đó!
   - CHỈ BỎ từ nối ("của", "tại") ở RANH GIỚI giữa chỉ tiêu và công ty. KHÔNG BỎ "của", "tại" nếu chúng nằm BÊN TRONG chỉ tiêu.
     Ví dụ đúng: "Thù lao của thành viên HĐQT Chu Thị Bình" → giữ nguyên "của" vì nó nằm bên trong chỉ tiêu.
     Ví dụ đúng: "Tỷ lệ biểu quyết của Xí nghiệp Liên doanh Visorutex" → giữ nguyên.

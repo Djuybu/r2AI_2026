@@ -30,12 +30,14 @@ def _normalize_company_name(company_input: str, user_query: str) -> str:
     """Normalize company name or raw ticker input against rag_module/code_stock.csv map.
     
     Quy tắc:
-    1. Load file rag_module/code_stock.csv.
-    2. Nếu tên/mã đầu vào thuộc cột "Mã CK" -> giữ nguyên (không cần map).
-    3. Nếu thuộc cột "Tên công ty" -> map sang "Mã CK" để thực hiện tra cứu.
+    1. Scan user_query directly for explicit 3-5 letter uppercase tickers in code_stock.csv.
+    2. Scan user_query against company names in code_stock.csv (longest match first).
+    3. If company_input provided by LLM is present in user_query, validate and return corresponding ticker.
+    4. If company_input is NOT in user_query and no match found, do NOT map to arbitrary tickers (e.g. VNM).
     """
     company_input = company_input.strip() if company_input else ""
     user_query = user_query.strip() if user_query else ""
+    q_lower = user_query.lower()
 
     try:
         from pathlib import Path
@@ -83,33 +85,34 @@ def _normalize_company_name(company_input: str, user_query: str) -> str:
                 name_to_code = list(_company_map)
                 all_tickers = {code.upper() for _, code in _company_map}
 
-        # 1. Kiểm tra xem company_input có nằm ở cột "Mã CK" hay không -> Nếu có thì KHÔNG CẦN MAP
-        if company_input and company_input.upper() in all_tickers:
-            return company_input.upper()
-
-        # Sắp xếp danh sách tên công ty theo độ dài giảm dần (longest-match first)
-        name_to_code.sort(key=lambda x: len(x[0]), reverse=True)
-
-        # 2. Nếu tên trong nội dung user_query nằm ở "Tên công ty" -> map sang "Mã CK"
-        q_lower = user_query.lower()
-        for name, code in name_to_code:
-            if name.lower() in q_lower:
-                return code
-
-        # 3. Nếu tên trong company_input nằm ở "Tên công ty" -> map sang "Mã CK"
-        if company_input:
-            c_lower = company_input.lower()
-            for name, code in name_to_code:
-                if name.lower() in c_lower or c_lower in name.lower():
-                    return code
-
-        # 4. Tra cứu các từ 3-5 ký tự xuất hiện trong câu hỏi có thuộc cột "Mã CK"
+        # 1. Tra cứu các mã chứng khoán 3-5 ký tự in hoa xuất hiện trực tiếp trong câu hỏi người dùng
         for w in re.findall(r"\b[A-Za-z]{3,5}\b", user_query):
             if w.upper() in all_tickers:
                 return w.upper()
 
+        # 2. Sắp xếp danh sách tên công ty theo độ dài giảm dần (longest-match first) và khớp vào user_query
+        name_to_code.sort(key=lambda x: len(x[0]), reverse=True)
+        for name, code in name_to_code:
+            if len(name) >= 3 and name.lower() in q_lower:
+                return code
+
+        # 3. Nếu company_input xuất hiện trong user_query, kiểm tra tên/mã
+        if company_input:
+            c_upper = company_input.upper()
+            if c_upper in all_tickers and c_upper.lower() in q_lower:
+                return c_upper
+            c_lower = company_input.lower()
+            for name, code in name_to_code:
+                if len(name) >= 3 and (name.lower() in c_lower or c_lower in name.lower()):
+                    if name.lower() in q_lower or code.lower() in q_lower:
+                        return code
+
     except Exception as e:
         print(f"⚠️ [Query Parser] Stock code normalization error: {e}")
+
+    # Nếu company_input do LLM sinh ra KHÔNG hề có trong user_query -> Bỏ qua hallucination
+    if company_input and company_input.lower() not in q_lower and company_input.upper() not in user_query:
+        return ""
 
     return company_input
 

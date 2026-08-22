@@ -127,10 +127,11 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
 
         # Robust clean_val definition to inject as a fail-safe
         def clean_val(val):
-            if pd.isna(val): return 0.0
+            if pd.isna(val): raise ValueError("Metric not found in table")
             if isinstance(val, (int, float)): return float(val)
             val = str(val).strip()
-            if not val or val in ['-', '—', 'n/a', 'NaN']: return 0.0
+            if not val or val in ['-', '—', 'n/a', 'NaN', 'None', 'null']:
+                raise ValueError("Metric not found in table")
             neg = False
             if val.startswith('(') and val.endswith(')'):
                 neg = True
@@ -143,8 +144,8 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
             try:
                 res = float(val)
                 return -res if neg else res
-            except:
-                return 0.0
+            except Exception:
+                raise ValueError("Metric not found in table")
 
         # Step 2: Prepare execution scope
         exec_globals = {
