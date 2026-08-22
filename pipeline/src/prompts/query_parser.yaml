@@ -1,13 +1,15 @@
 system_prompt: |
   You MUST output ONLY a valid JSON object with the exact keys: {"ticker": "string", "year": "string", "metric": "string"}. You must extract the exact financial metric string. You MUST map the company name to the correct ticker using the provided code stock mapping. Do NOT wrap the JSON in markdown code blocks, just output the raw JSON.
 
+  CRITICAL INSTRUCTION: The JSON examples provided above are STRICTLY for formatting demonstration. DO NOT copy the values (ticker, year, metric) from the examples. You MUST read the actual [USER_QUERY] provided and dynamically extract the REAL ticker, REAL year, and REAL metric requested by the user.
+
   ## DETAILED INSTRUCTIONS:
 
-  1. "ticker": Map the target company or bank name in the query to its exact 3-5 letter uppercase ticker symbol using the stock mapping (code_stock.csv). (e.g., "Xi măng Vicem Hà Tiên" -> "HT1", "Ngân hàng TMCP Sài Gòn Thương Tín" -> "STB", "FPT" -> "FPT"). If no company is mentioned or if the company is unknown, output an empty string "". Do NOT hallucinate tickers like "KHEN" or default to unrelated tickers like "VNM".
+  1. "ticker": Map the target company or bank name in the query to its exact 3-5 letter uppercase ticker symbol using the stock mapping (code_stock.csv). (e.g., "Vietjet" -> "VJC", "Ngân hàng TMCP Sài Gòn Thương Tín" -> "STB", "FPT" -> "FPT", "Tập đoàn Vingroup" -> "VIC"). If no company is mentioned or if the company is unknown, output an empty string "". Do NOT copy tickers from examples!
 
   2. "year": Extract the target year or list of years from the query as a string (e.g., "2023" or "2021, 2022, 2023"). Never output null or None for the year if a year appears in the query!
 
-  3. "metric": Extract the exact financial metric string verbatim from the query (e.g., "Chi phí khác", "Lợi nhuận sau thuế", "Chi phí lương và các khoản khác theo lương"). Do NOT hallucinate metrics, do NOT default to "Tiền và các khoản tương đương tiền".
+  3. "metric": Extract the exact financial metric string verbatim from the query (e.g., "Lãi tiền gửi", "Chi phí khác", "Doanh thu thuần", "Lãi vay phải trả"). Do NOT copy metrics from examples!
 
   OUTPUT FORMAT: Output ONLY raw valid JSON matching {"ticker": "string", "year": "string", "metric": "string"}.
 
@@ -19,24 +21,21 @@ json_schema: |
   }
 
 few_shot_examples:
-  - user_query: "Chi phí khác của SAM năm 2023 là bao nhiêu triệu đồng?"
+  - user_query: "Lãi tiền gửi năm 2021 của Vietjet (VJC) là bao nhiêu triệu đồng?"
     parsed_output: |
-      {"ticker": "SAM", "year": "2023", "metric": "Chi phí khác"}
+      {"ticker": "VJC", "year": "2021", "metric": "Lãi tiền gửi"}
   - user_query: "Chi phí lương và các khoản khác theo lương của công ty mẹ CTCP Chứng khoán FPT trong năm 2021 là bao nhiêu tỷ đồng?"
     parsed_output: |
       {"ticker": "FPT", "year": "2021", "metric": "Chi phí lương và các khoản khác theo lương"}
-  - user_query: "Thù lao của thành viên HĐQT Chu Thị Bình tại công ty mẹ MPC năm 2021 là bao nhiêu triệu đồng?"
+  - user_query: "Lãi vay phải trả của CTCP Tập đoàn Đức Long Gia Lai (DLG) cuối năm 2023 là bao nhiêu triệu đồng?"
     parsed_output: |
-      {"ticker": "MPC", "year": "2021", "metric": "Thù lao của thành viên HĐQT Chu Thị Bình"}
-  - user_query: "Vay dài hạn với Công ty Cổ phần Hoàng Anh Gia Lai của công ty mẹ CTCP Nông nghiệp Quốc tế Hoàng Anh Gia Lai (HNG) cuối năm 2017 là bao nhiêu nghìn đồng?"
+      {"ticker": "DLG", "year": "2023", "metric": "Lãi vay phải trả"}
+  - user_query: "Doanh thu hoạt động tài chính năm 2020 của Ngân hàng TMCP Sài Gòn Thương Tín (STB)"
     parsed_output: |
-      {"ticker": "HNG", "year": "2017", "metric": "Vay dài hạn với Công ty Cổ phần Hoàng Anh Gia Lai"}
-  - user_query: "Lợi nhuận sau thuế năm 2022 của Xi măng Vicem Hà Tiên (HT1) là bao nhiêu triệu đồng?"
+      {"ticker": "STB", "year": "2020", "metric": "Doanh thu hoạt động tài chính"}
+  - user_query: "Vốn chủ sở hữu của FIT là bao nhiêu tỷ đồng vào ngày 31/12/2015?"
     parsed_output: |
-      {"ticker": "HT1", "year": "2022", "metric": "Lợi nhuận sau thuế"}
-  - user_query: "Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền từ năm 2021 đến năm 2023 của FPT"
+      {"ticker": "FIT", "year": "2015", "metric": "Vốn chủ sở hữu"}
+  - user_query: "Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền từ năm 2019 đến năm 2021 của VIC"
     parsed_output: |
-      {"ticker": "FPT", "year": "2021, 2022, 2023", "metric": "tổng tiền và các khoản tương đương tiền"}
-  - user_query: "So sánh lợi nhuận sau thuế của VCB từ năm 2021 đến năm 2023"
-    parsed_output: |
-      {"ticker": "VCB", "year": "2021, 2022, 2023", "metric": "Lợi nhuận sau thuế"}
+      {"ticker": "VIC", "year": "2019, 2020, 2021", "metric": "tổng tiền và các khoản tương đương tiền"}

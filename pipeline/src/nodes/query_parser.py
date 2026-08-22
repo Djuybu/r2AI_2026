@@ -252,8 +252,8 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
 
         prompt_messages.append(HumanMessage(content=f"Câu hỏi: {user_query}"))
 
-        # Call LLM
-        llm = get_llm(cfg=cfg, temperature=0.0)
+        # Call LLM with slight temperature=0.1 to avoid overfitting/copy-pasting examples
+        llm = get_llm(cfg=cfg, temperature=0.1)
         response = llm.invoke(prompt_messages)
 
         raw_content = response.content if isinstance(response.content, str) else str(response.content)
