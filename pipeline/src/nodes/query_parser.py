@@ -197,8 +197,11 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     clean_content = _clean_financial_content(clean_content or q)
 
     return {
+        "ticker": company,
         "ten_cong_ty": company,
+        "year": ", ".join(years),
         "so_nam": years,
+        "metric": clean_content or q,
         "noi_dung": clean_content or q,
         "thao_tac": thao_tac,
         "muc_tieu": thao_tac,
@@ -272,8 +275,37 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         # Parse output JSON
         parsed_json = safe_parse_json(raw_content)
 
+        # Map strict schema keys {"ticker", "year", "metric"} to state schema keys
+        ticker_val = parsed_json.get("ticker") or parsed_json.get("ten_cong_ty") or ""
+        metric_val = parsed_json.get("metric") or parsed_json.get("noi_dung") or ""
+        year_val = parsed_json.get("year") if "year" in parsed_json else parsed_json.get("so_nam")
+
+        # Fallback year extraction from query if year is None or empty
+        if not year_val or year_val is None or str(year_val).strip() in ["None", "null", ""]:
+            year_val = re.findall(r"\b(20\d{2})\b", user_query)
+
+        # Ensure so_nam is a list of strings
+        if isinstance(year_val, str):
+            so_nam_list = [y.strip() for y in year_val.replace(",", " ").split() if y.strip().isdigit()]
+            if not so_nam_list:
+                so_nam_list = re.findall(r"\b(20\d{2})\b", user_query)
+        elif isinstance(year_val, (int, float)):
+            so_nam_list = [str(int(year_val))]
+        elif isinstance(year_val, list):
+            so_nam_list = [str(y).strip() for y in year_val if str(y).strip().isdigit()]
+        else:
+            so_nam_list = re.findall(r"\b(20\d{2})\b", user_query)
+
+        # Sync keys
+        parsed_json["ticker"] = ticker_val
+        parsed_json["ten_cong_ty"] = _normalize_company_name(ticker_val, user_query)
+        parsed_json["year"] = ", ".join(so_nam_list) if so_nam_list else ""
+        parsed_json["so_nam"] = so_nam_list
+        parsed_json["metric"] = metric_val
+        parsed_json["noi_dung"] = metric_val
+
         # Ensure minimal structure and sync thao_tac / muc_tieu (only trich_xuat or so_sanh)
-        thao_tac = parsed_json.get("thao_tac") or parsed_json.get("muc_tieu") or "trich_xuat"
+        thao_tac = parsed_json.get("thao_tac") or parsed_json.get("muc_tieu") or ("so_sanh" if len(so_nam_list) > 1 or "so sánh" in user_query.lower() or "tăng trưởng" in user_query.lower() else "trich_xuat")
         if thao_tac not in ["trich_xuat", "so_sanh"]:
             thao_tac = "trich_xuat"
         
@@ -281,27 +313,13 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         parsed_json["muc_tieu"] = thao_tac
 
         # Clean content only for so_sanh (strip measurement prefixes)
-        # For trich_xuat, keep noi_dung verbatim from LLM
         raw_noi_dung = parsed_json.get("noi_dung", "")
         if thao_tac == "so_sanh":
             parsed_json["noi_dung"] = _clean_financial_content(raw_noi_dung) or raw_noi_dung
+            parsed_json["metric"] = parsed_json["noi_dung"]
 
-        if "ten_cong_ty" not in parsed_json:
-            parsed_json["ten_cong_ty"] = ""
-        
-        # Normalize stock code / company name against code_stock.csv map
-        parsed_json["ten_cong_ty"] = _normalize_company_name(parsed_json.get("ten_cong_ty", ""), user_query)
-
-        if "so_nam" not in parsed_json:
-            parsed_json["so_nam"] = []
         if "tieu_chi_phu" not in parsed_json:
             parsed_json["tieu_chi_phu"] = None
-
-        # Ensure so_nam is always a list of strings
-        if isinstance(parsed_json["so_nam"], str):
-            parsed_json["so_nam"] = [parsed_json["so_nam"]]
-        elif isinstance(parsed_json["so_nam"], (int, float)):
-            parsed_json["so_nam"] = [str(int(parsed_json["so_nam"]))]
 
         print(
             f"📊 [Kết quả - Query Parser]:\n"
