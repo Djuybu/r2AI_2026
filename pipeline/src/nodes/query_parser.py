@@ -129,8 +129,6 @@ def _clean_financial_content(text: str) -> str:
         r"^tăng\s+trưởng\s*%\s*",
         r"^tăng\s+trưởng\s*",
         r"^tỷ\s+lệ\s+tăng\s+trưởng\s*",
-        r"^tỷ\s+lệ\s*",
-        r"^tỷ\s+trọng\s*",
         r"^mức\s+biến\s+động\s*",
         r"^chênh\s+lệch\s*",
         r"^so\s+sánh\s*",
@@ -279,9 +277,11 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         parsed_json["thao_tac"] = thao_tac
         parsed_json["muc_tieu"] = thao_tac
 
-        # Clean and extract core financial content
+        # Clean content only for so_sanh (strip measurement prefixes)
+        # For trich_xuat, keep noi_dung verbatim from LLM
         raw_noi_dung = parsed_json.get("noi_dung", "")
-        parsed_json["noi_dung"] = _clean_financial_content(raw_noi_dung) or raw_noi_dung
+        if thao_tac == "so_sanh":
+            parsed_json["noi_dung"] = _clean_financial_content(raw_noi_dung) or raw_noi_dung
 
         if "ten_cong_ty" not in parsed_json:
             parsed_json["ten_cong_ty"] = ""
