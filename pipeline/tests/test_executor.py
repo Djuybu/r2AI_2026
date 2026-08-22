@@ -24,6 +24,7 @@ def test_executor_node_success(tmp_path):
 
     state = {
         "generated_code": "import pandas as pd\ndf = pd.read_csv(file_path)\nresult = df.groupby('Category')['Revenue'].sum().reset_index()",
+        "discovered_tables": [{"csv_path": str(csv_file), "Nam_Tai_Chinh": "2024"}],
         "matched_table_path": str(csv_file),
         "retry_count": 0,
     }

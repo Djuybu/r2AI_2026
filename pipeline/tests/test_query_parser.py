@@ -29,7 +29,7 @@ class TestQueryParser(unittest.TestCase):
     @patch("pipeline.src.nodes.query_parser.get_llm")
     def test_parse_query_node_success(self, mock_get_llm):
         mock_llm = MagicMock()
-        mock_llm.invoke.return_value.content = '{"ten_cong_ty": "FPT", "so_nam": ["2024"], "noi_dung": "Doanh thu", "thao_tac": "tinh_tong", "tieu_chi_phu": null}'
+        mock_llm.invoke.return_value.content = '{"ten_cong_ty": "FPT", "so_nam": ["2024"], "noi_dung": "Doanh thu", "thao_tac": "trich_xuat", "tieu_chi_phu": null}'
         mock_get_llm.return_value = mock_llm
 
         state: AgentState = {"user_query": "Tính tổng doanh thu năm 2024 của FPT"}
@@ -37,8 +37,8 @@ class TestQueryParser(unittest.TestCase):
 
         self.assertEqual(result["status"], "pending")
         self.assertEqual(result["parsed_query"]["ten_cong_ty"], "FPT")
-        self.assertEqual(result["parsed_query"]["thao_tac"], "tinh_tong")
-        self.assertEqual(result["parsed_query"]["muc_tieu"], "tinh_tong")
+        self.assertEqual(result["parsed_query"]["thao_tac"], "trich_xuat")
+        self.assertEqual(result["parsed_query"]["muc_tieu"], "trich_xuat")
         self.assertIn("query_parser", result["node_latencies"])
 
     def test_fallback_parse_query_range(self):
