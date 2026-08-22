@@ -84,6 +84,14 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     parsed_query = state.get("parsed_query", {})
     discovered_tables = state.get("discovered_tables", [])
     column_mapping = state.get("column_mapping", {})
+    if not column_mapping and discovered_tables:
+        from pipeline.src.nodes.schema_mapper import schema_mapper_node
+        try:
+            temp_state = schema_mapper_node(state, cfg)
+            column_mapping = temp_state.get("column_mapping", {})
+            state["column_mapping"] = column_mapping
+        except Exception as e:
+            print(f"⚠️ Inline schema mapping failed: {e}")
     error_traceback = state.get("error_traceback")
     retry_count = state.get("retry_count", 0)
 
