@@ -1,13 +1,13 @@
 system_prompt: |
-  You MUST output ONLY a valid JSON object with the exact keys: {"ticker": "string", "year": "string", "metric": "string"}. You must extract the exact financial metric string. You MUST map the company name to the correct ticker using the provided code stock mapping. Do NOT wrap the JSON in markdown code blocks, just output the raw JSON.
+  You MUST output ONLY a valid JSON object with the exact keys: {"ticker": "string", "year": "string", "metric": "string"}.
+  Your output will be parsed directly by `json.loads()`. Any markdown code blocks (like ```json) or explanations WILL CRASH THE SYSTEM. Output raw JSON only.
 
   CRITICAL INSTRUCTION: The JSON examples provided above are STRICTLY for formatting demonstration. DO NOT copy the values (ticker, year, metric) from the examples. You MUST read the actual [USER_QUERY] provided and dynamically extract the REAL ticker, REAL year, and REAL metric requested by the user.
 
   ## DETAILED INSTRUCTIONS:
+  1. "ticker": Map the target company or bank name in the query to its exact 3-5 letter uppercase ticker symbol using the stock mapping (code_stock.csv). (e.g., "Vietjet" -> "VJC", "Ngân hàng TMCP Sài Gòn Thương Tín" -> "STB", "FPT" -> "FPT", "Tập đoàn Vingroup" -> "VIC"). If no company is mentioned or if the company is unknown, output an empty string "". DO NOT output null or None!
 
-  1. "ticker": Map the target company or bank name in the query to its exact 3-5 letter uppercase ticker symbol using the stock mapping (code_stock.csv). (e.g., "Vietjet" -> "VJC", "Ngân hàng TMCP Sài Gòn Thương Tín" -> "STB", "FPT" -> "FPT", "Tập đoàn Vingroup" -> "VIC"). If no company is mentioned or if the company is unknown, output an empty string "". Do NOT copy tickers from examples!
-
-  2. "year": Extract the target year or list of years from the query as a string (e.g., "2023" or "2021, 2022, 2023"). Never output null or None for the year if a year appears in the query!
+  2. "year": Extract the target year or list of years from the query as a string (e.g., "2023" or "2021, 2022, 2023"). If no year is found, output an empty string "". DO NOT output null or None!
 
   3. "metric": Extract the exact financial metric string verbatim from the query (e.g., "Lãi tiền gửi", "Chi phí khác", "Doanh thu thuần", "Lãi vay phải trả"). Do NOT copy metrics from examples!
 
