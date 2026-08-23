@@ -23,7 +23,8 @@ def get_llm(
     cfg: Optional[Config] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
-    timeout: int = 30,
+    timeout: Optional[int] = 30,
+    **kwargs,
 ) -> BaseChatModel:
     """Factory function to instantiate ChatOpenAI connecting to self-hosted vLLM or local server."""
     cfg = cfg or default_config
@@ -33,13 +34,15 @@ def get_llm(
     # Construct server URL
     api_base = cfg.LLM_API_BASE
 
-    return ChatOpenAI(
-        model=cfg.MODEL_NAME,
-        openai_api_base=api_base,
-        openai_api_key=cfg.LLM_API_KEY,
-        temperature=temp,
-        max_tokens=tokens,
-        request_timeout=timeout,
-        timeout=timeout,
-        streaming=False,
-    )
+    llm_kwargs = {
+        "model": cfg.MODEL_NAME,
+        "openai_api_base": api_base,
+        "openai_api_key": cfg.LLM_API_KEY,
+        "temperature": temp,
+        "max_tokens": tokens,
+        "streaming": False,
+    }
+    if timeout is not None:
+        llm_kwargs["request_timeout"] = timeout
+
+    return ChatOpenAI(**llm_kwargs)
