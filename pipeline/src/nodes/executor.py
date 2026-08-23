@@ -127,22 +127,21 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
 
         # Robust clean_val definition to inject as a fail-safe
         def clean_val(val):
-            if pd.isna(val): raise ValueError("Metric not found in table")
-            if isinstance(val, (int, float)): return float(val)
-            val = str(val).strip()
-            if not val or val in ['-', '—', 'n/a', 'NaN', 'None', 'null']:
+            if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN', 'None', 'null', 'n/a', '—']:
                 raise ValueError("Metric not found in table")
+            if isinstance(val, (int, float)): return float(val)
+            val_str = str(val).strip()
             neg = False
-            if val.startswith('(') and val.endswith(')'):
+            if val_str.startswith('(') and val_str.endswith(')'):
                 neg = True
-                val = val[1:-1].strip()
-            val = val.replace(',', '')
-            if '.' in val:
-                parts = val.split('.')
+                val_str = val_str[1:-1].strip()
+            val_str = val_str.replace(',', '')
+            if '.' in val_str:
+                parts = val_str.split('.')
                 if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3):
-                    val = val.replace('.', '')
+                    val_str = val_str.replace('.', '')
             try:
-                res = float(val)
+                res = float(val_str)
                 return -res if neg else res
             except Exception:
                 raise ValueError("Metric not found in table")

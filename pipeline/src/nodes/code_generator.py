@@ -26,10 +26,11 @@ def load_yaml_prompt(cfg: Config, filename: str) -> Dict[str, Any]:
 
 
 def clean_python_code(raw_code: str) -> str:
-    """Extract clean Python code from LLM markdown block."""
+    """Extract clean Python code from LLM response, stripping markdown and conversational text."""
     if not raw_code:
         return ""
 
+    # Step 1: Check markdown python blocks
     pattern = r"```(?:python)?\s*\n?(.*?)\n?```"
     matches = re.findall(pattern, raw_code, re.DOTALL)
     if matches:
@@ -38,7 +39,17 @@ def clean_python_code(raw_code: str) -> str:
     cleaned = raw_code.strip()
     if cleaned.startswith("```") and cleaned.endswith("```"):
         cleaned = cleaned[3:-3].strip()
-    return cleaned
+
+    # Step 2: Strip conversational text before code
+    lines = cleaned.splitlines()
+    code_start_idx = 0
+    for idx, line in enumerate(lines):
+        l = line.strip()
+        if l.startswith("import ") or l.startswith("def ") or l.startswith("file_path") or l.startswith("df =") or l.startswith("result ="):
+            code_start_idx = idx
+            break
+
+    return "\n".join(lines[code_start_idx:]).strip()
 
 
 def _build_files_context(
@@ -174,9 +185,17 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             print(f"🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần {retry_count})...")
             print(f"   - Traceback Lỗi:\n{error_traceback.strip()}")
 
+            retry_forcing_msg = (
+                f"Execution failed with error: {error_traceback.strip()}\n"
+                "CRITICAL: The string you used in `str.contains()` was NOT found in the table. "
+                "DO NOT output the exact same code again! "
+                "You MUST change your search strategy: shorten the search string in `str.contains(..., regex=False)` to a single core keyword from the metric, or inspect the sample row labels below."
+            )
+
             sample_labels = []
             if discovered_tables:
                 from pathlib import Path
+                import pandas as pd
                 for tbl in discovered_tables:
                     c_path = tbl.get("csv_path")
                     if c_path and Path(c_path).exists():
@@ -200,7 +219,7 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 paths_str=paths_str,
                 sample_labels_str=sample_labels_str,
                 previous_code=state.get('generated_code', ''),
-                error_traceback=error_traceback,
+                error_traceback=f"{error_traceback.strip()}\n\n{retry_forcing_msg}",
             )
 
             messages = [
