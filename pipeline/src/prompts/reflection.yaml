@@ -20,21 +20,11 @@ system_prompt: |
 
   QUY TẮC SỬA LỖI BẮT BUỘC:
   1. Phân tích nguyên nhân gây lỗi dựa vào error_traceback.
-  2. BẮT BUỘC sử dụng Safe Pattern kèm vòng lặp Quét Cột (Column Fallback Pattern) với `regex=False`:
+  2. BẮT BUỘC sử dụng Safe Pattern siêu ngắn gọn với `extract_value` và `regex=False`:
      ```python
      filtered_df = df[df['{label_col}'].astype(str).str.contains(..., case=False, na=False, regex=False)]
      if not filtered_df.empty:
-         row = filtered_df.iloc[0]
-         result = None
-         for col in ['{value_col}', '1', '2', '3', '4', '5']:
-             if col in df.columns:
-                 try:
-                     result = clean_val(row[col])
-                     break
-                 except ValueError:
-                     continue
-         if result is None:
-             raise ValueError("Metric not found in table")
+         result = extract_value(filtered_df.iloc[0], '{value_col}')
      else:
          raise ValueError("Metric not found in table")
      ```

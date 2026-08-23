@@ -127,10 +127,14 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
 
         # Robust clean_val definition to inject as a fail-safe
         def clean_val(val):
-            if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN', 'None', 'null', 'n/a', '—']:
+            if pd.isna(val):
+                raise ValueError("Metric not found in table")
+            val_str = str(val).strip()
+            if val_str in ['-', '—']:
+                return 0.0
+            if not val_str or val_str in ['', 'nan', 'NaN', 'None', 'null', 'n/a']:
                 raise ValueError("Metric not found in table")
             if isinstance(val, (int, float)): return float(val)
-            val_str = str(val).strip()
             neg = False
             if val_str.startswith('(') and val_str.endswith(')'):
                 neg = True
@@ -146,6 +150,21 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
             except Exception:
                 raise ValueError("Metric not found in table")
 
+        def extract_value(row, preferred_col):
+            cols_to_try = [preferred_col, '1', '2', '3', '4', '5']
+            for c in cols_to_try:
+                if hasattr(row, 'index') and c in row.index:
+                    try:
+                        return clean_val(row[c])
+                    except ValueError:
+                        continue
+                elif isinstance(row, pd.DataFrame) and c in row.columns and not row.empty:
+                    try:
+                        return clean_val(row[c].iloc[0])
+                    except ValueError:
+                        continue
+            raise ValueError("Metric not found in table")
+
         # Step 2: Prepare execution scope
         exec_globals = {
             "pd": pd,
@@ -155,6 +174,7 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
             "file_path": file_path,
             "df": df_loaded,
             "clean_val": clean_val,
+            "extract_value": extract_value,
         }
         for tbl in discovered_tables:
             csv_p = tbl.get("csv_path", "")
