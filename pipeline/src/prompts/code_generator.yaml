@@ -16,7 +16,7 @@ system_prompt: |
   1. Dữ liệu nằm trong file CSV. Đọc file bằng `pd.read_csv(file_path)`.
   2. Cấu trúc bảng: Cột nhãn (label_column) chứa tên chỉ tiêu. Cột giá trị (value_column) chứa số liệu.
   3. BẮT BUỘC dùng `regex=False` khi sử dụng `str.contains` để tránh lỗi regex với các chỉ tiêu có dấu ngoặc tròn (ví dụ: `df['CHỈ TIÊU'].astype(str).str.contains('Lợi nhuận sau thuế', case=False, na=False, regex=False)`).
-  4. BẮT BUỘC sử dụng mẫu code an toàn siêu ngắn gọn sau đây:
+  4. BẮT BUỘC sử dụng mẫu code an toàn:
      ```python
      filtered_df = df[df['{label_col}'].astype(str).str.contains(..., case=False, na=False, regex=False)]
      if not filtered_df.empty:
@@ -24,118 +24,94 @@ system_prompt: |
      else:
          raise ValueError("Metric not found in table")
      ```
-  5. XỬ LÝ KHI KHÔNG TÌM THẤY DỮ LIỆU / DỮ LIỆU RỖNG:
+  5. QUY TẮC SỬ DỤNG SCHEMA:
+     - Nếu bảng có NHIỀU HƠN MỘT CỘT GIÁ TRỊ, so sánh chỉ tiêu cần tìm với tên và mô tả của từng cột trong SCHEMA để chọn đúng cột giá trị phù hợp nhất.
+     - Nếu dữ liệu cần tìm là một SECTION (danh mục) trong SCHEMA:
+       + Ưu tiên lấy trực tiếp `total_value` của section đó nếu có.
+       + Nếu `total_value` không có hoặc rỗng, thực hiện tính tổng các hàng nằm trong `range` [start, end] của section đó trên cột giá trị: `df.iloc[start:end+1]`.
+  6. XỬ LÝ KHI KHÔNG TÌM THẤY DỮ LIỆU / DỮ LIỆU RỖNG:
      - Khi không lọc thấy dòng hoặc extract_value không tìm thấy giá trị, BẮT BUỘC raise `ValueError("Metric not found in table")` để kích hoạt Reflection Loop.
-  6. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.
-  7. CHỈ trả về code Python thuần túy. KHÔNG giải thích, KHÔNG bọc markdown.
+  7. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.
+  8. CHỈ trả về code Python thuần túy. KHÔNG giải thích, KHÔNG bọc markdown.
+
 goal_descriptions:
   trich_xuat: TRÍCH XUẤT giá trị cụ thể
-  tinh_tong: TÍNH TỔNG (tìm dòng Tổng/Cộng trước, nếu không có thì cộng các dòng con)
+  tinh_tong: TÍNH TỔNG (tìm dòng Tổng/Cộng trước, hoặc tính tổng section theo range)
   so_sanh: SO SÁNH giá trị giữa nhiều năm/công ty
+
 goal_instructions:
-  trich_xuat: 'HƯỚNG DẪN CỤ THỂ (TRÍCH XUẤT):
-
+  trich_xuat: |
+    HƯỚNG DẪN CỤ THỂ (TRÍCH XUẤT):
     1. Đọc file CSV bằng pd.read_csv(file_path).
+    2. Nếu nội dung cần tìm là một section: kiểm tra nếu có total_value thì lấy total_value, nếu không thì cộng các dòng trong range [start:end+1].
+    3. Ngược lại, truy vấn hàng ở cột '{label_col}' với `df['{label_col}'].astype(str).str.contains('{noi_dung}', case=False, na=False, regex=False)`.
+    4. Dùng kiểm tra `if not filtered_df.empty:` để lấy giá trị qua `extract_value(filtered_df.iloc[0], '{value_col}')`. Nếu rỗng → raise ValueError("Metric not found in table").
+    5. Gán vào biến result.
 
-    2. Truy vấn hàng ở cột ''{label_col}'' với `df[''{label_col}''].astype(str).str.contains(''{noi_dung}'', case=False, na=False, regex=False)`.
-
-    3. Dùng kiểm tra `if not filtered_df.empty:` để lấy giá trị qua `extract_value(filtered_df.iloc[0], ''{value_col}'')`. Nếu rỗng → raise ValueError("Metric not found in table").
-
-    4. Gán vào biến result.
-
-    '
-  tinh_tong: 'HƯỚNG DẪN CỤ THỂ (TÍNH TỔNG):
-
+  tinh_tong: |
+    HƯỚNG DẪN CỤ THỂ (TÍNH TỔNG):
     1. Đọc file CSV bằng pd.read_csv(file_path).
+    2. Nếu nội dung cần tìm là một section: kiểm tra nếu có total_value thì lấy total_value, nếu không thì lấy `sub_df = df.iloc[start:end+1]` và tính tổng các dòng qua `clean_val`.
+    3. Ngược lại, tìm dòng có chứa 'Tổng' hoặc 'Cộng' hoặc tên chỉ tiêu '{noi_dung}' ở cột '{label_col}' bằng `df['{label_col}'].astype(str).str.contains(..., case=False, na=False, regex=False)`.
+    4. Kiểm tra `if not filtered_df.empty:` để lấy giá trị qua `extract_value(filtered_df.iloc[0], '{value_col}')`. Nếu không tìm thấy, cộng các dòng con liên quan. Nếu vẫn rỗng → raise ValueError("Metric not found in table").
+    5. Gán kết quả vào result.
 
-    2. Tìm dòng có chứa ''Tổng'' hoặc ''Cộng'' hoặc tên chỉ tiêu ''{noi_dung}'' ở cột ''{label_col}'' bằng `df[''{label_col}''].astype(str).str.contains(..., case=False, na=False, regex=False)`.
-
-    3. Kiểm tra `if not filtered_df.empty:` để lấy giá trị qua `extract_value(filtered_df.iloc[0], ''{value_col}'')`. Nếu không tìm thấy, cộng các dòng con liên quan. Nếu vẫn rỗng → raise ValueError("Metric not found in table").
-
-    4. Gán kết quả vào result.
-
-    '
-  so_sanh: 'HƯỚNG DẪN CỤ THỂ (SO SÁNH NĂM / TÍNH TỐC ĐỘ TĂNG TRƯỞNG):
-
+  so_sanh: |
+    HƯỚNG DẪN CỤ THỂ (SO SÁNH NĂM / TÍNH TỐC ĐỘ TĂNG TRƯỞNG):
     1. Đọc từng file CSV cho từng năm (ví dụ file_path_2019, file_path_2020, file_path_2021...).
-
-    2. Truy vấn hàng ở cột ''{label_col}'' với `str.contains(..., case=False, na=False, regex=False)` và lấy giá trị từng năm qua `extract_value(filtered_df.iloc[0], ''{value_col}'')`. Nếu rỗng → raise ValueError("Metric not found in table").
-
+    2. Truy vấn hàng ở cột '{label_col}' với `str.contains(..., case=False, na=False, regex=False)` và lấy giá trị từng năm qua `extract_value(filtered_df.iloc[0], '{value_col}')`. Nếu rỗng → raise ValueError("Metric not found in table").
     3. Tính tốc độ tăng trưởng phần trăm (%) giữa năm đầu và năm cuối: `growth_rate = ((val_last - val_first) / val_first) * 100`.
-
     4. Gán kết quả vào `result`.
 
-    '
-user_prompt_template: 'Yêu cầu người dùng: {user_query}
-
+user_prompt_template: |
+  Yêu cầu người dùng: {user_query}
 
   MỤC TIÊU: {muc_tieu_desc}
-
-  NỘI DUNG cần tìm (ở cột label): ''{noi_dung}''
-
+  NỘI DUNG cần tìm (ở cột label): '{noi_dung}'
   Công ty: {ten_cong_ty}
-
   Năm: {so_nam}
-
   Tiêu chí phụ: {tieu_chi_phu}
 
-
   DỮ LIỆU CÓ SẴN:
-
   {files_context}
 
-
   CỘT QUAN TRỌNG:
-
-  - Cột nhãn (chứa tên chỉ tiêu): ''{label_col}''
-
-  - Cột giá trị: ''{value_col}''
-
+  - Cột nhãn (chứa tên chỉ tiêu): '{label_col}'
+  - Cột giá trị: '{value_col}'
 
   BIẾN ĐƯỜNG DẪN FILE:
-
   {paths_str}
-
 
   {goal_instruction}
 
-
   <BANNED_SYNTAX>
-
   - You are FORBIDDEN from writing `result = 0.0` or `result = 0` or any fallback value at the end of the script to bypass errors.
-
   - You are FORBIDDEN from using `.iloc[0]` or `.values[0]` outside of an `if not filtered_df.empty:` block.
-
   - You are FORBIDDEN from using `str.contains()` without explicitly passing `regex=False`.
-
   </BANNED_SYNTAX>
 
-
   🚨 BẮT BUỘC KHÔNG ĐƯỢC VI PHẠM:
-
   1. CRITICAL RULE: DO NOT EVER hardcode or append result = 0.0 or any fallback value at the end of the script to bypass errors. If the filtered dataframe is empty, the script MUST end by raising a ValueError("Metric not found in table").
-
   2. CRITICAL OUTPUT RULE: Output ONLY executable Python code. NO markdown formatting. NO ```python tags. NO conversational text or explanations. Start directly with 'import pandas'.
-
-  3. Định nghĩa clean_val(val) (raise ValueError("Metric not found in table") nếu rỗng/invalid).
-
+  3. Định nghĩa clean_val(val) nếu cần (hoặc dùng clean_val có sẵn).
   4. Đọc file bằng pd.read_csv(file_path...).
-
-  5. Dùng mẫu safe pattern với `regex=False`: `filtered_df = df[df[''{label_col}''].astype(str).str.contains(..., case=False, na=False, regex=False)]`
-
+  5. Dùng mẫu safe pattern với `regex=False`: `filtered_df = df[df['{label_col}'].astype(str).str.contains(..., case=False, na=False, regex=False)]`
   6. BẮT BUỘC dùng `if not filtered_df.empty:` trước khi lấy `.iloc[0]`. Nếu rỗng, BẮT BUỘC `raise ValueError("Metric not found in table")`. KHÔNG ĐƯỢC gán result = 0.0!
-
-  7. KHÔNG ĐƯỢC filter theo `df[''Ma_Doanh_Nghiep''] == ...` vì dữ liệu đã đúng công ty.
-
+  7. KHÔNG ĐƯỢC filter theo `df['Ma_Doanh_Nghiep'] == ...` vì dữ liệu đã đúng công ty.
   8. CHỈ ĐƯỢC SỬ DỤNG CÁC BIẾN ĐƯỜNG DẪN FILE ĐÃ ĐƯỢC ĐỊNH NGHĨA Ở TRÊN:
-
   {paths_str}
-
   9. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.
 
-  '
 few_shot_examples:
-- user_query: Doanh thu thuần năm 2023 của FPT
-  file_path: data/FPT_2023.csv
-  column_mapping: '{"label_column": "CHỈ TIÊU", "value_column": "Năm nay"}'
-  generated_code: "import pandas as pd\n\ndef clean_val(val):\n    if pd.isna(val) or str(val).strip() in ['-', '', 'nan', 'NaN', 'None', 'n/a', '—']:\n        raise ValueError(\"Metric not found in table\")\n    val_str = str(val).strip().replace('.', '')\n    if '(' in val_str and ')' in val_str:\n        val_str = '-' + val_str.replace('(', '').replace(')', '')\n    try:\n        return float(val_str)\n    except Exception:\n        raise ValueError(\"Metric not found in table\")\n\ndf = pd.read_csv(file_path)\nfiltered_df = df[df['CHỈ TIÊU'].astype(str).str.contains('Doanh thu thuần', case=False, na=False, regex=False)]\nif not filtered_df.empty:\n    row = filtered_df.iloc[0]\n    result = None\n    for col in ['Năm nay', '1', '2', '3', '4', '5']:\n        if col in df.columns:\n            try:\n                result = clean_val(row[col])\n                break\n            except ValueError:\n                continue\n    if result is None:\n        raise ValueError(\"Metric not found in table\")\nelse:\n    raise ValueError(\"Metric not found in table\")\n"
+  - user_query: Doanh thu thuần năm 2023 của FPT
+    file_path: data/FPT_2023.csv
+    column_mapping: '{"label_column": "CHỈ TIÊU", "value_column": "Năm nay"}'
+    generated_code: |
+      import pandas as pd
+
+      df = pd.read_csv(file_path)
+      filtered_df = df[df['CHỈ TIÊU'].astype(str).str.contains('Doanh thu thuần', case=False, na=False, regex=False)]
+      if not filtered_df.empty:
+          result = extract_value(filtered_df.iloc[0], 'Năm nay')
+      else:
+          raise ValueError("Metric not found in table")

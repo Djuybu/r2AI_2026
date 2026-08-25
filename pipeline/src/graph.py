@@ -7,11 +7,19 @@ from pipeline.src.state import AgentState
 from pipeline.src.config import Config, config as default_config
 from pipeline.src.nodes.query_parser import parse_query_node
 from pipeline.src.nodes.data_discovery import data_discovery_node
+from pipeline.src.nodes.schema_mapper import schema_mapper_node
 from pipeline.src.nodes.code_generator import code_generator_node
 from pipeline.src.nodes.executor import executor_node
 
-def route_after_discovery(state: AgentState) -> Literal["code_generator", "__end__"]:
+def route_after_discovery(state: AgentState) -> Literal["schema_mapper", "__end__"]:
     """Route workflow after data discovery node."""
+    if state.get("status") == "error":
+        return END
+    return "schema_mapper"
+
+
+def route_after_schema_mapper(state: AgentState) -> Literal["code_generator", "__end__"]:
+    """Route workflow after schema mapper node."""
     if state.get("status") == "error":
         return END
     return "code_generator"
@@ -42,6 +50,7 @@ def create_cocopila_graph(cfg: Optional[Config] = None):
     # Add Nodes
     workflow.add_node("query_parser", lambda state: parse_query_node(state, cfg))
     workflow.add_node("data_discovery", lambda state: data_discovery_node(state, cfg))
+    workflow.add_node("schema_mapper", lambda state: schema_mapper_node(state, cfg))
     workflow.add_node("code_generator", lambda state: code_generator_node(state, cfg))
     workflow.add_node("executor", lambda state: executor_node(state, cfg))
 
@@ -52,6 +61,15 @@ def create_cocopila_graph(cfg: Optional[Config] = None):
     workflow.add_conditional_edges(
         "data_discovery",
         route_after_discovery,
+        {
+            "schema_mapper": "schema_mapper",
+            END: END,
+        }
+    )
+
+    workflow.add_conditional_edges(
+        "schema_mapper",
+        route_after_schema_mapper,
         {
             "code_generator": "code_generator",
             END: END,

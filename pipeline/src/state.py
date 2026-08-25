@@ -28,6 +28,7 @@ class AgentState(TypedDict, total=False):
 
     # Node 3: Schema Mapper Output
     column_mapping: Dict[str, str]  # Map tiêu_chí_phụ → tên cột thực tế
+    schema: Dict[str, Any]          # Schema phân tích bảng: useful_columns + sub_sections
 
     # Node 4: Code Generator Output
     generated_code: str

@@ -1,14 +1,22 @@
-# Schema Mapper prompt — hiện tại không sử dụng LLM.
-# File này giữ lại để reference và có thể sử dụng trong tương lai nếu cần.
+# Schema Mapper prompt — sử dụng LLM để mô tả ý nghĩa từng cột giá trị.
+# Dùng bởi _enrich_column_descriptions() trong schema_mapper.py.
 
-system_prompt: >
-  Schema Mapper hiện sử dụng rule-based matching thay vì LLM.
-  Nội dung (noi_dung) nằm ở cột đầu tiên của bảng nên không cần map.
-  Chỉ map tiêu chí phụ (tieu_chi_phu) sang tên cột giá trị thực tế.
+system_prompt: |
+  Bạn là chuyên gia phân tích dữ liệu tài chính Việt Nam.
+  Cho danh sách tên cột giá trị trong bảng báo cáo tài chính, hãy mô tả ngắn gọn (1 câu tiếng Việt) ý nghĩa từng cột.
+  Trả về ONLY một JSON array với format:
+  [{"column_name": "tên cột", "column_description": "mô tả ngắn gọn"}]
+  KHÔNG giải thích, KHÔNG bọc markdown. Output raw JSON only.
+
+user_prompt_template: |
+  Bảng: {table_name}
+  Danh sách cột giá trị: {columns}
+  Hãy mô tả ý nghĩa từng cột giá trị trong bảng báo cáo tài chính này:
 
 json_schema: |
-  {
-    "label_column": "tên cột đầu tiên (chỉ tiêu)",
-    "value_column": "tên cột giá trị",
-    "all_columns": "danh sách tất cả các cột"
-  }
+  [
+    {
+      "column_name": "tên cột giá trị",
+      "column_description": "mô tả ngắn gọn ý nghĩa cột"
+    }
+  ]

@@ -1,17 +1,23 @@
 """Node 3: Schema Mapper Node.
 Ánh xạ tiêu chí phụ (tieu_chi_phu) sang tên cột thực tế trong bảng dữ liệu.
+Phân tích schema bảng: useful_columns (các cột giá trị) + sub_sections (danh mục con).
 Nội dung (noi_dung) nằm ở cột đầu tiên nên không cần map.
-Sử dụng rule-based matching, không gọi LLM.
 """
 
 import time
+import yaml
 import pandas as pd
+import numpy as np
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set
+
 from thefuzz import process, fuzz
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from pipeline.src.state import AgentState
 from pipeline.src.config import Config, config as default_config
+from pipeline.src.llm_provider import get_llm
+from pipeline.src.utils.json_repair import safe_parse_json
 
 
 # Danh sách các cột giá trị phổ biến trong báo cáo tài chính Việt Nam
@@ -101,19 +107,228 @@ def _find_value_column(columns: List[str], label_col: Optional[str] = None, tieu
     return None
 
 
+# ─────────────────────────────────────────────────────────────
+# Schema Analysis: useful_columns & sub_sections
+# ─────────────────────────────────────────────────────────────
+
+def _extract_useful_columns(
+    df: pd.DataFrame,
+    label_col: Optional[str],
+    metadata_cols: Set[str],
+) -> List[Dict[str, str]]:
+    """Xác định các cột giá trị hữu dụng (chứa chủ yếu dữ liệu số).
+
+    Xử lý cột có tên là số ('0', '1', '2',...): duyệt các hàng đầu tiên
+    để tìm tên thực sự của cột.
+
+    Returns:
+        List[{"column_name": str, "column_description": str}]
+    """
+    useful = []
+    all_columns = list(df.columns)
+
+    for col in all_columns:
+        # Bỏ qua metadata và label column
+        if col in metadata_cols or col == label_col:
+            continue
+
+        # Kiểm tra xem cột có chứa chủ yếu dữ liệu số không
+        numeric_vals = pd.to_numeric(df[col], errors="coerce")
+        non_null_count = df[col].notna().sum()
+        if non_null_count == 0:
+            continue
+        numeric_ratio = numeric_vals.notna().sum() / non_null_count
+        if numeric_ratio < 0.5:
+            continue
+
+        # Xác định tên cột thực sự
+        col_name = str(col)
+        if col_name.strip().isdigit():
+            # Cột tên là số → duyệt các hàng đầu để tìm tên thực
+            resolved_parts = []
+            for row_idx in range(min(5, len(df))):
+                cell_val = df.iloc[row_idx][col]
+                if pd.notna(cell_val):
+                    cell_str = str(cell_val).strip()
+                    if not cell_str or cell_str.lower() in ["nan", "none", "null", "n/a", "-", "—"]:
+                        continue
+                    # Nếu giá trị không phải số thuần → là header text
+                    try:
+                        float(cell_str.replace(",", "").replace(".", ""))
+                        break  # Gặp số → dừng duyệt
+                    except ValueError:
+                        resolved_parts.append(cell_str)
+                else:
+                    continue
+            if resolved_parts:
+                col_name = " - ".join(resolved_parts)
+            # Nếu không tìm được tên, giữ nguyên tên số
+
+        useful.append({
+            "column_name": col_name,
+            "column_description": "",
+        })
+
+    return useful
+
+
+def _extract_sub_sections(
+    df: pd.DataFrame,
+    label_col: Optional[str],
+    metadata_cols: Set[str],
+) -> List[Dict[str, Any]]:
+    """Phát hiện các danh mục con (sub-sections) trong bảng tài chính.
+
+    Danh mục con được phân cách bởi các hàng trống (hàng mà label_col rỗng).
+    Section header = hàng có label_col không rỗng, được ngăn cách bởi hàng trống phía trước.
+
+    Returns:
+        List[{"section_name": str, "range": [int, int], "total_value": float|None}]
+    """
+    if not label_col or label_col not in df.columns:
+        return []
+
+    # Xác định các cột giá trị (không phải metadata, không phải label)
+    value_cols = [c for c in df.columns if c not in metadata_cols and c != label_col]
+    if not value_cols:
+        return []
+
+    sections = []
+    section_header_rows = []
+
+    # Duyệt để tìm section header rows
+    prev_was_empty = False
+    for idx in range(len(df)):
+        label_val = df.iloc[idx][label_col]
+        is_label_empty = pd.isna(label_val) or str(label_val).strip() == ""
+
+        if not is_label_empty and prev_was_empty:
+            # Đây là section header: label_col có giá trị, hàng trước rỗng
+            label_text = str(label_val).strip()
+
+            # Tìm total_value: cột value đầu tiên có giá trị số ở hàng này
+            total_value = None
+            for vc in value_cols:
+                cell = df.iloc[idx][vc]
+                if pd.notna(cell):
+                    try:
+                        cell_str = str(cell).strip().replace(",", "")
+                        if cell_str.startswith("(") and cell_str.endswith(")"):
+                            cell_str = "-" + cell_str[1:-1].strip()
+                        total_value = float(cell_str)
+                        break
+                    except (ValueError, TypeError):
+                        continue
+
+            section_header_rows.append({
+                "row_idx": idx,
+                "section_name": label_text,
+                "total_value": total_value,
+            })
+
+        prev_was_empty = is_label_empty
+
+    # Tính range cho mỗi section
+    for i, header in enumerate(section_header_rows):
+        start = header["row_idx"] + 1
+        if i + 1 < len(section_header_rows):
+            end = section_header_rows[i + 1]["row_idx"] - 1
+        else:
+            end = len(df) - 1
+
+        # Cắt bỏ các hàng trống ở cuối range
+        while end >= start:
+            val = df.iloc[end][label_col]
+            if pd.isna(val) or str(val).strip() == "":
+                end -= 1
+            else:
+                break
+
+        if start <= end:
+            sections.append({
+                "section_name": header["section_name"],
+                "range": [start, end],
+                "total_value": header["total_value"],
+            })
+
+    return sections
+
+
+def _enrich_column_descriptions(
+    cfg: Config,
+    useful_columns: List[Dict[str, str]],
+    table_name: str,
+) -> List[Dict[str, str]]:
+    """Gọi LLM để sinh mô tả ngắn gọn cho từng cột giá trị.
+
+    Fallback: nếu LLM fail, giữ column_description rỗng.
+    """
+    if not useful_columns:
+        return useful_columns
+
+    try:
+        # Load prompt template
+        prompt_path = cfg.get_prompt_path("schema_mapper.yaml")
+        if not prompt_path.exists():
+            print(f"⚠️ [Schema Mapper] Prompt file not found: {prompt_path}")
+            return useful_columns
+
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            prompt_data = yaml.safe_load(f)
+
+        system_prompt = prompt_data.get("system_prompt", "")
+        user_template = prompt_data.get("user_prompt_template", "")
+
+        col_names = [c["column_name"] for c in useful_columns]
+        user_content = user_template.format(
+            table_name=table_name,
+            columns=", ".join(col_names),
+        )
+
+        llm = get_llm(cfg=cfg, temperature=0.0)
+        response = llm.invoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_content),
+        ])
+
+        raw_text = response.content if isinstance(response.content, str) else str(response.content)
+        parsed = safe_parse_json(raw_text)
+
+        # parsed có thể là list hoặc dict chứa list
+        descriptions_list = parsed if isinstance(parsed, list) else parsed.get("columns", [])
+
+        # Map descriptions back vào useful_columns
+        desc_map = {}
+        for item in descriptions_list:
+            if isinstance(item, dict):
+                desc_map[item.get("column_name", "")] = item.get("column_description", "")
+
+        for col in useful_columns:
+            if col["column_name"] in desc_map:
+                col["column_description"] = desc_map[col["column_name"]]
+
+        print(f"   ✅ [Schema Mapper] LLM đã sinh mô tả cho {len(desc_map)} cột.")
+
+    except Exception as e:
+        print(f"   ⚠️ [Schema Mapper] LLM enrichment failed: {e}. Giữ descriptions rỗng.")
+
+    return useful_columns
+
+
 def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
-    """LangGraph Node 3: Map tiêu chí phụ sang tên cột thực tế.
+    """LangGraph Node 3: Map tiêu chí phụ sang tên cột thực tế + phân tích schema bảng.
 
     - Nội dung (noi_dung) nằm ở cột đầu tiên → không cần map.
-    - Chỉ cần map tiêu_chí_phụ → tên cột giá trị thực tế.
-    - Rule-based matching, không gọi LLM.
+    - Map tiêu_chí_phụ → tên cột giá trị thực tế (rule-based).
+    - Phân tích schema: useful_columns + sub_sections.
+    - Gọi LLM để sinh mô tả cột (optional enrichment).
 
     Args:
         state: Current AgentState containing 'parsed_query' and 'discovered_tables'
         cfg: Config instance
 
     Returns:
-        Updated AgentState with 'column_mapping'
+        Updated AgentState with 'column_mapping' and 'schema'
     """
     cfg = cfg or default_config
     start_time = time.time()
@@ -126,6 +341,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
     print(f"   - Tiêu chí phụ: {tieu_chi_phu or '(không có)'}")
 
     column_mapping: Dict[str, str] = {}
+    schema: Dict[str, Any] = {"useful_columns": [], "sub_sections": []}
 
     if not discovered_tables:
         print(f"⚠️ [Schema Mapper] Không có bảng dữ liệu để ánh xạ.")
@@ -135,6 +351,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         return {
             **state,
             "column_mapping": {},
+            "schema": schema,
             "status": "pending",
             "node_latencies": node_latencies,
         }
@@ -151,12 +368,14 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         return {
             **state,
             "column_mapping": {},
+            "schema": schema,
             "status": "pending",
             "node_latencies": node_latencies,
         }
 
     print(f"   - Cột trong bảng: {columns}")
 
+    # ── Column Mapping (logic cũ giữ nguyên) ──
     # Find label column (cột đầu tiên)
     label_col = _find_label_column(columns)
     if label_col:
@@ -172,15 +391,56 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
     # Map all available columns for reference
     column_mapping["all_columns"] = str(columns)
 
-    print(f"\n📊 [Kết quả - Schema Mapper]: {column_mapping}\n")
+    print(f"\n📊 [Kết quả - Schema Mapper - Column Mapping]: {column_mapping}")
+
+    # ── Schema Analysis (logic mới) ──
+    csv_path = first_table.get("csv_path", "")
+    table_name = first_table.get("Ten_Bang", Path(csv_path).stem if csv_path else "unknown")
+    metadata_set = set(METADATA_HEADER_COLUMNS)
+
+    try:
+        df_full = pd.read_csv(csv_path)
+        print(f"\n📐 [Schema Mapper] Đang phân tích schema bảng ({len(df_full)} hàng)...")
+
+        # 1. Extract useful columns
+        useful_columns = _extract_useful_columns(df_full, label_col, metadata_set)
+        print(f"   - Cột giá trị hữu dụng ({len(useful_columns)}): {[c['column_name'] for c in useful_columns]}")
+
+        # 2. Extract sub-sections
+        sub_sections = _extract_sub_sections(df_full, label_col, metadata_set)
+        print(f"   - Danh mục con ({len(sub_sections)}):")
+        for sec in sub_sections[:5]:  # Log tối đa 5 section
+            total_str = f"{sec['total_value']}" if sec['total_value'] is not None else "N/A"
+            print(f"     • {sec['section_name']} (range: {sec['range']}, total: {total_str})")
+        if len(sub_sections) > 5:
+            print(f"     ... và {len(sub_sections) - 5} section khác")
+
+        # 3. Enrich column descriptions via LLM
+        useful_columns = _enrich_column_descriptions(cfg, useful_columns, table_name)
+
+        schema = {
+            "useful_columns": useful_columns,
+            "sub_sections": sub_sections,
+        }
+
+        print(f"\n📊 [Kết quả - Schema Mapper - Schema Analysis]:")
+        for col in useful_columns:
+            desc = col['column_description'] or '(chưa có mô tả)'
+            print(f"   📋 Cột '{col['column_name']}': {desc}")
+
+    except Exception as e:
+        print(f"⚠️ [Schema Mapper] Lỗi phân tích schema: {e}. Tiếp tục với schema rỗng.")
 
     latency = time.time() - start_time
     node_latencies = state.get("node_latencies", {})
     node_latencies["schema_mapper"] = round(latency, 3)
 
+    print(f"\n⏱️ [Schema Mapper] Hoàn thành trong {latency:.3f}s\n")
+
     return {
         **state,
         "column_mapping": column_mapping,
+        "schema": schema,
         "status": "pending",
         "node_latencies": node_latencies,
     }
