@@ -332,7 +332,7 @@ def qdrant_search(
     ('unknown' covers companies that publish only one consolidated report.)
     """
     query_vector = model.encode(
-        query, normalize_embeddings=True, convert_to_numpy=True
+        query, normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False
     ).tolist()
 
     must = []
@@ -692,9 +692,9 @@ def search_by_company_and_content(
                 sparse_rank_map = {idx: rank + 1 for rank, idx in enumerate(sparse_ranked_indices)}
 
                 # --- B. Dense Vector Search trên các dòng chỉ tiêu ---
-                query_vec = _embed_model.encode(content_clean, normalize_embeddings=True, convert_to_numpy=True)
+                query_vec = _embed_model.encode(content_clean, normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False)
                 line_texts = [item["text"] for item in row_items]
-                line_vecs = _embed_model.encode(line_texts, batch_size=256, normalize_embeddings=True, convert_to_numpy=True)
+                line_vecs = _embed_model.encode(line_texts, batch_size=256, normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False)
                 dense_scores = np.dot(line_vecs, query_vec)  # Cosine similarity
                 dense_ranked_indices = np.argsort(dense_scores)[::-1]
                 dense_rank_map = {idx: rank + 1 for rank, idx in enumerate(dense_ranked_indices)}
