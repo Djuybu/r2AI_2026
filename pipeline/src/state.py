@@ -23,6 +23,8 @@ class AgentState(TypedDict, total=False):
     # Node 2: Data Discovery Output
     discovered_tables: List[Dict[str, Any]]  # List bảng từ Search Engine
     # Each table dict contains: csv_path, Ten_Bang, rrf_score, Ma_Doanh_Nghiep, Nam_Tai_Chinh, etc.
+    table_schema: List[str]                  # Danh sách tên cột của bảng tốt nhất
+    first_row_values: Dict[str, str]         # Giá trị hàng đầu tiên (khi cột có tên là số)
 
     # Node 3: Schema Mapper Output
     column_mapping: Dict[str, str]  # Map tiêu_chí_phụ → tên cột thực tế

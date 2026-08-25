@@ -52,9 +52,82 @@ def clean_python_code(raw_code: str) -> str:
     return "\n".join(lines[code_start_idx:]).strip()
 
 
+# Các cột metadata/thông tin chung ở đầu file CSV
+_METADATA_COLUMNS = {
+    "Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh",
+    "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon"
+}
+
+
+def _resolve_value_column(
+    table_schema: List[str],
+    first_row_values: Dict[str, str],
+    parsed_query: Dict[str, Any],
+    column_mapping: Dict[str, str],
+) -> str:
+    """Chọn cột giá trị dựa trên schema thực tế và dữ liệu hàng đầu tiên.
+
+    Logic:
+    1. Nếu schema rỗng hoặc không có thông tin: fallback column_mapping.
+    2. Lọc ra các cột dữ liệu (loại bỏ metadata và label_column).
+    3. Nếu chỉ có 2 cột dữ liệu → lấy cột thứ hai.
+    4. Nếu có >2 cột VÀ các cột có tên là số (0,1,2,3...):
+       dùng first_row_values để đoán cột đúng dựa vào tieu_chi_phu hoặc noi_dung.
+    5. Fallback: dùng column_mapping["value_column"] như cũ.
+    """
+    fallback = column_mapping.get("value_column", "Năm nay")
+
+    if not table_schema:
+        return fallback
+
+    label_col = column_mapping.get("label_column", "")
+
+    # Lọc cột dữ liệu (loại bỏ metadata + label)
+    data_cols = [
+        c for c in table_schema
+        if c not in _METADATA_COLUMNS and c != label_col
+    ]
+
+    if not data_cols:
+        return fallback
+
+    # Trường hợp 1: Chỉ có 2 cột dữ liệu (label + 1 value) → lấy cột thứ hai
+    if len(data_cols) == 1:
+        return data_cols[0]
+
+    # Kiểm tra xem có cột tên là số không
+    numeric_named_cols = [c for c in data_cols if str(c).strip().isdigit()]
+
+    # Trường hợp 2: Có >2 cột và cột có tên là số → dùng first_row_values để đoán
+    if len(data_cols) > 1 and numeric_named_cols and first_row_values:
+        tieu_chi_phu = parsed_query.get("tieu_chi_phu", "")
+
+        if tieu_chi_phu:
+            # Tìm cột mà giá trị hàng đầu tiên khớp với tiêu chí phụ
+            tieu_chi_lower = str(tieu_chi_phu).strip().lower()
+            for col in data_cols:
+                val = first_row_values.get(str(col), "")
+                if tieu_chi_lower in val.lower():
+                    print(f"   🎯 Chọn cột '{col}' (giá trị hàng đầu: '{val}') dựa trên tiêu chí phụ '{tieu_chi_phu}'")
+                    return col
+
+        # Nếu không tìm được theo tiêu chí phụ, dùng column_mapping fallback
+        # nhưng ưu tiên tìm trong first_row_values xem cột nào có giá trị giống fallback
+        for col in data_cols:
+            val = first_row_values.get(str(col), "")
+            if fallback.lower() in val.lower():
+                print(f"   🎯 Chọn cột '{col}' (giá trị hàng đầu: '{val}') khớp với '{fallback}'")
+                return col
+
+    # Trường hợp 3: Không có cột tên số, hoặc không đoán được → dùng fallback
+    return fallback
+
+
 def _build_files_context(
     discovered_tables: List[Dict[str, Any]],
     column_mapping: Dict[str, str],
+    table_schema: List[str] = None,
+    first_row_values: Dict[str, str] = None,
 ) -> str:
     """Build context string describing available files for code generation."""
     if not discovered_tables:
@@ -73,6 +146,17 @@ def _build_files_context(
         )
 
     lines.append(f"\nColumn Mapping: {column_mapping}")
+
+    # Thêm thông tin schema bảng
+    if table_schema:
+        lines.append(f"\nSchema bảng (tên các cột): {table_schema}")
+
+    # Thêm giá trị hàng đầu tiên nếu có cột tên là số
+    if first_row_values:
+        lines.append(f"\nGiá trị hàng đầu tiên (giúp hiểu ý nghĩa cột số):")
+        for col, val in first_row_values.items():
+            lines.append(f"  Cột '{col}' → '{val}'")
+
     return "\n".join(lines)
 
 
@@ -95,6 +179,8 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     parsed_query = state.get("parsed_query", {})
     discovered_tables = state.get("discovered_tables", [])
     column_mapping = state.get("column_mapping", {})
+    table_schema = state.get("table_schema", [])
+    first_row_values = state.get("first_row_values", {})
     if not column_mapping and discovered_tables:
         from pipeline.src.nodes.schema_mapper import schema_mapper_node
         try:
@@ -113,12 +199,17 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     so_nam = parsed_query.get("so_nam", [])
     tieu_chi_phu = parsed_query.get("tieu_chi_phu")
 
-    # Get column names from mapping
+    # Get column names from mapping, sử dụng schema thực tế nếu có
     label_col = column_mapping.get("label_column", "CHỈ TIÊU")
-    value_col = column_mapping.get("value_column", "Năm nay")
+    value_col = _resolve_value_column(table_schema, first_row_values, parsed_query, column_mapping)
 
-    # Build files context
-    files_context = _build_files_context(discovered_tables, column_mapping)
+    print(f"   📋 [Code Generator] Schema: {table_schema}")
+    print(f"   📋 [Code Generator] Label col: '{label_col}', Value col: '{value_col}'")
+    if first_row_values:
+        print(f"   📋 [Code Generator] First row values: {first_row_values}")
+
+    # Build files context (bao gồm schema và first_row info)
+    files_context = _build_files_context(discovered_tables, column_mapping, table_schema, first_row_values)
 
     # Build file path variables for code
     paths_str = ""

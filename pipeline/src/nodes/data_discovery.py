@@ -14,6 +14,42 @@ from pipeline.src.config import Config, config as default_config
 from pipeline.src.utils.data_registry import DataRegistry
 
 
+# Các cột metadata/thông tin chung - dùng để lọc khi trích xuất first_row_values
+_METADATA_COLUMNS = {
+    "Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh",
+    "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon"
+}
+
+
+def _extract_table_schema(csv_path: str) -> Dict[str, Any]:
+    """Đọc schema (tên cột) và giá trị hàng đầu tiên nếu có cột tên là số.
+
+    Returns:
+        Dict với 2 key:
+        - table_schema: list[str] — danh sách tên cột
+        - first_row_values: dict[str, str] — giá trị hàng đầu tiên (chỉ khi có cột tên số)
+    """
+    result: Dict[str, Any] = {"table_schema": [], "first_row_values": {}}
+    try:
+        df = pd.read_csv(csv_path, nrows=1)
+        columns = list(df.columns)
+        result["table_schema"] = columns
+
+        # Kiểm tra xem có cột nào tên là số (0, 1, 2, 3...) không
+        numeric_cols = [c for c in columns if str(c).strip().isdigit()]
+        if numeric_cols and not df.empty:
+            first_row = df.iloc[0]
+            # Trả về giá trị hàng đầu tiên cho các cột không phải metadata
+            result["first_row_values"] = {
+                str(c): str(first_row[c])
+                for c in columns
+                if c not in _METADATA_COLUMNS
+            }
+    except Exception as e:
+        print(f"⚠️ Không đọc được schema từ {csv_path}: {e}")
+    return result
+
+
 def _resolve_csv_path(csv_path_str: str, cfg: Config) -> Optional[Path]:
     """Resolve csv_path from search engine result to an actual local file path."""
     if not csv_path_str:
@@ -282,16 +318,30 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             "error_message": "Không tìm thấy bảng dữ liệu phù hợp từ Search Engine.",
             "discovered_tables": [],
             "matched_table_path": None,
+            "table_schema": [],
+            "first_row_values": {},
             "node_latencies": node_latencies,
         }
 
     first_table_path = all_discovered_tables[0]["csv_path"]
-    print(f"\n📊 [Kết quả - Data Discovery]: Đã chọn {len(all_discovered_tables)} bảng có độ khớp cao nhất.\n")
+
+    # Extract schema và giá trị hàng đầu tiên từ bảng tốt nhất
+    schema_info = _extract_table_schema(first_table_path)
+    all_discovered_tables[0]["table_schema"] = schema_info["table_schema"]
+    all_discovered_tables[0]["first_row_values"] = schema_info["first_row_values"]
+
+    print(f"\n📊 [Kết quả - Data Discovery]: Đã chọn {len(all_discovered_tables)} bảng có độ khớp cao nhất.")
+    print(f"   📋 Schema bảng: {schema_info['table_schema']}")
+    if schema_info["first_row_values"]:
+        print(f"   📋 Giá trị hàng đầu tiên (cột số): {schema_info['first_row_values']}")
+    print()
 
     return {
         **state,
         "discovered_tables": all_discovered_tables,
         "matched_table_path": first_table_path,
+        "table_schema": schema_info["table_schema"],
+        "first_row_values": schema_info["first_row_values"],
         "status": "pending",
         "node_latencies": node_latencies,
     }

@@ -1,5 +1,6 @@
 # Pipeline plan output
 pipeline/plans/
+pipeline/tests/
 
 # Python & Virtual Environments
 .env
