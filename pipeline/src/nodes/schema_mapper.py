@@ -162,7 +162,7 @@ def _extract_useful_columns(
                     continue
             if resolved_parts:
                 col_name = " - ".join(resolved_parts)
-            # Nếu không tìm được tên, giữ nguyên tên số
+                print(f"      🔹 Cột số '{col}' → Giải mã tên cột thật: '{col_name}'")
 
         useful.append({
             "column_name": col_name,
@@ -270,7 +270,7 @@ def _enrich_column_descriptions(
         # Load prompt template
         prompt_path = cfg.get_prompt_path("schema_mapper.yaml")
         if not prompt_path.exists():
-            print(f"⚠️ [Schema Mapper] Prompt file not found: {prompt_path}")
+            print(f"   ⚠️ [Schema Mapper] File prompt không tồn tại: {prompt_path}")
             return useful_columns
 
         with open(prompt_path, "r", encoding="utf-8") as f:
@@ -285,6 +285,7 @@ def _enrich_column_descriptions(
             columns=", ".join(col_names),
         )
 
+        print(f"   🤖 [Schema Mapper] Đang gọi LLM để sinh mô tả ngữ nghĩa cho {len(col_names)} cột...")
         llm = get_llm(cfg=cfg, temperature=0.0)
         response = llm.invoke([
             SystemMessage(content=system_prompt),
@@ -307,7 +308,7 @@ def _enrich_column_descriptions(
             if col["column_name"] in desc_map:
                 col["column_description"] = desc_map[col["column_name"]]
 
-        print(f"   ✅ [Schema Mapper] LLM đã sinh mô tả cho {len(desc_map)} cột.")
+        print(f"   ✅ [Schema Mapper] LLM đã làm giàu mô tả cho {len(desc_map)}/{len(useful_columns)} cột thành công.")
 
     except Exception as e:
         print(f"   ⚠️ [Schema Mapper] LLM enrichment failed: {e}. Giữ descriptions rỗng.")
@@ -337,14 +338,16 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
     discovered_tables = state.get("discovered_tables", [])
     tieu_chi_phu = parsed_query.get("tieu_chi_phu")
 
-    print(f"\n🔍 [Schema Mapper] Đang ánh xạ tiêu chí → cột thực tế...")
-    print(f"   - Tiêu chí phụ: {tieu_chi_phu or '(không có)'}")
+    print(f"\n" + "=" * 65)
+    print(f"🔍 [Node 3: SCHEMA MAPPER] Bắt đầu phân tích Schema...")
+    print(f"=" * 65)
+    print(f"   - Tiêu chí phụ cần tìm: '{tieu_chi_phu or '(không có)'}'")
 
     column_mapping: Dict[str, str] = {}
     schema: Dict[str, Any] = {"useful_columns": [], "sub_sections": []}
 
     if not discovered_tables:
-        print(f"⚠️ [Schema Mapper] Không có bảng dữ liệu để ánh xạ.")
+        print(f"   ⚠️ [Schema Mapper] Không có bảng dữ liệu đầu vào để ánh xạ.")
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})
         node_latencies["schema_mapper"] = round(latency, 3)
@@ -361,7 +364,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
     columns = _get_columns_from_table(first_table)
 
     if not columns:
-        print(f"⚠️ [Schema Mapper] Không đọc được cột từ bảng: {first_table.get('csv_path')}")
+        print(f"   ⚠️ [Schema Mapper] Không đọc được cột từ file: {first_table.get('csv_path')}")
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})
         node_latencies["schema_mapper"] = round(latency, 3)
@@ -373,49 +376,44 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
             "node_latencies": node_latencies,
         }
 
-    print(f"   - Cột trong bảng: {columns}")
+    print(f"   📋 Cột gốc trong bảng ({len(columns)} cột): {columns}")
 
-    # ── Column Mapping (logic cũ giữ nguyên) ──
-    # Find label column (cột đầu tiên)
+    # ── 1. Column Mapping (Rule-based) ──
     label_col = _find_label_column(columns)
     if label_col:
         column_mapping["label_column"] = label_col
-        print(f"   - Cột nhãn (chỉ tiêu): '{label_col}'")
+        print(f"   🏷️ Cột nhãn (chỉ tiêu tài chính): '{label_col}'")
 
-    # Find value column based on tieu_chi_phu and label_col
     value_col = _find_value_column(columns, label_col, tieu_chi_phu)
     if value_col:
         column_mapping["value_column"] = value_col
-        print(f"   - Cột giá trị: '{value_col}'")
+        print(f"   🎯 Cột giá trị ưu tiên: '{value_col}'")
 
-    # Map all available columns for reference
     column_mapping["all_columns"] = str(columns)
 
-    print(f"\n📊 [Kết quả - Schema Mapper - Column Mapping]: {column_mapping}")
-
-    # ── Schema Analysis (logic mới) ──
+    # ── 2. Schema Analysis (useful_columns & sub_sections) ──
     csv_path = first_table.get("csv_path", "")
     table_name = first_table.get("Ten_Bang", Path(csv_path).stem if csv_path else "unknown")
     metadata_set = set(METADATA_HEADER_COLUMNS)
 
     try:
         df_full = pd.read_csv(csv_path)
-        print(f"\n📐 [Schema Mapper] Đang phân tích schema bảng ({len(df_full)} hàng)...")
+        print(f"\n   📐 Phân tích chi tiết bảng '{table_name}' ({len(df_full)} dòng, {len(df_full.columns)} cột):")
 
-        # 1. Extract useful columns
+        # 2a. Useful columns
         useful_columns = _extract_useful_columns(df_full, label_col, metadata_set)
-        print(f"   - Cột giá trị hữu dụng ({len(useful_columns)}): {[c['column_name'] for c in useful_columns]}")
+        print(f"   📊 Cột giá trị hữu dụng phát hiện được ({len(useful_columns)} cột): {[c['column_name'] for c in useful_columns]}")
 
-        # 2. Extract sub-sections
+        # 2b. Sub-sections
         sub_sections = _extract_sub_sections(df_full, label_col, metadata_set)
-        print(f"   - Danh mục con ({len(sub_sections)}):")
-        for sec in sub_sections[:5]:  # Log tối đa 5 section
-            total_str = f"{sec['total_value']}" if sec['total_value'] is not None else "N/A"
-            print(f"     • {sec['section_name']} (range: {sec['range']}, total: {total_str})")
-        if len(sub_sections) > 5:
-            print(f"     ... và {len(sub_sections) - 5} section khác")
+        print(f"   📂 Danh mục con (Sub-sections) tìm thấy ({len(sub_sections)} mục):")
+        for sec in sub_sections[:6]:
+            total_str = f"{sec['total_value']:,.2f}" if isinstance(sec['total_value'], (int, float)) else "N/A"
+            print(f"      • {sec['section_name']} -> Hàng {sec['range'][0]}..{sec['range'][1]} | Total: {total_str}")
+        if len(sub_sections) > 6:
+            print(f"      ... và {len(sub_sections) - 6} danh mục con khác")
 
-        # 3. Enrich column descriptions via LLM
+        # 2c. LLM Description Enrichment
         useful_columns = _enrich_column_descriptions(cfg, useful_columns, table_name)
 
         schema = {
@@ -423,19 +421,20 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
             "sub_sections": sub_sections,
         }
 
-        print(f"\n📊 [Kết quả - Schema Mapper - Schema Analysis]:")
+        print(f"\n   📋 [Kết quả Schema Phân tích]:")
         for col in useful_columns:
-            desc = col['column_description'] or '(chưa có mô tả)'
-            print(f"   📋 Cột '{col['column_name']}': {desc}")
+            desc = col['column_description'] or '(không có mô tả)'
+            print(f"      • Cột '{col['column_name']}': {desc}")
 
     except Exception as e:
-        print(f"⚠️ [Schema Mapper] Lỗi phân tích schema: {e}. Tiếp tục với schema rỗng.")
+        print(f"   ⚠️ [Schema Mapper] Lỗi trong quá trình phân tích schema: {e}")
 
     latency = time.time() - start_time
     node_latencies = state.get("node_latencies", {})
     node_latencies["schema_mapper"] = round(latency, 3)
 
-    print(f"\n⏱️ [Schema Mapper] Hoàn thành trong {latency:.3f}s\n")
+    print(f"\n   ⏱️ [Schema Mapper] Hoàn thành trong {latency:.3f}s")
+    print(f"=" * 65 + "\n")
 
     return {
         **state,
