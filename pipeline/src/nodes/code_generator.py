@@ -58,21 +58,74 @@ _METADATA_COLUMNS = {
     "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon"
 }
 
+_KNOWN_LABEL_COLUMNS = [
+    "CHÍ TIÊU", "CHỈ TIÊU", "TÀI SẢN", "NGUỒN VỐN",
+    "Cột_0", "Chỉ tiêu", "Mã số", "STT"
+]
+
+
+def _resolve_label_column(
+    table_schema: List[str],
+    first_row_values: Optional[Dict[str, str]] = None,
+    column_mapping: Optional[Dict[str, str]] = None,
+) -> str:
+    """Chọn cột nhãn (chứa tên chỉ tiêu tài chính) dựa trên schema thực tế và dữ liệu hàng đầu.
+
+    Logic:
+    1. Nếu column_mapping có label_column và cột đó thực sự tồn tại trong table_schema -> dùng nó.
+    2. Kiểm tra nếu có cột trong table_schema khớp với _KNOWN_LABEL_COLUMNS -> dùng cột đó.
+    3. Nếu các cột là số và có first_row_values, kiểm tra xem giá trị hàng đầu của cột nào khớp với _KNOWN_LABEL_COLUMNS -> chọn cột đó.
+    4. Lấy cột đầu tiên trong table_schema không thuộc _METADATA_COLUMNS.
+    5. Fallback: column_mapping['label_column'] nếu có, hoặc 'CHỈ TIÊU'.
+    """
+    column_mapping = column_mapping or {}
+    first_row_values = first_row_values or {}
+
+    # 1. Kiểm tra column_mapping nếu cột đó thực sự có trong table_schema
+    mapped_label = column_mapping.get("label_column")
+    if mapped_label and mapped_label in table_schema:
+        return mapped_label
+
+    if not table_schema:
+        return mapped_label or "CHỈ TIÊU"
+
+    # Lọc các cột không phải metadata
+    non_meta_cols = [c for c in table_schema if c not in _METADATA_COLUMNS]
+    if not non_meta_cols:
+        return mapped_label or "CHỈ TIÊU"
+
+    # 2. Kiểm tra tên cột trong schema có khớp known label columns không
+    for known in _KNOWN_LABEL_COLUMNS:
+        for c in non_meta_cols:
+            if known.lower() == str(c).strip().lower():
+                return c
+
+    # 3. Kiểm tra first_row_values xem có cột nào chứa tên chỉ tiêu không
+    if first_row_values:
+        for known in ["CHỈ TIÊU", "CHÍ TIÊU", "TÀI SẢN", "NGUỒN VỐN", "Chỉ tiêu"]:
+            for col, val in first_row_values.items():
+                if col in non_meta_cols and known.lower() in str(val).strip().lower():
+                    return str(col)
+
+    # 4. Lấy cột đầu tiên không phải metadata
+    return non_meta_cols[0]
+
 
 def _resolve_value_column(
     table_schema: List[str],
     first_row_values: Dict[str, str],
     parsed_query: Dict[str, Any],
     column_mapping: Dict[str, str],
+    label_col: Optional[str] = None,
 ) -> str:
     """Chọn cột giá trị dựa trên schema thực tế và dữ liệu hàng đầu tiên.
 
     Logic:
     1. Nếu schema rỗng hoặc không có thông tin: fallback column_mapping.
     2. Lọc ra các cột dữ liệu (loại bỏ metadata và label_column).
-    3. Nếu chỉ có 2 cột dữ liệu → lấy cột thứ hai.
-    4. Nếu có >2 cột VÀ các cột có tên là số (0,1,2,3...):
-       dùng first_row_values để đoán cột đúng dựa vào tieu_chi_phu hoặc noi_dung.
+    3. Nếu chỉ có 1 cột dữ liệu (sau khi trừ label) → lấy cột đó.
+    4. Nếu có >1 cột VÀ các cột có tên là số (0,1,2,3...):
+       dùng first_row_values để đoán cột đúng dựa vào tieu_chi_phu hoặc noi_dung/fallback.
     5. Fallback: dùng column_mapping["value_column"] như cũ.
     """
     fallback = column_mapping.get("value_column", "Năm nay")
@@ -80,7 +133,7 @@ def _resolve_value_column(
     if not table_schema:
         return fallback
 
-    label_col = column_mapping.get("label_column", "")
+    label_col = label_col or column_mapping.get("label_column", "")
 
     # Lọc cột dữ liệu (loại bỏ metadata + label)
     data_cols = [
@@ -91,15 +144,15 @@ def _resolve_value_column(
     if not data_cols:
         return fallback
 
-    # Trường hợp 1: Chỉ có 2 cột dữ liệu (label + 1 value) → lấy cột thứ hai
+    # Trường hợp 1: Chỉ có 1 cột dữ liệu (sau khi đã trừ label) → lấy cột đó
     if len(data_cols) == 1:
         return data_cols[0]
 
     # Kiểm tra xem có cột tên là số không
     numeric_named_cols = [c for c in data_cols if str(c).strip().isdigit()]
 
-    # Trường hợp 2: Có >2 cột và cột có tên là số → dùng first_row_values để đoán
-    if len(data_cols) > 1 and numeric_named_cols and first_row_values:
+    # Trường hợp 2: Có >1 cột và cột có tên là số → dùng first_row_values để đoán
+    if numeric_named_cols and first_row_values:
         tieu_chi_phu = parsed_query.get("tieu_chi_phu", "")
 
         if tieu_chi_phu:
@@ -119,8 +172,11 @@ def _resolve_value_column(
                 print(f"   🎯 Chọn cột '{col}' (giá trị hàng đầu: '{val}') khớp với '{fallback}'")
                 return col
 
-    # Trường hợp 3: Không có cột tên số, hoặc không đoán được → dùng fallback
-    return fallback
+    # Trường hợp 3: Không có cột tên số, hoặc không đoán được → dùng fallback nếu có trong data_cols, hoặc cột đầu tiên
+    if fallback in data_cols:
+        return fallback
+
+    return data_cols[0] if data_cols else fallback
 
 
 def _build_files_context(
@@ -200,8 +256,8 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     tieu_chi_phu = parsed_query.get("tieu_chi_phu")
 
     # Get column names from mapping, sử dụng schema thực tế nếu có
-    label_col = column_mapping.get("label_column", "CHỈ TIÊU")
-    value_col = _resolve_value_column(table_schema, first_row_values, parsed_query, column_mapping)
+    label_col = _resolve_label_column(table_schema, first_row_values, column_mapping)
+    value_col = _resolve_value_column(table_schema, first_row_values, parsed_query, column_mapping, label_col)
 
     print(f"   📋 [Code Generator] Schema: {table_schema}")
     print(f"   📋 [Code Generator] Label col: '{label_col}', Value col: '{value_col}'")
