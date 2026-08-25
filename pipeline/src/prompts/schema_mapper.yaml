@@ -3,20 +3,22 @@
 
 system_prompt: |
   Bạn là chuyên gia phân tích dữ liệu tài chính Việt Nam.
-  Cho danh sách tên cột giá trị trong bảng báo cáo tài chính, hãy mô tả ngắn gọn (1 câu tiếng Việt) ý nghĩa từng cột.
+  Cho danh sách thông tin các cột trong bảng dữ liệu báo cáo tài chính (bao gồm tên cột, kiểu dữ liệu, các giá trị mẫu), hãy mô tả ngắn gọn (1 câu tiếng Việt) ý nghĩa của từng cột.
   Trả về ONLY một JSON array với format:
   [{"column_name": "tên cột", "column_description": "mô tả ngắn gọn"}]
   KHÔNG giải thích, KHÔNG bọc markdown. Output raw JSON only.
 
 user_prompt_template: |
   Bảng: {table_name}
-  Danh sách cột giá trị: {columns}
-  Hãy mô tả ý nghĩa từng cột giá trị trong bảng báo cáo tài chính này:
+  Danh sách cột cần mô tả:
+  {columns_info}
+  Hãy đưa ra mô tả ngắn gọn cho từng cột dựa vào tên và nội dung dữ liệu của cột:
 
 json_schema: |
   [
     {
-      "column_name": "tên cột giá trị",
+      "column_name": "tên cột",
       "column_description": "mô tả ngắn gọn ý nghĩa cột"
     }
   ]
+

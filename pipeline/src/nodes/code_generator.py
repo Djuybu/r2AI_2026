@@ -58,57 +58,45 @@ _METADATA_COLUMNS = {
     "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon"
 }
 
-_KNOWN_LABEL_COLUMNS = [
-    "CHÍ TIÊU", "CHỈ TIÊU", "TÀI SẢN", "NGUỒN VỐN",
-    "Cột_0", "Chỉ tiêu", "Mã số", "STT"
-]
-
 
 def _resolve_label_column(
     table_schema: List[str],
     first_row_values: Optional[Dict[str, str]] = None,
     column_mapping: Optional[Dict[str, str]] = None,
+    schema: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """Chọn cột nhãn (chứa tên chỉ tiêu tài chính) dựa trên schema thực tế và dữ liệu hàng đầu.
+    """Chọn cột nhãn (chứa tên chỉ tiêu tài chính) dựa trên column_mapping và schema thực tế.
 
     Logic:
     1. Nếu column_mapping có label_column và cột đó thực sự tồn tại trong table_schema -> dùng nó.
-    2. Kiểm tra nếu có cột trong table_schema khớp với _KNOWN_LABEL_COLUMNS -> dùng cột đó.
-    3. Nếu các cột là số và có first_row_values, kiểm tra xem giá trị hàng đầu của cột nào khớp với _KNOWN_LABEL_COLUMNS -> chọn cột đó.
-    4. Lấy cột đầu tiên trong table_schema không thuộc _METADATA_COLUMNS.
-    5. Fallback: column_mapping['label_column'] nếu có, hoặc 'CHỈ TIÊU'.
+    2. Nếu có schema useful_columns -> lấy cột dạng text đầu tiên.
+    3. Lấy cột đầu tiên trong table_schema không thuộc _METADATA_COLUMNS.
+    4. Fallback: column_mapping['label_column'] nếu có, hoặc cột đầu tiên.
     """
     column_mapping = column_mapping or {}
-    first_row_values = first_row_values or {}
+    schema = schema or {}
 
     # 1. Kiểm tra column_mapping nếu cột đó thực sự có trong table_schema
     mapped_label = column_mapping.get("label_column")
     if mapped_label and mapped_label in table_schema:
         return mapped_label
 
+    # 2. Kiểm tra useful_columns trong schema
+    useful_cols = schema.get("useful_columns", [])
+    text_cols = [c.get("raw_column") for c in useful_cols if c.get("data_type") == "text"]
+    for tc in text_cols:
+        if tc in table_schema:
+            return tc
+
     if not table_schema:
-        return mapped_label or "CHỈ TIÊU"
+        return mapped_label or "0"
 
-    # Lọc các cột không phải metadata
+    # 3. Lấy cột đầu tiên không phải metadata
     non_meta_cols = [c for c in table_schema if c not in _METADATA_COLUMNS]
-    if not non_meta_cols:
-        return mapped_label or "CHỈ TIÊU"
+    if non_meta_cols:
+        return non_meta_cols[0]
 
-    # 2. Kiểm tra tên cột trong schema có khớp known label columns không
-    for known in _KNOWN_LABEL_COLUMNS:
-        for c in non_meta_cols:
-            if known.lower() == str(c).strip().lower():
-                return c
-
-    # 3. Kiểm tra first_row_values xem có cột nào chứa tên chỉ tiêu không
-    if first_row_values:
-        for known in ["CHỈ TIÊU", "CHÍ TIÊU", "TÀI SẢN", "NGUỒN VỐN", "Chỉ tiêu"]:
-            for col, val in first_row_values.items():
-                if col in non_meta_cols and known.lower() in str(val).strip().lower():
-                    return str(col)
-
-    # 4. Lấy cột đầu tiên không phải metadata
-    return non_meta_cols[0]
+    return mapped_label or table_schema[0]
 
 
 def _resolve_value_column(
@@ -314,7 +302,7 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     tieu_chi_phu = parsed_query.get("tieu_chi_phu")
 
     # Get column names from mapping, sử dụng schema thực tế nếu có
-    label_col = _resolve_label_column(table_schema, first_row_values, column_mapping)
+    label_col = _resolve_label_column(table_schema, first_row_values, column_mapping, schema=schema)
     value_col = _resolve_value_column(table_schema, first_row_values, parsed_query, column_mapping, label_col, schema=schema)
 
     print(f"   📋 [Code Generator] Schema: {table_schema}")
