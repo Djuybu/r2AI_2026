@@ -1,0 +1,7 @@
+﻿ID,Câu hỏi,Trạng thái,Số lần thử,Kết quả,Kiểu dữ liệu,Lỗi,Độ dài mã (dòng)
+1,Lãi tiền gửi năm 2018 của công ty mẹ CTCP Hàng không Vietjet...,❌ ERROR,0,None,NoneType,Parser timeout,0
+2,Số dư cho vay khách hàng ngành Thương mại của công ty mẹ Ngâ...,❌ ERROR,3,None,error,Failed after reflection attempts,10
+3,Chi phí dự phòng của Ngân hàng TMCP Sài Gòn Tài Lộc trong nă...,❌ ERROR,3,None,error,Failed after reflection attempts,10
+4,Lợi nhuận sau thuế của CTCP Chứng khoán FPT năm 2023 là bao ...,❌ ERROR,3,None,error,Failed after reflection attempts,10
+5,Chi phí phạt của công ty mẹ SCR năm 2017 là bao nhiêu tỷ đồn...,❌ ERROR,3,None,error,Failed after reflection attempts,10
+6,Lưu chuyển tiền thuần từ hoạt động kinh doanh của công ty mẹ...,❌ ERROR,3,None,error,Failed after reflection attempts,10

@@ -1,0 +1,383 @@
+[
+  {
+    "id": 1,
+    "question": "Lãi tiền gửi năm 2018 của công ty mẹ CTCP Hàng không Vietjet (VJC) là bao nhiêu triệu đồng?",
+    "status": "error",
+    "error": "Parser timeout",
+    "generated_code": "",
+    "attempts": 0,
+    "parsed_query": null,
+    "discovered_tables": [],
+    "result": null,
+    "error_traceback": "Request timed out."
+  },
+  {
+    "id": 2,
+    "question": "Số dư cho vay khách hàng ngành Thương mại của công ty mẹ Ngân hàng TMCP Á Châu (ACB) cuối năm 2022 là bao nhiêu triệu đồng?",
+    "status": "error",
+    "error": "Failed after reflection attempts",
+    "result": {
+      "type": "error",
+      "data": null
+    },
+    "generated_code": "import pandas as pd\n\nfile_path_2022 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/ACB/2022/ACB_financial_statements_2022_consolidated/ACB_financial_statements_2022_consolidated_table_106.csv'\ndf = pd.read_csv(file_path_2022)\n\nfiltered_df = df[df['0'].astype(str).str.contains('Số dư cho vay khách hàng ngành Thương mại', case=False, na=False, regex=False)]\nif not filtered_df.empty:\n    result = extract_value(filtered_df.iloc[0], '1')\nelse:\n    raise ValueError(\"Metric not found in table\")",
+    "attempts": 3,
+    "parsed_query": {
+      "ticker": "ACB",
+      "year": "2022",
+      "metric": "Số dư cho vay khách hàng ngành Thương mại",
+      "ten_cong_ty": "ACB",
+      "so_nam": [
+        "2022"
+      ],
+      "noi_dung": "Số dư cho vay khách hàng ngành Thương mại",
+      "thao_tac": "trich_xuat",
+      "muc_tieu": "trich_xuat"
+    },
+    "discovered_tables": [
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/ACB/2022/ACB_financial_statements_2022_consolidated/ACB_financial_statements_2022_consolidated_table_106.csv",
+        "Ten_Bang": "i) Rủi ro lãi suất (tiếp theo Lãi suất trên các khoản mục tiền tệ tại ngày kết thúc kỳ kế toán như sau",
+        "rrf_score": 0.131498,
+        "Ma_Doanh_Nghiep": "ACB",
+        "Nam_Tai_Chinh": "2022",
+        "Loai_Bao_Cao": "consolidated",
+        "matched_sample": "Cho vay khách hàng",
+        "table_schema": [
+          "Ma_Doanh_Nghiep",
+          "Ten_Doanh_Nghiep",
+          "Nam_Tai_Chinh",
+          "Loai_Bao_Cao",
+          "Ten_Bang",
+          "Don_Vi_Tinh",
+          "Tep_Nguon",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        "first_row_values": {
+          "0": "Tại ngày 31 tháng 12 năm 2021",
+          "1": "Dưới1 tháng",
+          "2": "Từ 1 thángđến 3 tháng",
+          "3": "Từ trên 3 thángđến 6 tháng",
+          "4": "Từ trên 6 thángđến 12 tháng",
+          "5": "Từ trên 1 nămđến 5 năm",
+          "6": "Trên5 năm"
+        }
+      },
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/ACB/2022/ACB_financial_statements_2022_separate/ACB_financial_statements_2022_separate_table_106.csv",
+        "Ten_Bang": "i) Rùi ro lãi suất (tiếp theo Lãi suất trên các khoản mục tiền tệ tại ngày kết thúc kỳ kế toán như sau",
+        "rrf_score": 0.131054,
+        "Ma_Doanh_Nghiep": "ACB",
+        "Nam_Tai_Chinh": "2022",
+        "Loai_Bao_Cao": "separate",
+        "matched_sample": "Cho vay khách hàng"
+      },
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/ACB/2022/ACB_financial_statements_2022_separate/ACB_financial_statements_2022_separate_table_1.csv",
+        "Ten_Bang": "BÁO CÁO TÌNH HÌNH TÀI CHÍNH RIÊNG",
+        "rrf_score": 0.13009,
+        "Ma_Doanh_Nghiep": "ACB",
+        "Nam_Tai_Chinh": "2022",
+        "Loai_Bao_Cao": "separate",
+        "matched_sample": "Cho vay khách hàng"
+      }
+    ],
+    "error_traceback": "Traceback (most recent call last):\n  File \"/tmp/ipykernel_58/3918322929.py\", line 67, in executor_node\n    validate_ast(code_str)\n  File \"/tmp/ipykernel_58/3918322929.py\", line 10, in validate_ast\n    if alias.name.split(\".\")[0] not in ALLOWED_MODULES:\n                                       ^^^^^^^^^^^^^^^\nNameError: name 'ALLOWED_MODULES' is not defined\n"
+  },
+  {
+    "id": 3,
+    "question": "Chi phí dự phòng của Ngân hàng TMCP Sài Gòn Tài Lộc trong năm 2020 là bao nhiêu triệu đồng?",
+    "status": "error",
+    "error": "Failed after reflection attempts",
+    "result": {
+      "type": "error",
+      "data": null
+    },
+    "generated_code": "import pandas as pd\n\nfile_path_2020 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/STB/2020/STB_financial_statements_2020_consolidated/STB_financial_statements_2020_consolidated_table_91.csv'\ndf = pd.read_csv(file_path_2020)\n\nfiltered_df = df[df['0'].astype(str).str.contains('Chi phí dự phòng', case=False, na=False, regex=False)]\nif not filtered_df.empty:\n    result = extract_value(filtered_df.iloc[0], '1')\nelse:\n    raise ValueError(\"Metric not found in table\")",
+    "attempts": 3,
+    "parsed_query": {
+      "ticker": "STL",
+      "year": "2020",
+      "metric": "Chi phí dự phòng",
+      "ten_cong_ty": "STB",
+      "so_nam": [
+        "2020"
+      ],
+      "noi_dung": "Chi phí dự phòng",
+      "thao_tac": "trich_xuat",
+      "muc_tieu": "trich_xuat"
+    },
+    "discovered_tables": [
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/STB/2020/STB_financial_statements_2020_consolidated/STB_financial_statements_2020_consolidated_table_91.csv",
+        "Ten_Bang": "31. (CHI PHÍ)/THU NHẬP TỪ GÓP VỐN, MUA CỔ PHẦN 32. CHI PHÍ HOẠT ĐỘNG",
+        "rrf_score": 0.132522,
+        "Ma_Doanh_Nghiep": "STB",
+        "Nam_Tai_Chinh": "2020",
+        "Loai_Bao_Cao": "consolidated",
+        "matched_sample": "Chi phí dự phòng",
+        "table_schema": [
+          "Ma_Doanh_Nghiep",
+          "Ten_Doanh_Nghiep",
+          "Nam_Tai_Chinh",
+          "Loai_Bao_Cao",
+          "Ten_Bang",
+          "Don_Vi_Tinh",
+          "Tep_Nguon",
+          "0",
+          "1",
+          "2"
+        ],
+        "first_row_values": {
+          "0": "nan",
+          "1": "Năm nayTriệu đồng",
+          "2": "Năm trướcTriệu đồng"
+        }
+      },
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/STB/2020/STB_financial_statements_2020_separate/STB_financial_statements_2020_separate_table_90.csv",
+        "Ten_Bang": "*) Đây là khoản lợi nhuận từ Ngân hàng TNHH Sài Gòn Thương Tín Lào với số tiền là 18.397 triệu LAK (tương đương 47.230 triệu đồng 30. CHI PHÍ HOẠT ĐỘNG",
+        "rrf_score": 0.132522,
+        "Ma_Doanh_Nghiep": "STB",
+        "Nam_Tai_Chinh": "2020",
+        "Loai_Bao_Cao": "separate",
+        "matched_sample": "Chi phí dự phòng"
+      },
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/STB/2020/STB_financial_statements_2020_consolidated/STB_financial_statements_2020_consolidated_table_101.csv",
+        "Ten_Bang": "39.1 Báo cáo bộ phận chính yếu: theo khu vực địa lý Thông tin về thu nhập, chỉ phí và các khoản mục tài sản, nợ phải trả của các bộ phân theo khu vực địa lý của Ngân hàng và các công ty con tại ngày 31 tháng 12 năm 2020 và cho năm tài chính kết thúc cùng ngày như sau",
+        "rrf_score": 0.129877,
+        "Ma_Doanh_Nghiep": "STB",
+        "Nam_Tai_Chinh": "2020",
+        "Loai_Bao_Cao": "consolidated",
+        "matched_sample": "Chi phí dự phòng rủi ro tin dụng"
+      }
+    ],
+    "error_traceback": "Traceback (most recent call last):\n  File \"/tmp/ipykernel_58/3918322929.py\", line 67, in executor_node\n    validate_ast(code_str)\n  File \"/tmp/ipykernel_58/3918322929.py\", line 10, in validate_ast\n    if alias.name.split(\".\")[0] not in ALLOWED_MODULES:\n                                       ^^^^^^^^^^^^^^^\nNameError: name 'ALLOWED_MODULES' is not defined\n"
+  },
+  {
+    "id": 4,
+    "question": "Lợi nhuận sau thuế của CTCP Chứng khoán FPT năm 2023 là bao nhiêu tỷ đồng?",
+    "status": "error",
+    "error": "Failed after reflection attempts",
+    "result": {
+      "type": "error",
+      "data": null
+    },
+    "generated_code": "import pandas as pd\n\nfile_path_2023 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/FPT/2023/FPT_financial_statements_2023_separate/FPT_financial_statements_2023_separate_table_6.csv'\ndf = pd.read_csv(file_path_2023)\n\nfiltered_df = df[df['0'].astype(str).str.contains('Lợi nhuận sau thuế', case=False, na=False, regex=False)]\nif not filtered_df.empty:\n    result = extract_value(filtered_df.iloc[0], '1')\nelse:\n    raise ValueError(\"Metric not found in table\")",
+    "attempts": 3,
+    "parsed_query": {
+      "ticker": "FPT",
+      "year": "2023",
+      "metric": "Lợi nhuận sau thuế",
+      "ten_cong_ty": "FPT",
+      "so_nam": [
+        "2023"
+      ],
+      "noi_dung": "Lợi nhuận sau thuế",
+      "thao_tac": "trich_xuat",
+      "muc_tieu": "trich_xuat"
+    },
+    "discovered_tables": [
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/FPT/2023/FPT_financial_statements_2023_separate/FPT_financial_statements_2023_separate_table_6.csv",
+        "Ten_Bang": "Mẫu số B 02 – DN BÁO CÁO KẾT QUÀ HOẠT ĐỘNG KINH DOANH RIÊNG",
+        "rrf_score": 0.126862,
+        "Ma_Doanh_Nghiep": "FPT",
+        "Nam_Tai_Chinh": "2023",
+        "Loai_Bao_Cao": "separate",
+        "matched_sample": "Lợi nhuận sau thuế TNDN (60 = 50 - 51 - 52)",
+        "table_schema": [
+          "Ma_Doanh_Nghiep",
+          "Ten_Doanh_Nghiep",
+          "Nam_Tai_Chinh",
+          "Loai_Bao_Cao",
+          "Ten_Bang",
+          "Don_Vi_Tinh",
+          "Tep_Nguon",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "first_row_values": {
+          "0": "Mã số",
+          "1": "nan",
+          "2": "Thuyết minh",
+          "3": "Năm tài chính kết thúc ngày 31 tháng 12 năm",
+          "4": "Năm tài chính kết thúc ngày 31 tháng 12 năm"
+        }
+      },
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/FPT/2023/FPT_financial_statements_2023_consolidated/FPT_financial_statements_2023_consolidated_table_8.csv",
+        "Ten_Bang": "Mẫu số B 02 – DN/HN BÁO CÁO KẾT QUẢ HOẠT ĐỘNG KINH DOANH HỢP NHẤT",
+        "rrf_score": 0.126495,
+        "Ma_Doanh_Nghiep": "FPT",
+        "Nam_Tai_Chinh": "2023",
+        "Loai_Bao_Cao": "consolidated",
+        "matched_sample": "Lợi nhuận sau thuế TNDN (60 = 50 - 51 - 52)"
+      },
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/FPT/2023/FPT_financial_statements_2023_separate/FPT_financial_statements_2023_separate_table_5.csv",
+        "Ten_Bang": "BẢNG CÂN ĐỐI KẾ TOÁN RIÊNG tiếp theo",
+        "rrf_score": 0.126393,
+        "Ma_Doanh_Nghiep": "FPT",
+        "Nam_Tai_Chinh": "2023",
+        "Loai_Bao_Cao": "separate",
+        "matched_sample": "Lợi nhuận sau thuế (\"LNST\") chưa phân phối"
+      }
+    ],
+    "error_traceback": "Traceback (most recent call last):\n  File \"/tmp/ipykernel_58/3918322929.py\", line 67, in executor_node\n    validate_ast(code_str)\n  File \"/tmp/ipykernel_58/3918322929.py\", line 10, in validate_ast\n    if alias.name.split(\".\")[0] not in ALLOWED_MODULES:\n                                       ^^^^^^^^^^^^^^^\nNameError: name 'ALLOWED_MODULES' is not defined\n"
+  },
+  {
+    "id": 5,
+    "question": "Chi phí phạt của công ty mẹ SCR năm 2017 là bao nhiêu tỷ đồng?",
+    "status": "error",
+    "error": "Failed after reflection attempts",
+    "result": {
+      "type": "error",
+      "data": null
+    },
+    "generated_code": "import pandas as pd\n\nfile_path_2017 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/SCR/2017/SCR_financial_statements_2017_separate/SCR_financial_statements_2017_separate_table_59.csv'\ndf = pd.read_csv(file_path_2017)\n\nfiltered_df = df[df['0'].astype(str).str.contains('Chi phí phạt', case=False, na=False, regex=False)]\nif not filtered_df.empty:\n    result = extract_value(filtered_df.iloc[0], '1')\nelse:\n    raise ValueError(\"Metric not found in table\")",
+    "attempts": 3,
+    "parsed_query": {
+      "ticker": "SCR",
+      "year": "2017",
+      "metric": "Chi phí phạt",
+      "ten_cong_ty": "SCR",
+      "so_nam": [
+        "2017"
+      ],
+      "noi_dung": "Chi phí phạt",
+      "thao_tac": "trich_xuat",
+      "muc_tieu": "trich_xuat"
+    },
+    "discovered_tables": [
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/SCR/2017/SCR_financial_statements_2017_separate/SCR_financial_statements_2017_separate_table_59.csv",
+        "Ten_Bang": "32. Thu nhập khác 33. Chi phí khác",
+        "rrf_score": 0.132787,
+        "Ma_Doanh_Nghiep": "SCR",
+        "Nam_Tai_Chinh": "2017",
+        "Loai_Bao_Cao": "separate",
+        "matched_sample": "Chi phí phạt",
+        "table_schema": [
+          "Ma_Doanh_Nghiep",
+          "Ten_Doanh_Nghiep",
+          "Nam_Tai_Chinh",
+          "Loai_Bao_Cao",
+          "Ten_Bang",
+          "Don_Vi_Tinh",
+          "Tep_Nguon",
+          "0",
+          "1",
+          "2"
+        ],
+        "first_row_values": {
+          "0": "nan",
+          "1": "2017VND",
+          "2": "2016VND"
+        }
+      },
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/SCR/2017/SCR_financial_statements_2017_consolidated/SCR_financial_statements_2017_consolidated_table_62.csv",
+        "Ten_Bang": "37. Thu nhập khác 38. Chi phí khác",
+        "rrf_score": 0.132258,
+        "Ma_Doanh_Nghiep": "SCR",
+        "Nam_Tai_Chinh": "2017",
+        "Loai_Bao_Cao": "consolidated",
+        "matched_sample": "Chi phí phạt thuế"
+      },
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/SCR/2017/SCR_financial_statements_2017_consolidated/SCR_financial_statements_2017_consolidated_table_60.csv",
+        "Ten_Bang": "36. Chi phí quản lý doanh nghiệp",
+        "rrf_score": 0.030366,
+        "Ma_Doanh_Nghiep": "SCR",
+        "Nam_Tai_Chinh": "2017",
+        "Loai_Bao_Cao": "consolidated",
+        "matched_sample": "Chi phí khác"
+      }
+    ],
+    "error_traceback": "Traceback (most recent call last):\n  File \"/tmp/ipykernel_58/3918322929.py\", line 67, in executor_node\n    validate_ast(code_str)\n  File \"/tmp/ipykernel_58/3918322929.py\", line 10, in validate_ast\n    if alias.name.split(\".\")[0] not in ALLOWED_MODULES:\n                                       ^^^^^^^^^^^^^^^\nNameError: name 'ALLOWED_MODULES' is not defined\n"
+  },
+  {
+    "id": 6,
+    "question": "Lưu chuyển tiền thuần từ hoạt động kinh doanh của công ty mẹ VSC trong năm 2017 là bao nhiêu tỷ đồng?",
+    "status": "error",
+    "error": "Failed after reflection attempts",
+    "result": {
+      "type": "error",
+      "data": null
+    },
+    "generated_code": "import pandas as pd\n\nfile_path_2017 = '/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/VSC/2017/VSC_financial_statements_2017_consolidated/VSC_financial_statements_2017_consolidated_table_5.csv'\ndf = pd.read_csv(file_path_2017)\n\nfiltered_df = df[df['0'].astype(str).str.contains('Lưu chuyển tiền thuần', case=False, na=False, regex=False)]\nif not filtered_df.empty:\n    result = extract_value(filtered_df.iloc[0], '1')\nelse:\n    raise ValueError(\"Metric not found in table\")",
+    "attempts": 3,
+    "parsed_query": {
+      "ticker": "VSC",
+      "year": "2017",
+      "metric": "Lưu chuyển tiền thuần",
+      "ten_cong_ty": "VSC",
+      "so_nam": [
+        "2017"
+      ],
+      "noi_dung": "Lưu chuyển tiền thuần",
+      "thao_tac": "trich_xuat",
+      "muc_tieu": "trich_xuat"
+    },
+    "discovered_tables": [
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/VSC/2017/VSC_financial_statements_2017_consolidated/VSC_financial_statements_2017_consolidated_table_5.csv",
+        "Ten_Bang": "Ban hành theo Thông tư số 202/2014/TT-BTC",
+        "rrf_score": 0.132002,
+        "Ma_Doanh_Nghiep": "VSC",
+        "Nam_Tai_Chinh": "2017",
+        "Loai_Bao_Cao": "consolidated",
+        "matched_sample": "Lưu chuyển tiền thuần từ hoạt động tài chính",
+        "table_schema": [
+          "Ma_Doanh_Nghiep",
+          "Ten_Doanh_Nghiep",
+          "Nam_Tai_Chinh",
+          "Loai_Bao_Cao",
+          "Ten_Bang",
+          "Don_Vi_Tinh",
+          "Tep_Nguon",
+          "0",
+          "1",
+          "2",
+          "3"
+        ],
+        "first_row_values": {
+          "0": "nan",
+          "1": "Mã số",
+          "2": "2017 VND",
+          "3": "2016 VND"
+        }
+      },
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/VSC/2017/VSC_financial_statements_2017_separate/VSC_financial_statements_2017_separate_table_9.csv",
+        "Ten_Bang": "Mãu B 03 - DN Ban hành theo Thông tư số 200/2014/TT-BTC",
+        "rrf_score": 0.132002,
+        "Ma_Doanh_Nghiep": "VSC",
+        "Nam_Tai_Chinh": "2017",
+        "Loai_Bao_Cao": "separate",
+        "matched_sample": "Lưu chuyển tiền thuần từ hoạt động tài chính"
+      },
+      {
+        "csv_path": "/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data/VSC/2017/VSC_financial_statements_2017_separate/VSC_financial_statements_2017_separate_table_8.csv",
+        "Ten_Bang": "Mâu B 03 - DN Ban hành theo Thông tư số 200/2014/TT-BTC",
+        "rrf_score": 0.131099,
+        "Ma_Doanh_Nghiep": "VSC",
+        "Nam_Tai_Chinh": "2017",
+        "Loai_Bao_Cao": "separate",
+        "matched_sample": "Lưu chuyển tiền thuần từ hoạt động kinh doanh"
+      }
+    ],
+    "error_traceback": "Traceback (most recent call last):\n  File \"/tmp/ipykernel_58/3918322929.py\", line 67, in executor_node\n    validate_ast(code_str)\n  File \"/tmp/ipykernel_58/3918322929.py\", line 10, in validate_ast\n    if alias.name.split(\".\")[0] not in ALLOWED_MODULES:\n                                       ^^^^^^^^^^^^^^^\nNameError: name 'ALLOWED_MODULES' is not defined\n"
+  }
+]
