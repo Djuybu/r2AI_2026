@@ -1,24 +1,42 @@
-# Schema Mapper prompt — sử dụng LLM để mô tả ý nghĩa từng cột giá trị.
+# Schema Mapper prompt — sử dụng LLM để mô tả ý nghĩa từng cột giá trị tài chính.
 # Dùng bởi _enrich_column_descriptions() trong schema_mapper.py.
 
 system_prompt: |
   Bạn là chuyên gia phân tích dữ liệu tài chính Việt Nam.
-  Cho danh sách thông tin các cột trong bảng dữ liệu báo cáo tài chính (bao gồm tên cột, kiểu dữ liệu, các giá trị mẫu), hãy mô tả ngắn gọn (1 câu tiếng Việt) ý nghĩa của từng cột.
+  Nhiệm vụ của bạn là tư duy, phân tích cấu trúc bảng và ý nghĩa ngữ nghĩa của từng cột số liệu trong bảng báo cáo tài chính.
+
+  QUY TRÌNH TƯ DUY KHI TẠO MÔ TẢ CỘT:
+  1. Xác định nội dung & chủ đề của bảng (bỏ qua số thứ tự mục, ví dụ: "29. Doanh thu hoạt động tài chính" -> "Doanh thu hoạt động tài chính").
+  2. Phân tích chiều thời gian / kỳ kế toán của cột (năm cụ thể như 2020, đầu năm, cuối năm, ngày kết thúc...).
+  3. ĐẶC BIỆT NHẬN DIỆN ĐƠN VỊ ĐO LƯỜNG trong tên cột hoặc bảng:
+     - Nếu tên cột có từ "Triệu", "triệu" (như "Năm 2020Triệu", "Số cuối nămTriệu", "2021Triệu") -> Bạn PHẢI giải thích rõ đơn vị tính là triệu đồng / triệu VND để model ở các bước sau hiểu giá trị thực tế của số đo.
+     - Nếu tên cột có từ "Tỷ", "Nghìn", "USD", "VND" -> Bạn PHẢI chỉ rõ đơn vị tính tương ứng (ví dụ: đơn vị đo: tỷ đồng, đơn vị đo: USD).
+  4. Tạo mô tả ngắn gọn (1 câu tiếng Việt) kết hợp TÊN BẢNG + THỜI KỲ + ĐƠN VỊ TÍNH (nếu có).
+
+  Ví dụ:
+  - Bảng: "Doanh thu hoạt động tài chính", Cột: "2018" -> "Doanh thu hoạt động tài chính của các nội dung trong năm 2018"
+  - Bảng: "NGHĨA VỤ NỢ TIỀM ẨN", Cột: "Số cuối nămTriệu" -> "Nghĩa vụ nợ tiềm ẩn của các nội dung vào thời điểm cuối năm (đơn vị đo: triệu đồng)"
+  - Bảng: "Thu nhập lãi thuần", Cột: "Năm 2020Triệu" -> "Thu nhập lãi thuần của các nội dung trong năm 2020 (đơn vị đo: triệu đồng)"
+  - Bảng: "Bảng cân đối kế toán", Cột: "31/12/2022" -> "Số liệu cân đối kế toán của các chỉ tiêu tại ngày 31/12/2022"
+
   Trả về ONLY một JSON array với format:
-  [{"column_name": "tên cột", "column_description": "mô tả ngắn gọn"}]
-  KHÔNG giải thích, KHÔNG bọc markdown. Output raw JSON only.
+  [{"column_name": "tên cột", "column_description": "mô tả chi tiết kết hợp tên bảng, thời kỳ và đơn vị đo"}]
+  KHÔNG giải thích ngoài lề, KHÔNG bọc markdown. Output raw JSON only.
 
 user_prompt_template: |
-  Bảng: {table_name}
-  Danh sách cột cần mô tả:
+  Bảng báo cáo tài chính: {table_name}
+  Đơn vị tính từ metadata (nếu có): {don_vi_tinh}
+  Danh sách cột số liệu cần phân tích:
   {columns_info}
-  Hãy đưa ra mô tả ngắn gọn cho từng cột dựa vào tên và nội dung dữ liệu của cột:
+  Hãy phân tích và đưa ra mô tả chi tiết cho từng cột (kết hợp tên bảng, kỳ báo cáo và làm rõ đơn vị đo lường nếu có):
 
 json_schema: |
   [
     {
       "column_name": "tên cột",
-      "column_description": "mô tả ngắn gọn ý nghĩa cột"
+      "column_description": "mô tả chi tiết kết hợp tên bảng, thời kỳ và đơn vị đo"
     }
   ]
+
+
 

@@ -10,6 +10,7 @@ Workflow:
 7. Xuất và in ra Output JSON chuẩn phục vụ kiểm thử.
 """
 
+import re
 import time
 import json
 import yaml
@@ -34,6 +35,11 @@ METADATA_HEADER_COLUMNS = [
 ]
 
 
+_AUXILIARY_CODE_COLUMNS = {
+    "mã số", "mãsố", "thuyết minh", "thuyếtminh", "stt", "ghi chú", "note", "code"
+}
+
+
 def _is_cell_empty(val: Any) -> bool:
     """Kiểm tra xem một ô có bị rỗng, null hoặc chứa ký tự không có dữ liệu hay không."""
     if val is None or pd.isna(val):
@@ -51,41 +57,124 @@ def _is_numeric_value(val: Any) -> bool:
         s = s[1:-1]
     if s.startswith("-") or s.startswith("+"):
         s = s[1:]
-    return s.isdigit()
+    return s.isdigit() and len(s) > 0
 
 
 def _resolve_column_header(df: pd.DataFrame, col: str) -> str:
     """Xác định tên thực sự của cột.
 
-    Nếu tên cột là chữ rõ ràng -> giữ nguyên.
-    Nếu tên cột là số ('0', '1', '2',...) hoặc 'Unnamed:' -> quét các hàng header đầu tiên.
+    - Nếu tên cột là năm 4 chữ số (ví dụ: '2018', '2017') -> giữ nguyên.
+    - Nếu tên cột là chữ có nghĩa -> giữ nguyên.
+    - Nếu tên cột là số thứ tự positional ('0', '1', '2',...) hoặc 'Unnamed:' -> quét các hàng đầu tiên để tìm tiêu đề chữ.
     """
     raw_name = str(col).strip()
+
+    # 1. Nếu là năm 4 chữ số (19xx, 20xx) -> là header hợp lệ, giữ nguyên!
+    if re.match(r"^(19|20)\d{2}$", raw_name):
+        return raw_name
+
+    # 2. Nếu là tên rõ ràng (chứa chữ và không phải 'Unnamed:' hoặc positional số) -> giữ nguyên!
     if not raw_name.isdigit() and not raw_name.startswith("Unnamed:"):
         return raw_name
 
-    # 1. Kiểm tra hàng đầu tiên (row 0)
-    if len(df) > 0:
-        first_cell = df.iloc[0][col]
-        if not _is_cell_empty(first_cell):
-            first_str = str(first_cell).strip()
-            # Nếu chứa chữ hoặc ký tự ngày tháng / năm / đơn vị
-            if not _is_numeric_value(first_str) or any(c in first_str for c in ["/", "-", "20", "19"]):
-                return first_str
-
-    # 2. Duyệt qua tối đa 5 hàng đầu để tìm văn bản mô tả header
+    # 3. Quét các hàng header đầu tiên để tìm chuỗi văn bản tiêu đề
     for row_idx in range(min(5, len(df))):
         cell_val = df.iloc[row_idx][col]
         if not _is_cell_empty(cell_val):
             cell_str = str(cell_val).strip()
             if not _is_numeric_value(cell_str):
-                return cell_str
+                has_letters = bool(re.search(r"[a-zA-ZÀ-ỹ]", cell_str))
+                has_date_format = bool(re.search(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", cell_str))
+                if has_letters or has_date_format:
+                    return cell_str
 
-    # Fallback cho cột số 0 thường là cột chỉ tiêu
     if raw_name == "0":
         return "Chỉ tiêu"
 
     return raw_name
+
+
+def _clean_table_name(table_name: str) -> str:
+    """Làm sạch tên bảng báo cáo tài chính để phục vụ việc mô tả cột."""
+    if not table_name:
+        return "Báo cáo tài chính"
+    text = str(table_name).strip()
+    text = re.sub(r"^(\d+\s*[\.\)]|\w+\s*[\.\)]|\*\))\s*", "", text)
+    patterns_to_remove = [
+        r"Mẫu\s+B\s*\d+\s*-\s*DN.*",
+        r"Ban\s+hành\s+theo\s+Thông\s+tư.*",
+        r"Cho\s+năm\s+tài\s+chính\s+kết\s+thúc.*",
+        r"cho\s+năm\s+kết\s+thúc\s+ngày.*",
+        r"kết\s+thúc\s+ngày\s+\d+.*",
+        r"vào\s+ngày\s+\d+.*",
+        r"Tại\s+ngày\s+\d+.*",
+        r"\(?\s*tiếp\s+theo.*",
+        r"_\s*Phải\s+trả.*",
+    ]
+    for p in patterns_to_remove:
+        text = re.sub(p, "", text, flags=re.IGNORECASE).strip()
+    text = text.strip(" :,-_.\t\n()[]{}")
+    return text if len(text) >= 3 else table_name.strip()
+
+
+def _extract_unit_from_name(name: str, default_unit: Optional[str] = None) -> Optional[str]:
+    """Phát hiện đơn vị tính/đo lường từ tên cột hoặc metadata để làm rõ trong mô tả."""
+    lower = name.lower()
+    if "triệu" in lower or "trieu" in lower or "million" in lower:
+        return "triệu đồng"
+    if "tỷ" in lower or "ty" in lower or "billion" in lower:
+        return "tỷ đồng"
+    if "nghìn" in lower or "ngàn" in lower or "thousand" in lower:
+        return "nghìn đồng"
+    if "usd" in lower or "$" in lower:
+        return "USD"
+    if "vnd" in lower or "đồng" in lower:
+        return "VND"
+    if default_unit:
+        d_lower = str(default_unit).lower().strip()
+        if d_lower and d_lower not in {"vnd", "đồng", "dong", "none", "nan", "-"}:
+            return str(default_unit).strip()
+    return None
+
+
+def _build_default_column_description(
+    table_name: str, 
+    col_name: str, 
+    raw_column: str,
+    don_vi_tinh: Optional[str] = None,
+) -> str:
+    """Tạo mô tả chi tiết mặc định kết hợp ngữ cảnh tên bảng, thời kỳ và đơn vị tính của cột."""
+    clean_tbl = _clean_table_name(table_name)
+    name_check = f"{col_name} {raw_column}".strip()
+    unit = _extract_unit_from_name(name_check, don_vi_tinh)
+    unit_suffix = f" (đơn vị đo: {unit})" if unit else ""
+
+    # 1. Định dạng ngày cụ thể (ví dụ: 31/12/2024, 01/01/2023)
+    date_match = re.search(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", name_check)
+    if date_match:
+        date_str = date_match.group(0)
+        return f"{clean_tbl} của các nội dung tại ngày {date_str}{unit_suffix}"
+
+    # 2. Tìm năm 4 chữ số trong tên cột (ví dụ: '2018', '2017', 'Năm 2020Triệu', '2021Triệu', '2020 VND')
+    year_match = re.search(r"(19\d{2}|20\d{2})", name_check)
+    if year_match:
+        year = year_match.group(1)
+        return f"{clean_tbl} của các nội dung trong năm {year}{unit_suffix}"
+
+    # 3. Các từ khóa chỉ kỳ / thời điểm tương đối
+    lower_check = name_check.lower()
+    if "năm nay" in lower_check or "kỳ này" in lower_check:
+        return f"{clean_tbl} của các nội dung trong năm nay / kỳ hiện tại{unit_suffix}"
+    if "năm trước" in lower_check or "kỳ trước" in lower_check:
+        return f"{clean_tbl} của các nội dung trong năm trước / kỳ trước{unit_suffix}"
+    if "cuối năm" in lower_check or "cuối kỳ" in lower_check:
+        return f"{clean_tbl} của các nội dung vào thời điểm cuối năm / cuối kỳ{unit_suffix}"
+    if "đầu năm" in lower_check or "đầu kỳ" in lower_check:
+        return f"{clean_tbl} của các nội dung vào thời điểm đầu năm / đầu kỳ{unit_suffix}"
+
+    # 4. Fallback chung
+    display_col = col_name if col_name and not col_name.isdigit() else raw_column
+    return f"{clean_tbl} - chỉ tiêu {display_col}{unit_suffix}"
 
 
 def _get_columns_from_table(table: Dict[str, Any]) -> List[str]:
@@ -152,8 +241,16 @@ def _extract_useful_columns(
             # Step 4: Tìm tên cột thực tế
             resolved_name = _resolve_column_header(df, col)
 
-            # Xác định kiểu dữ liệu
-            data_type = "numeric" if (data_rows > 0 and numeric_count / data_rows >= 0.5) else "text"
+            # Phân loại auxiliary code column (Mã số, Thuyết minh, STT)
+            is_aux_code = (
+                resolved_name.strip().lower() in _AUXILIARY_CODE_COLUMNS 
+                or str(col).strip().lower() in _AUXILIARY_CODE_COLUMNS
+            )
+
+            if is_aux_code:
+                data_type = "text"
+            else:
+                data_type = "numeric" if (data_rows > 0 and numeric_count / data_rows >= 0.5) else "text"
 
             useful.append({
                 "raw_column": str(col),
@@ -176,7 +273,7 @@ def _find_label_column(
 ) -> Optional[str]:
     """Xác định cột nhãn (chứa tên chỉ tiêu tài chính) một cách động:
 
-    Chọn cột dạng 'text' đầu tiên trong danh sách useful_columns.
+    Chọn cột dạng 'text' đầu tiên trong danh sách useful_columns, ưu tiên cột không phải auxiliary code.
     """
     if not useful_columns:
         if columns:
@@ -184,12 +281,18 @@ def _find_label_column(
             return non_meta[0] if non_meta else columns[0]
         return None
 
-    # Tìm cột text đầu tiên
+    # Ưu tiên cột text không phải auxiliary code (như Mã số, Thuyết minh)
+    primary_text = [
+        c for c in useful_columns 
+        if c.get("data_type") == "text" and c.get("column_name", "").strip().lower() not in _AUXILIARY_CODE_COLUMNS
+    ]
+    if primary_text:
+        return primary_text[0]["raw_column"]
+
     text_cols = [c for c in useful_columns if c.get("data_type") == "text"]
     if text_cols:
         return text_cols[0]["raw_column"]
 
-    # Fallback cột đầu tiên trong useful_columns
     return useful_columns[0]["raw_column"]
 
 
@@ -227,6 +330,14 @@ def _find_value_column(
             for uc in value_candidates:
                 if uc["column_name"] == match:
                     return uc["raw_column"]
+
+    # Ưu tiên các cột numeric KHÔNG phải là cột mã số / thuyết minh
+    primary_numeric = [
+        c for c in value_candidates 
+        if c.get("data_type") == "numeric" and c.get("column_name", "").strip().lower() not in _AUXILIARY_CODE_COLUMNS
+    ]
+    if primary_numeric:
+        return primary_numeric[0]["raw_column"]
 
     # Default: Chọn cột dạng 'numeric' đầu tiên trong các cột ứng viên
     numeric_candidates = [c for c in value_candidates if c.get("data_type") == "numeric"]
@@ -309,20 +420,18 @@ def _enrich_column_descriptions(
     cfg: Config,
     useful_columns: List[Dict[str, Any]],
     table_name: str,
+    don_vi_tinh: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Gọi LLM để sinh mô tả ngắn gọn cho từng cột useful_columns dựa vào tên và nội dung."""
+    """Gọi LLM để sinh mô tả ngắn gọn kết hợp tên bảng, thời kỳ và đơn vị tính cho từng cột useful_columns."""
     if not useful_columns:
         return useful_columns
 
-    # Gán mô tả mặc định rõ ràng
+    # Gán mô tả mặc định chi tiết kết hợp tên bảng, thời kỳ và đơn vị tính
     for col in useful_columns:
         c_name = col.get("column_name", "")
-        d_type = col.get("data_type", "dữ liệu")
+        r_name = col.get("raw_column", "")
         if not col.get("column_description"):
-            if d_type == "numeric":
-                col["column_description"] = f"Cột giá trị số '{c_name}' trong bảng {table_name}"
-            else:
-                col["column_description"] = f"Cột danh mục/chỉ tiêu '{c_name}' trong bảng {table_name}"
+            col["column_description"] = _build_default_column_description(table_name, c_name, r_name, don_vi_tinh)
 
     try:
         from pipeline.src.llm_provider import check_vllm_health
@@ -345,12 +454,13 @@ def _enrich_column_descriptions(
         for uc in useful_columns:
             samples_str = ", ".join(uc.get("sample_values", [])[:3])
             columns_info_lines.append(
-                f"- Cột: '{uc['column_name']}' (Kiểu: {uc['data_type']}, Mẫu: [{samples_str}])"
+                f"- Cột: '{uc['column_name']}' (raw: '{uc.get('raw_column')}', Kiểu: {uc['data_type']}, Mẫu: [{samples_str}])"
             )
         columns_info = "\n".join(columns_info_lines)
 
         user_content = user_template.format(
-            table_name=table_name,
+            table_name=_clean_table_name(table_name),
+            don_vi_tinh=don_vi_tinh or "(không có thông tin riêng)",
             columns_info=columns_info,
         )
 
@@ -369,16 +479,19 @@ def _enrich_column_descriptions(
         desc_map = {}
         for item in descriptions_list:
             if isinstance(item, dict):
-                desc_map[item.get("column_name", "")] = item.get("column_description", "")
+                col_key = item.get("column_name") or item.get("raw_column") or ""
+                desc_map[col_key] = item.get("column_description", "")
 
         for col in useful_columns:
             c_name = col["column_name"]
+            r_name = col.get("raw_column", "")
             if c_name in desc_map and desc_map[c_name]:
                 col["column_description"] = desc_map[c_name]
+            elif r_name in desc_map and desc_map[r_name]:
+                col["column_description"] = desc_map[r_name]
             else:
-                # Kiểm tra fuzzy match với key trong desc_map
                 for k, v in desc_map.items():
-                    if k and (k in c_name or c_name in k) and v:
+                    if k and (k in c_name or c_name in k or k in r_name) and v:
                         col["column_description"] = v
                         break
 
@@ -396,9 +509,9 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
     Thực hiện quy trình:
     1. Truy vấn các cột từ bảng
     2. Xác nhận số hàng có dữ liệu > số hàng không có dữ liệu
-    3. Lựa chọn các cột useful
+    3. Lựa chọn các cột useful (chỉ giữ lại cột numeric)
     4. Tìm tên cột thực sự
-    5. Đưa ra mô tả cho từng cột
+    5. Đưa ra mô tả cho từng cột kết hợp tên bảng, thời kỳ và đơn vị tính
     6. Xác định động label_column và value_column
     7. In Output JSON ra console phục vụ kiểm thử.
     """
@@ -440,11 +553,25 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         raw_columns = list(df_full.columns)
         print(f"   📋 Đọc bảng '{table_name}' từ: {csv_path}")
 
+        # Trích xuất đơn vị tính từ metadata nếu có
+        don_vi_tinh = None
+        if "Don_Vi_Tinh" in df_full.columns and len(df_full) > 0:
+            first_dvt = df_full.iloc[0]["Don_Vi_Tinh"]
+            if not _is_cell_empty(first_dvt):
+                don_vi_tinh = str(first_dvt).strip()
+
         # ── 1, 2, 3, 4. Trích xuất useful_columns qua kiểm tra dữ liệu từng cột ──
-        useful_columns = _extract_useful_columns(df_full, metadata_cols=metadata_set)
+        all_useful_detected = _extract_useful_columns(df_full, metadata_cols=metadata_set)
 
         # ── 5. Xác định động label_column và value_column (Không dùng danh sách ưu tiên) ──
-        label_col = _find_label_column(useful_columns, raw_columns)
+        label_col = _find_label_column(all_useful_detected, raw_columns)
+
+        # Chỉ giữ lại các cột numeric trong useful_columns (loại bỏ các cột text theo yêu cầu)
+        useful_columns = [
+            c for c in all_useful_detected 
+            if c.get("data_type") == "numeric" and c.get("column_name", "").strip().lower() not in _AUXILIARY_CODE_COLUMNS
+        ]
+
         value_col = _find_value_column(useful_columns, label_col, tieu_chi_phu, raw_columns)
 
         column_mapping = {
@@ -464,7 +591,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
             print(f"   📂 Phát hiện {len(sub_sections)} danh mục con (Sub-sections).")
 
         # ── 7. Sinh mô tả ngữ nghĩa cho các cột bằng LLM ──
-        useful_columns = _enrich_column_descriptions(cfg, useful_columns, table_name)
+        useful_columns = _enrich_column_descriptions(cfg, useful_columns, table_name, don_vi_tinh=don_vi_tinh)
 
         schema = {
             "useful_columns": useful_columns,
