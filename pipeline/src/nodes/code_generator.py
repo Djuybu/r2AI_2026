@@ -256,6 +256,23 @@ def _build_files_context(
             total_str = f", total_value={total_val}" if total_val is not None else ", total_value=N/A"
             lines.append(f"  • '{sec_name}' (hàng {sec_range[0]}–{sec_range[1]}{total_str})")
 
+    # Add sample row labels from the label column so LLM sees actual text entries
+    label_col = column_mapping.get("label_column")
+    if discovered_tables and label_col:
+        from pathlib import Path
+        c_path = discovered_tables[0].get("csv_path")
+        if c_path and Path(c_path).exists():
+            try:
+                sub_df = pd.read_csv(c_path)
+                if label_col in sub_df.columns:
+                    sample_labels = sub_df[label_col].dropna().astype(str).head(15).tolist()
+                    if sample_labels:
+                        lines.append(f"\nMẪU NHÃN HÀNG THỰC TẾ TRONG CỘT '{label_col}':")
+                        for lbl in sample_labels:
+                            lines.append(f"  • '{lbl}'")
+            except Exception:
+                pass
+
     return "\n".join(lines)
 
 

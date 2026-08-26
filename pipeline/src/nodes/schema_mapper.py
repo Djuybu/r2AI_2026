@@ -194,6 +194,16 @@ def _get_columns_from_table(table: Dict[str, Any]) -> List[str]:
 # Workflow Steps: Useful Columns & Dynamic Mapping
 # ─────────────────────────────────────────────────────────────
 
+def _is_code_or_index_column(series: pd.Series) -> bool:
+    """Check if a column contains mostly index numbers, Roman numerals, or short codes (e.g. 1, 2, I, II, 411a, A, B)."""
+    non_empty = [str(x).strip() for x in series if not _is_cell_empty(x)]
+    if not non_empty:
+        return False
+    code_pattern = re.compile(r"^(?:[0-9]{1,4}[a-z]?|[IVXLCDM]+|[A-Z]|\(\w+\)|\d+\.\d+)$", re.IGNORECASE)
+    code_matches = sum(1 for s in non_empty if code_pattern.match(s) or len(s) <= 3)
+    return (code_matches / len(non_empty)) >= 0.6
+
+
 def _extract_useful_columns(
     df: pd.DataFrame,
     label_col: Optional[str] = None,
@@ -241,10 +251,11 @@ def _extract_useful_columns(
             # Step 4: Tìm tên cột thực tế
             resolved_name = _resolve_column_header(df, col)
 
-            # Phân loại auxiliary code column (Mã số, Thuyết minh, STT)
+            # Phân loại auxiliary code column (Mã số, Thuyết minh, STT, Roman numerals, short index codes)
             is_aux_code = (
                 resolved_name.strip().lower() in _AUXILIARY_CODE_COLUMNS 
                 or str(col).strip().lower() in _AUXILIARY_CODE_COLUMNS
+                or _is_code_or_index_column(series)
             )
 
             if is_aux_code:
@@ -256,6 +267,7 @@ def _extract_useful_columns(
                 "raw_column": str(col),
                 "column_name": resolved_name,
                 "data_type": data_type,
+                "is_aux_code": is_aux_code,
                 "data_rows_count": data_rows,
                 "empty_rows_count": empty_rows,
                 "sample_values": sample_values,
@@ -281,17 +293,23 @@ def _find_label_column(
             return non_meta[0] if non_meta else columns[0]
         return None
 
-    # Ưu tiên cột text không phải auxiliary code (như Mã số, Thuyết minh)
+    # Ưu tiên cột text không phải auxiliary code (như Mã số, Thuyết minh, Roman numerals)
     primary_text = [
         c for c in useful_columns 
-        if c.get("data_type") == "text" and c.get("column_name", "").strip().lower() not in _AUXILIARY_CODE_COLUMNS
+        if c.get("data_type") == "text" 
+        and not c.get("is_aux_code", False)
+        and c.get("column_name", "").strip().lower() not in _AUXILIARY_CODE_COLUMNS
     ]
     if primary_text:
         return primary_text[0]["raw_column"]
 
-    text_cols = [c for c in useful_columns if c.get("data_type") == "text"]
+    text_cols = [c for c in useful_columns if c.get("data_type") == "text" and not c.get("is_aux_code", False)]
     if text_cols:
         return text_cols[0]["raw_column"]
+
+    text_cols_any = [c for c in useful_columns if c.get("data_type") == "text"]
+    if text_cols_any:
+        return text_cols_any[0]["raw_column"]
 
     return useful_columns[0]["raw_column"]
 
