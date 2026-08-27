@@ -27,6 +27,7 @@ import logging
 import pickle
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -586,9 +587,209 @@ def get_first_meaningful_column(df: pd.DataFrame) -> Tuple[Optional[str], pd.Ser
     return first_col, df[first_col]
 
 
+def strip_accents(text: str) -> str:
+    """Normalize Vietnamese text by stripping accents for robust fuzzy matching."""
+    if not text:
+        return ""
+    t = text.replace("đ", "d").replace("Đ", "D")
+    t = unicodedata.normalize("NFD", t)
+    return "".join(c for c in t if unicodedata.category(c) != "Mn").lower()
+
+
+def advanced_clean_query_content(noi_dung_input: str, ticker: str = "", so_nam: list = None) -> str:
+    if not noi_dung_input:
+        return ""
+    text = str(noi_dung_input)
+    text = re.sub(r"\([A-Za-z]{2,5}\)", "", text)
+    text = re.sub(r"\b20\d{2}\b", "", text)
+    if ticker:
+        text = re.sub(r"\b" + re.escape(ticker) + r"\b", "", text, flags=re.IGNORECASE)
+
+    patterns = [
+        r"là bao nhiêu.*",
+        r"bao nhiêu.*",
+        r"của công ty mẹ.*",
+        r"của ngân hàng.*",
+        r"của ctcp.*",
+        r"của tập đoàn.*",
+        r"của công ty.*",
+        r"vào ngày.*",
+        r"đến ngày.*",
+        r"tại ngày.*",
+        r"cuối năm.*",
+        r"đầu năm.*",
+        r"trong năm.*",
+        r"năm.*",
+        r"báo cáo tài chính.*",
+        r"báo cáo riêng.*",
+        r"báo cáo hợp nhất.*",
+    ]
+    for p in patterns:
+        text = re.sub(p, "", text, flags=re.IGNORECASE)
+
+    prefix_patterns = [
+        r"^\s*tổng\s+số\s+lượng\s+",
+        r"^\s*tổng\s+số\s+dư\s+",
+        r"^\s*tổng\s+số\s+",
+        r"^\s*tổng\s+giá\s+trị\s+thuần\s+",
+        r"^\s*tổng\s+giá\s+trị\s+",
+        r"^\s*tổng\s+tỷ\s+lệ\s+",
+        r"^\s*tổng\s+chi\s+phí\s+",
+        r"^\s*tổng\s+cam\s+kết\s+",
+        r"^\s*tổng\s+",
+        r"^\s*số\s+dư\s+",
+        r"^\s*giá\s+trị\s+còn\s+lại\s+của\s+",
+        r"^\s*giá\s+trị\s+thuần\s+",
+        r"^\s*giá\s+trị\s+",
+        r"^\s*khoản\s+phải\s+thu\s+từ\s+",
+        r"^\s*khoản\s+phải\s+thu\s+",
+        r"^\s*khoản\s+",
+        r"^\s*chỉ\s+tiêu\s+",
+        r"^\s*mức\s+",
+    ]
+    for pp in prefix_patterns:
+        text = re.sub(pp, "", text, flags=re.IGNORECASE)
+
+    suffix_patterns = [
+        r"\(tổng cộng\)",
+        r"\(tổng số\)",
+        r"triệu đồng.*",
+        r"tỷ đồng.*",
+        r"nghìn đồng.*",
+        r"đồng.*",
+        r"phần trăm.*",
+    ]
+    for sp in suffix_patterns:
+        text = re.sub(sp, "", text, flags=re.IGNORECASE)
+
+    cleaned = text.strip(" ,.?:;\t\n()[]{}")
+    return cleaned if len(cleaned) >= 2 else noi_dung_input.strip()
+
+
+def compute_domain_boost(
+    query_text: str,
+    raw_query: str,
+    table_name: str,
+    line_text: str,
+    col_names: list,
+    all_table_text: str = ""
+) -> float:
+    q_low = f"{query_text} {raw_query}".lower()
+    q_norm = strip_accents(q_low)
+    tb_low = (table_name or "").lower()
+    tb_norm = strip_accents(tb_low)
+    lt_low = (line_text or "").lower()
+    lt_norm = strip_accents(lt_low)
+    all_low = (all_table_text or "").lower()
+    all_norm = strip_accents(all_low)
+    cols_norm = [strip_accents(str(c)) for c in col_names]
+    
+    boost = 0.0
+
+    # 1. Cash flow activity
+    if "đầu tư" in q_low and "lưu chuyển" in q_low:
+        if "hoạt động đầu tư" in tb_low or "hoạt động đầu tư" in lt_low or "hoat dong dau tu" in tb_norm:
+            boost += 0.80
+        if "hoạt động tài chính" in tb_low or "hoạt động tài chính" in lt_low or "hoạt động kinh doanh" in tb_low:
+            boost -= 0.60
+    elif "tài chính" in q_low and "lưu chuyển" in q_low:
+        if "hoạt động tài chính" in tb_low or "hoạt động tài chính" in lt_low or "hoat dong tai chinh" in tb_norm:
+            boost += 0.80
+        if "hoạt động đầu tư" in tb_low or "hoạt động kinh doanh" in tb_low:
+            boost -= 0.60
+    elif "kinh doanh" in q_low and "lưu chuyển" in q_low:
+        if "hoạt động kinh doanh" in tb_low or "hoạt động kinh doanh" in lt_low or "hoat dong kinh doanh" in tb_norm or "gián tiếp" in tb_low or "gian tiep" in tb_norm:
+            boost += 0.80
+        if "hoạt động tài chính" in tb_low or "hoạt động đầu tư" in tb_low:
+            boost -= 0.60
+
+    # 2. Balance sheet: Vay ngắn hạn / Nợ phải trả vs Phải thu / Cho vay
+    if any(k in q_low for k in ["vay ngắn hạn", "vay dài hạn", "nợ ngắn hạn", "nợ dài hạn", "phải trả"]):
+        if any(k in tb_low for k in ["nguồn vốn", "nợ phải trả", "vay và nợ"]) or any(k in lt_low for k in ["vay và nợ", "vay ngắn hạn"]):
+            boost += 0.80
+        if any(k in tb_low or k in lt_low for k in ["phải thu về cho vay", "cho vay"]):
+            boost -= 0.60
+        if "tài sản" in tb_low and not any(k in tb_low for k in ["nguồn vốn", "nợ phải trả"]):
+            boost -= 0.40
+
+    if "tiền gửi" in q_low and any(k in q_low for k in ["số dư", "tại các tctd", "tổ chức tín dụng"]):
+        if any(k in tb_low for k in ["chi phí lãi", "trả lãi"]):
+            boost -= 0.60
+        if any(k in tb_low or k in lt_low for k in ["tiền gửi và cho vay", "tiền gửi tại", "tài sản", "bảng cân đối"]):
+            boost += 0.60
+
+    # 3. Ownership / Voting rights % vs Equity VND
+    if any(k in q_low for k in ["quyền biểu quyết", "tỷ lệ biểu quyết", "tỷ lệ sở hữu", "tỷ lệ"]):
+        if any("bieu quyet" in c for c in cols_norm) or any("so huu" in c for c in cols_norm):
+            boost += 1.00
+        if any(k in tb_low for k in ["công ty con", "công ty liên kết", "công ty liên doanh", "cấu trúc công ty", "thuyết minh", "đầu tư vào công ty"]):
+            boost += 0.70
+        if any(k in lt_low for k in ["tỷ lệ quyền biểu quyết", "tỷ lệ biểu quyết"]):
+            boost += 0.70
+        if "vốn chủ sở hữu" in tb_low and "cổ phiếu" in lt_low:
+            boost -= 0.40
+
+    # 4. Loan by industry / sector
+    if any(k in q_low for k in ["thương mại", "ngành nghề", "ngành"]):
+        if "ngành nghề kinh doanh" in tb_low or "theo ngành" in tb_low or "nganh nghe kinh doanh" in tb_norm:
+            boost += 0.90
+        if "thương mại" in lt_low or "thuong mai" in lt_norm:
+            boost += 0.90
+        if "rủi ro tín dụng" in tb_low and "ngành" not in tb_low:
+            boost -= 0.40
+
+    # 5. Lease commitments
+    if any(k in q_low for k in ["thuê hoạt động", "cho thuê hoạt động", "cam kết thuê", "cam kết cho thuê"]):
+        if any(k in tb_low for k in ["cam kết cho thuê", "cam kết thuê", "các cam kết"]):
+            boost += 0.90
+        if "phải thu ngắn hạn" in tb_low:
+            boost -= 0.50
+
+    # 6. Goodwill / Intangible Assets
+    if "lợi thế thương mại" in q_low or "loi the thuong mai" in q_norm:
+        if any(k in tb_norm for k in ["loi the thuong mai", "loi the", "tai san vo hinh", "tai san co dinh vo hinh"]):
+            boost += 0.90
+        if "loi the thuong mai" in lt_norm or "loi the" in lt_norm:
+            boost += 0.70
+        if "đối chiếu chi phí thuế" in tb_low or "lưu chuyển tiền tệ" in tb_low or "trình bày lại" in tb_low:
+            boost -= 0.60
+
+    # 7. 3rd-party named entities
+    third_party_entities = ["bảo việt nhân thọ", "visorutex", "an phong", "gia định", "hưng phú"]
+    for ent in third_party_entities:
+        ent_norm = strip_accents(ent)
+        if ent in q_low or ent_norm in q_norm:
+            if ent in lt_low or ent_norm in lt_norm:
+                boost += 1.20
+            elif ent in all_low or ent_norm in all_norm:
+                boost += 0.80
+
+    # 8. Salary / Labor expenses (Chi phí lương / nhân viên)
+    if any(k in q_low for k in ["lương", "chi phí lương", "nhân viên", "luong"]):
+        if any(k in tb_low for k in ["chi phí quản lý", "chi phí hoạt động", "chi phí nhân viên", "chi phí sản xuất", "chi phi quan ly"]):
+            boost += 0.80
+        if any(k in lt_norm for k in ["chi phi luong", "luong", "chi phi nhan vien", "luong va khac khoan khac theo luong", "luong va cac khoan"]):
+            boost += 1.00
+        if "chi phí trả trước" in tb_low and "lương" not in lt_low:
+            boost -= 0.50
+
+    # 9. Trade prepayments (Trả trước người bán dài hạn)
+    if "trả trước" in q_low or "tra truoc" in q_norm:
+        if "dài hạn" in q_low or "dai han" in q_norm:
+            if "phải thu dài hạn" in tb_low or "phai thu dai han" in tb_norm or "tra truoc cho nguoi ban dai han" in tb_norm:
+                boost += 0.80
+            if "tra truoc cho nguoi ban dai han" in lt_norm:
+                boost += 1.00
+            if "nợ xấu" in tb_low or "no xau" in tb_norm:
+                boost -= 0.60
+
+    return boost
+
+
 def search_by_company_and_content(
     company_name: str,
     content: str,
+    raw_query: str = "",
     year: Optional[str] = None,
     report_type: Optional[str] = None,
     top_k: Optional[int] = None,
@@ -598,11 +799,12 @@ def search_by_company_and_content(
     1. Giới hạn/lọc toàn bộ danh sách bảng theo tên công ty (mã chứng khoán) & năm tài chính (không giới hạn số bảng).
     2. Rút ra tất cả các dòng chỉ tiêu ở CỘT ĐẦU TIÊN CÓ NGHĨA của TOÀN BỘ các bảng đã lọc (đọc toàn bộ dòng trong file CSV).
     3. Thực thi On-the-fly Hybrid Search (BM25 + SentenceTransformer Vector + RRF) trực tiếp trên tập dòng chỉ tiêu này.
-    4. Xếp hạng các bảng dựa theo chỉ tiêu có điểm số cao nhất trong từng bảng.
+    4. Áp dụng domain boost & diacritic normalization để xếp hạng chuẩn xác các bảng.
 
     Args:
         company_name: Tên công ty hoặc mã chứng khoán (VD: 'Vinamilk', 'VNM', 'FPT')
         content: Nội dung/chỉ tiêu nằm ở cột đầu tiên có nghĩa (VD: 'Doanh thu thuần')
+        raw_query: Chuỗi câu hỏi tự nhiên gốc để hỗ trợ quy tắc ngữ nghĩa
         year: Năm báo cáo tài chính (VD: '2023')
         report_type: Loại báo cáo ('separate' | 'consolidated')
         top_k: Số lượng bảng kết quả trả về (Nếu None hoặc <= 0, trả về TOÀN BỘ danh sách bảng đã xếp hạng).
@@ -636,8 +838,8 @@ def search_by_company_and_content(
     logger.info("Direction A Search: Company='%s' (Ticker='%s') | Year=%s | Content='%s'",
                 company_name, ticker, year, content)
 
-    content_clean = content.strip() if content else ""
-    content_lower = content_clean.lower()
+    content_clean = advanced_clean_query_content(content, ticker, [year] if year else None)
+    content_norm = strip_accents(content_clean)
 
     # 2. Lọc TOÀN BỘ danh sách bảng thuộc về (Ticker, Year)
     if ticker and _doc_mapping and content_clean:
@@ -656,79 +858,128 @@ def search_by_company_and_content(
         logger.info("Found %d candidate tables for ticker='%s', year='%s'", len(candidates), ticker, year)
 
         if candidates:
-            # 3. Thu thập tất cả các dòng chỉ tiêu ở Cột đầu tiên từ TOÀN BỘ các bảng ứng viên
             row_items: List[Dict[str, Any]] = []
             for doc in candidates:
                 raw_csv_path = doc.get("csv_path", "")
                 csv_path_resolved = _resolve_local_csv_path(raw_csv_path)
                 if csv_path_resolved and csv_path_resolved.exists():
                     try:
-                        # Đọc TOÀN BỘ dòng trong file CSV thay vì giới hạn 100 dòng
                         df_sample = pd.read_csv(csv_path_resolved)
                         if not df_sample.empty:
                             col_name, col_series = get_first_meaningful_column(df_sample)
+                            tb_name = ""
+                            if "Ten_Bang" in df_sample.columns:
+                                first_tb = df_sample["Ten_Bang"].dropna()
+                                if not first_tb.empty:
+                                    tb_name = str(first_tb.iloc[0]).strip()
+                            if not tb_name:
+                                tb_name = doc.get("Ten_Bang", "")
+                            col_names = [str(c) for c in df_sample.columns]
+                            all_text = " ".join(df_sample.astype(str).values.flatten())[:1500]
+
                             for r_idx, val in col_series.dropna().items():
                                 val_str = str(val).strip()
                                 if len(val_str) >= 2:
+                                    comb = f"{tb_name} - {val_str}"
                                     row_items.append({
                                         "text": val_str,
+                                        "combined_text": comb,
                                         "col_name": str(col_name),
+                                        "col_names": col_names,
                                         "row_idx": r_idx,
                                         "doc": doc,
+                                        "table_name": tb_name,
                                         "csv_path": str(csv_path_resolved),
+                                        "all_table_text": all_text,
                                     })
                     except Exception as exc:
                         logger.debug("Error reading CSV %s: %s", csv_path_resolved, exc)
 
             if row_items:
-                logger.info("Collected %d line items from Column 0 across candidate tables. Running On-the-fly Hybrid Search...", len(row_items))
+                logger.info("Collected %d line items from Column 0 across candidate tables. Running Advanced Hybrid Search...", len(row_items))
 
-                # --- A. BM25 Search trên các dòng chỉ tiêu ---
-                corpus_tokens = [tokenize(item["text"]) for item in row_items]
+                corpus_tokens = [tokenize(item["combined_text"]) for item in row_items]
                 bm25_model = BM25Okapi(corpus_tokens)
                 query_tokens = tokenize(content_clean)
                 bm25_scores = bm25_model.get_scores(query_tokens)
-                sparse_ranked_indices = np.argsort(bm25_scores)[::-1]
-                sparse_rank_map = {idx: rank + 1 for rank, idx in enumerate(sparse_ranked_indices)}
 
-                # --- B. Dense Vector Search trên các dòng chỉ tiêu ---
-                query_vec = _embed_model.encode(content_clean, normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False)
-                line_texts = [item["text"] for item in row_items]
-                line_vecs = _embed_model.encode(line_texts, batch_size=256, normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False)
-                dense_scores = np.dot(line_vecs, query_vec)  # Cosine similarity
-                dense_ranked_indices = np.argsort(dense_scores)[::-1]
-                dense_rank_map = {idx: rank + 1 for rank, idx in enumerate(dense_ranked_indices)}
-
-                # --- C. Reciprocal Rank Fusion (RRF) trên từng chỉ tiêu ---
-                line_fusion: Dict[str, Dict[str, Any]] = {}
+                pre_scores = []
                 for idx, item in enumerate(row_items):
+                    d_boost = compute_domain_boost(
+                        content_clean,
+                        raw_query,
+                        item["table_name"],
+                        item["text"],
+                        item["col_names"],
+                        item.get("all_table_text", "")
+                    )
+                    t_norm = strip_accents(item["text"])
+                    comb_norm = strip_accents(item["combined_text"])
+
+                    sub_boost = 0.0
+                    if content_norm in t_norm or (len(t_norm) >= 4 and t_norm in content_norm):
+                        sub_boost = 0.60
+                    elif content_norm in comb_norm:
+                        sub_boost = 0.40
+
+                    pre_scores.append(bm25_scores[idx] + (d_boost * 15.0) + (sub_boost * 15.0))
+
+                top_indices = np.argsort(pre_scores)[::-1][:150]
+
+                query_vec = _embed_model.encode(content_clean, normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False)
+                candidate_texts = [row_items[idx]["combined_text"] for idx in top_indices]
+                cand_vecs = _embed_model.encode(candidate_texts, batch_size=128, normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False)
+                dense_scores = np.dot(cand_vecs, query_vec)
+
+                s_ranks = {orig_idx: rank + 1 for rank, orig_idx in enumerate(top_indices)}
+                dense_rank_indices = np.argsort(dense_scores)[::-1]
+                d_ranks = {top_indices[pos]: rank + 1 for rank, pos in enumerate(dense_rank_indices)}
+
+                line_fusion: Dict[str, Dict[str, Any]] = {}
+                for pos, idx in enumerate(top_indices):
+                    item = row_items[idx]
                     csv_path = item["csv_path"]
-                    d_rank = dense_rank_map[idx]
-                    s_rank = sparse_rank_map[idx]
-                    rrf = (1.0 / (RRF_K + d_rank)) + (1.0 / (RRF_K + s_rank))
+                    d_r = d_ranks.get(idx, 100)
+                    s_r = s_ranks.get(idx, 100)
 
-                    # Cộng thưởng nếu chuỗi exact substring khớp (hoặc hàng nhãn chứa trong chuỗi truy vấn)
-                    t_lower = item["text"].lower()
-                    if content_lower in t_lower or (len(t_lower) >= 4 and t_lower in content_lower):
-                        rrf += 0.1
+                    rrf = (1.0 / (RRF_K + d_r)) + (1.0 / (RRF_K + s_r))
 
-                    # Mỗi bảng giữ chỉ tiêu có điểm RRF cao nhất
+                    t_norm = strip_accents(item["text"])
+                    comb_norm = strip_accents(item["combined_text"])
+
+                    if content_norm in t_norm or (len(t_norm) >= 4 and t_norm in content_norm):
+                        rrf += 0.30
+                    elif content_norm in comb_norm:
+                        rrf += 0.20
+
+                    d_boost = compute_domain_boost(
+                        content_clean,
+                        raw_query,
+                        item["table_name"],
+                        item["text"],
+                        item["col_names"],
+                        item.get("all_table_text", "")
+                    )
+                    rrf += d_boost
+
+                    merged_doc = dict(item["doc"])
+                    merged_doc.update({
+                        "csv_path": csv_path,
+                        "Ten_Bang": item["table_name"],
+                        "rrf_score": round(rrf, 6),
+                        "dense_rank": d_r,
+                        "sparse_rank": s_r,
+                        "content_matched": True,
+                        "matched_col_name": item["col_name"],
+                        "matched_sample": item["text"],
+                        "matched_row_idx": item["row_idx"],
+                    })
                     if csv_path not in line_fusion or rrf > line_fusion[csv_path]["rrf_score"]:
-                        line_fusion[csv_path] = {
-                            "csv_path": csv_path,
-                            "rrf_score": round(rrf, 6),
-                            "dense_rank": d_rank,
-                            "sparse_rank": s_rank,
-                            "content_matched": True,
-                            "matched_col_name": item["col_name"],
-                            "matched_sample": item["text"],
-                            "matched_row_idx": item["row_idx"],
-                            **item["doc"]
-                        }
+                        line_fusion[csv_path] = merged_doc
 
                 fused_tables = sorted(line_fusion.values(), key=lambda x: x["rrf_score"], reverse=True)
                 if fused_tables:
-                    logger.info("Direction A Hybrid Search successfully ranked %d tables.", len(fused_tables))
+                    logger.info("Advanced Hybrid Search successfully ranked %d tables.", len(fused_tables))
                     if top_k is not None and top_k > 0:
                         return fused_tables[:top_k]
                     return fused_tables

@@ -392,7 +392,33 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             prompt_data = load_yaml_prompt(cfg, "reflection.yaml")
             system_prompt = prompt_data["system_prompt"]
 
+            if len(discovered_tables) > 1:
+                # Multi-table fallback: rotate candidate tables on retry
+                shift = retry_count % len(discovered_tables)
+                discovered_tables = discovered_tables[shift:] + discovered_tables[:shift]
+                first_table_path = discovered_tables[0]["csv_path"]
+                schema_info = _extract_table_schema(first_table_path)
+                table_schema = schema_info["table_schema"]
+                first_row_values = schema_info["first_row_values"]
+                state["discovered_tables"] = discovered_tables
+                state["matched_table_path"] = first_table_path
+                state["table_schema"] = table_schema
+                state["first_row_values"] = first_row_values
+                from pipeline.src.nodes.schema_mapper import schema_mapper_node
+                try:
+                    temp_state = schema_mapper_node(state, cfg)
+                    column_mapping = temp_state.get("column_mapping", {})
+                    schema = temp_state.get("schema", {})
+                    state["column_mapping"] = column_mapping
+                    state["schema"] = schema
+                    label_col = _resolve_label_column(table_schema, first_row_values, column_mapping, schema=schema)
+                    value_col = _resolve_value_column(table_schema, first_row_values, parsed_query, column_mapping, label_col, schema=schema)
+                    files_context = _build_files_context(discovered_tables, column_mapping, table_schema, first_row_values, schema=schema)
+                except Exception as e:
+                    print(f"⚠️ Multi-table fallback schema mapping failed: {e}")
+
             print(f"🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần {retry_count})...")
+            print(f"   - Bảng được chọn: {discovered_tables[0].get('Ten_Bang')} ({discovered_tables[0].get('csv_path')})")
             print(f"   - Traceback Lỗi:\n{error_traceback.strip()}")
 
             retry_forcing_msg = (
