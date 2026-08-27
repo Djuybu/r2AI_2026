@@ -90,7 +90,7 @@ def sanitize_code_str(code_str: str) -> str:
         return ""
     # Fix bug 1: `if 'X' in df[col].str.contains(...)` -> replace with `if (df[col].str.contains(...)).any():`
     code_str = re.sub(
-        r"if\s+['\"].*?['\"]\s+in\s+([^\n:]+?\.str\.contains\([^:\n]+\)):\s*",
+        r"if\s+['\"].*?['\"]\s+in\s+([^\n:]+?\.str\.contains\([^:\n]+\)):[ \t]*",
         r"if (\1).any():",
         code_str
     )
@@ -99,6 +99,12 @@ def sanitize_code_str(code_str: str) -> str:
     code_str = re.sub(
         r"df\[\s*df\[(['\"].*?['\"])\s*\]\s*==\s*(['\"].*?['\"])\s*\]",
         r"df[df[\1].astype(str).str.contains(\2, case=False, na=False, regex=False)]",
+        code_str
+    )
+    # Fix bug 3: Ensure automatic insertion of `.astype(str)` before any `.str.` operations if missing
+    code_str = re.sub(
+        r"(df\[\s*['\"][^'\"]+['\"]\s*\])(?!\.astype\(str\))\.str\.",
+        r"\1.astype(str).str.",
         code_str
     )
     return code_str

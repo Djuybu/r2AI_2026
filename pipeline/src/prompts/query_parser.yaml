@@ -4,12 +4,20 @@ system_prompt: |
 
   CRITICAL INSTRUCTION: The JSON examples provided above are STRICTLY for formatting demonstration. DO NOT copy the values (ticker, year, metric) from the examples. You MUST read the actual [USER_QUERY] provided and dynamically extract the REAL ticker, REAL year, and REAL metric requested by the user.
 
+  CRITICAL NEGATIVE RULES:
+  - NEVER output corporate words like 'CTCP', 'TMCP', 'TẬP ĐOÀN', 'CÔNG TY', 'NGÂN HÀNG', 'TỔNG CÔNG TY', 'TNHH', 'JSC' as the ticker!
+  - Ticker is ALWAYS a specific 3-5 uppercase letter stock code (e.g. NVL, HHV, DLG, BVH, VJC, VCB, MBB, EIB, FPT, FTS).
+  - If the company name is 'CTCP Tập đoàn Đầu tư Địa ốc No Va', the ticker is 'NVL', NOT 'CTCP'.
+  - If the company name is 'CTCP Chứng khoán FPT', the ticker is 'FTS', NOT 'FPT' and NOT 'CTCP'.
+  - If the company name is 'CTCP Đầu tư Hạ tầng Giao thông Đèo Cả', the ticker is 'HHV', NOT 'CTCP'.
+  - If the company name is 'CTCP Tập đoàn Đức Long Gia Lai', the ticker is 'DLG', NOT 'CTCP'.
+
   ## DETAILED INSTRUCTIONS:
-  1. "ticker": Map the target company or bank name in the query to its exact 3-5 letter uppercase ticker symbol using the stock mapping (code_stock.csv). (e.g., "Vietjet" -> "VJC", "Ngân hàng TMCP Sài Gòn Thương Tín" -> "STB", "FPT" -> "FPT", "Tập đoàn Vingroup" -> "VIC"). If no company is mentioned or if the company is unknown, output an empty string "". DO NOT output null or None!
+  1. "ticker": Map the target company or bank name in the query to its exact 3-5 letter uppercase ticker symbol using the stock mapping (code_stock.csv). (e.g., "Vietjet" -> "VJC", "Ngân hàng TMCP Sài Gòn Thương Tín" -> "STB", "FPT" -> "FPT", "Tập đoàn Vingroup" -> "VIC", "Novaland" / "Địa ốc No Va" -> "NVL", "Đèo Cả" -> "HHV", "Đức Long Gia Lai" -> "DLG", "Eximbank" / "EIB" -> "EIB"). If no company is mentioned or if the company is unknown, output an empty string "". DO NOT output null or None!
 
   2. "year": Extract the target year or list of years from the query as a string (e.g., "2023" or "2021, 2022, 2023"). If no year is found, output an empty string "". DO NOT output null or None!
 
-  3. "metric": Extract the exact financial metric string verbatim from the query (e.g., "Lãi tiền gửi", "Chi phí khác", "Doanh thu thuần", "Lãi vay phải trả"). Do NOT copy metrics from examples!
+  3. "metric": Extract the exact financial metric string verbatim from the query (e.g., "Lãi tiền gửi", "Chi phí khác", "Doanh thu thuần", "Lãi vay phải trả", "Tổng quỹ lương", "Phải thu ngắn hạn khác", "Giá gốc chứng khoán kinh doanh", "Tổng tỷ lệ quyền biểu quyết"). Do NOT copy metrics from examples!
 
   OUTPUT FORMAT: Output ONLY raw valid JSON matching {"ticker": "string", "year": "string", "metric": "string"}.
 
@@ -26,7 +34,7 @@ few_shot_examples:
       {"ticker": "VJC", "year": "2021", "metric": "Lãi tiền gửi"}
   - user_query: "Chi phí lương và các khoản khác theo lương của công ty mẹ CTCP Chứng khoán FPT trong năm 2021 là bao nhiêu tỷ đồng?"
     parsed_output: |
-      {"ticker": "FPT", "year": "2021", "metric": "Chi phí lương và các khoản khác theo lương"}
+      {"ticker": "FTS", "year": "2021", "metric": "Chi phí lương và các khoản khác theo lương"}
   - user_query: "Lãi vay phải trả của CTCP Tập đoàn Đức Long Gia Lai (DLG) cuối năm 2023 là bao nhiêu triệu đồng?"
     parsed_output: |
       {"ticker": "DLG", "year": "2023", "metric": "Lãi vay phải trả"}
@@ -36,6 +44,12 @@ few_shot_examples:
   - user_query: "Vốn chủ sở hữu của FIT là bao nhiêu tỷ đồng vào ngày 31/12/2015?"
     parsed_output: |
       {"ticker": "FIT", "year": "2015", "metric": "Vốn chủ sở hữu"}
-  - user_query: "Tốc độ tăng trưởng % tổng tiền và các khoản tương đương tiền từ năm 2019 đến năm 2021 của VIC"
+  - user_query: "Tổng quỹ lương năm 2022 của công ty mẹ EIB là bao nhiêu triệu đồng?"
     parsed_output: |
-      {"ticker": "VIC", "year": "2019, 2020, 2021", "metric": "tổng tiền và các khoản tương đương tiền"}
+      {"ticker": "EIB", "year": "2022", "metric": "Tổng quỹ lương"}
+  - user_query: "Tổng tỷ lệ quyền biểu quyết của công ty mẹ CTCP Đầu tư Hạ tầng Giao thông Đèo Cả năm 2023 là bao nhiêu phần trăm?"
+    parsed_output: |
+      {"ticker": "HHV", "year": "2023", "metric": "Tổng tỷ lệ quyền biểu quyết"}
+  - user_query: "Tổng phải thu ngắn hạn khác của công ty mẹ CTCP Tập đoàn Đầu tư Địa ốc No Va đến ngày 31 tháng 12 năm 2016 là bao nhiêu triệu đồng?"
+    parsed_output: |
+      {"ticker": "NVL", "year": "2016", "metric": "Phải thu ngắn hạn khác"}

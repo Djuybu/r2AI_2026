@@ -35,8 +35,14 @@ METADATA_HEADER_COLUMNS = [
 ]
 
 
+AUXILIARY_COL_REGEX = re.compile(
+    r"^(stt|số\s*tt|số\s*thứ\s*tự|sothutu|mã\s*số|mãsố|thuyết\s*minh|thuyếtminh|ghi\s*chú|note|code|ms|tm|cột_\d+|unnamed.*)$",
+    re.IGNORECASE,
+)
+
 _AUXILIARY_CODE_COLUMNS = {
-    "mã số", "mãsố", "thuyết minh", "thuyếtminh", "stt", "ghi chú", "note", "code"
+    "mã số", "mãsố", "thuyết minh", "thuyếtminh", "stt", "số tt", "số thứ tự", "sothutu",
+    "ghi chú", "note", "code", "ms", "tm", "cột_0", "cột 0", "cot_0", "cot 0", "unnamed: 0"
 }
 
 
@@ -49,10 +55,12 @@ def _is_cell_empty(val: Any) -> bool:
 
 
 def _is_numeric_value(val: Any) -> bool:
-    """Kiểm tra xem một ô có chứa giá trị số (kể cả số âm trong ngoặc, có dấu phân cách) hay không."""
+    """Kiểm tra xem một ô có chứa giá trị số (kể cả số âm trong ngoặc, dấu phân cách, %, $, VND) hay không."""
     if _is_cell_empty(val):
         return False
-    s = str(val).strip().replace(",", "").replace(".", "").replace(" ", "")
+    s = str(val).strip()
+    s = re.sub(r"(?i)\b(?:vnd|đồng|dong|usd)\b", "", s).strip()
+    s = s.replace(",", "").replace(".", "").replace(" ", "").replace("%", "").replace("$", "").replace("VND", "").replace("vnd", "")
     if s.startswith("(") and s.endswith(")"):
         s = s[1:-1]
     if s.startswith("-") or s.startswith("+"):
@@ -194,14 +202,37 @@ def _get_columns_from_table(table: Dict[str, Any]) -> List[str]:
 # Workflow Steps: Useful Columns & Dynamic Mapping
 # ─────────────────────────────────────────────────────────────
 
-def _is_code_or_index_column(series: pd.Series) -> bool:
-    """Check if a column contains mostly index numbers, Roman numerals, or short codes (e.g. 1, 2, I, II, 411a, A, B)."""
+def _is_code_or_index_column(series: pd.Series, col_name: str = "") -> bool:
+    """Kiểm tra xem một cột có phải STT, mã số, thuyết minh, float index hoặc chỉ số phân mục hay không."""
+    raw_col_lower = str(col_name).strip().lower()
+    if AUXILIARY_COL_REGEX.match(raw_col_lower) or raw_col_lower in _AUXILIARY_CODE_COLUMNS:
+        return True
+
     non_empty = [str(x).strip() for x in series if not _is_cell_empty(x)]
     if not non_empty:
         return False
-    code_pattern = re.compile(r"^(?:[0-9]{1,4}[a-z]?|[IVXLCDM]+|[A-Z]|\(\w+\)|\d+\.\d+)$", re.IGNORECASE)
-    code_matches = sum(1 for s in non_empty if code_pattern.match(s) or len(s) <= 3)
-    return (code_matches / len(non_empty)) >= 0.6
+
+    total_chars = sum(len(x) for x in non_empty)
+    letter_count = sum(sum(1 for ch in x if ch.isalpha()) for x in non_empty)
+    avg_len = total_chars / len(non_empty)
+    letter_ratio = (letter_count / total_chars) if total_chars > 0 else 0.0
+
+    # Quy tắc 1: Text density check - Chuỗi cực ngắn (<= 4.0 ký tự) và ít chữ cái (< 0.35) -> Cột chỉ số / STT
+    if avg_len <= 4.0 and letter_ratio < 0.35:
+        return True
+
+    # Quy tắc 2: Khớp các mẫu mã số, số thứ tự, float index (\d+\.0+), số La Mã, phân mục
+    index_token_pattern = re.compile(
+        r"^(?:[0-9]{1,4}[a-z]?|[IVXLCDM]+|[A-Z]|\(\w+\)|\d+\.\d{1,2}|\d+[\.\)]|\d+\.\d+\.\d+)$",
+        re.IGNORECASE,
+    )
+    index_matches = sum(
+        1 for s in non_empty
+        if (len(s) <= 4 and not _is_numeric_value(s)) or
+           (len(s) <= 5 and bool(re.match(r"^\d+\.0+$", s))) or
+           (len(s) <= 6 and bool(index_token_pattern.match(s)))
+    )
+    return (index_matches / len(non_empty)) >= 0.5
 
 
 def _extract_useful_columns(
@@ -231,16 +262,19 @@ def _extract_useful_columns(
         empty_rows = 0
         numeric_count = 0
         sample_values = []
+        non_empty_values = []
 
         for val in series:
             if _is_cell_empty(val):
                 empty_rows += 1
             else:
                 data_rows += 1
+                s_val = str(val).strip()
+                non_empty_values.append(s_val)
                 if _is_numeric_value(val):
                     numeric_count += 1
                 if len(sample_values) < 3:
-                    sample_values.append(str(val).strip())
+                    sample_values.append(s_val)
 
         # Điều kiện bắt buộc: Số hàng có dữ liệu > Số hàng không có dữ liệu
         is_useful = data_rows > empty_rows
@@ -251,11 +285,19 @@ def _extract_useful_columns(
             # Step 4: Tìm tên cột thực tế
             resolved_name = _resolve_column_header(df, col)
 
-            # Phân loại auxiliary code column (Mã số, Thuyết minh, STT, Roman numerals, short index codes)
+            total_chars = sum(len(x) for x in non_empty_values)
+            letter_count = sum(sum(1 for ch in x if ch.isalpha()) for x in non_empty_values)
+            avg_str_len = (total_chars / len(non_empty_values)) if non_empty_values else 0.0
+            letter_ratio = (letter_count / total_chars) if total_chars > 0 else 0.0
+
+            # Phân loại auxiliary code column (Mã số, Thuyết minh, STT, Roman numerals, short index codes, float index)
             is_aux_code = (
-                resolved_name.strip().lower() in _AUXILIARY_CODE_COLUMNS 
+                bool(AUXILIARY_COL_REGEX.match(resolved_name.strip()))
+                or bool(AUXILIARY_COL_REGEX.match(str(col).strip()))
+                or resolved_name.strip().lower() in _AUXILIARY_CODE_COLUMNS 
                 or str(col).strip().lower() in _AUXILIARY_CODE_COLUMNS
-                or _is_code_or_index_column(series)
+                or _is_code_or_index_column(series, col_name=str(col))
+                or _is_code_or_index_column(series, col_name=resolved_name)
             )
 
             if is_aux_code:
@@ -268,6 +310,8 @@ def _extract_useful_columns(
                 "column_name": resolved_name,
                 "data_type": data_type,
                 "is_aux_code": is_aux_code,
+                "avg_str_len": avg_str_len,
+                "letter_ratio": letter_ratio,
                 "data_rows_count": data_rows,
                 "empty_rows_count": empty_rows,
                 "sample_values": sample_values,
@@ -284,8 +328,7 @@ def _find_label_column(
     columns: Optional[List[str]] = None
 ) -> Optional[str]:
     """Xác định cột nhãn (chứa tên chỉ tiêu tài chính) một cách động:
-
-    Chọn cột dạng 'text' đầu tiên trong danh sách useful_columns, ưu tiên cột không phải auxiliary code.
+    Chọn cột dạng 'text' có độ dài chuỗi trung bình lớn nhất và mật độ chữ cao nhất.
     """
     if not useful_columns:
         if columns:
@@ -293,24 +336,30 @@ def _find_label_column(
             return non_meta[0] if non_meta else columns[0]
         return None
 
-    # Ưu tiên cột text không phải auxiliary code (như Mã số, Thuyết minh, Roman numerals)
+    # 1. Ứng viên ưu tiên: Cột text không phải auxiliary code
     primary_text = [
         c for c in useful_columns 
         if c.get("data_type") == "text" 
         and not c.get("is_aux_code", False)
-        and c.get("column_name", "").strip().lower() not in _AUXILIARY_CODE_COLUMNS
+        and not AUXILIARY_COL_REGEX.match(str(c.get("column_name", "")).strip())
+        and not AUXILIARY_COL_REGEX.match(str(c.get("raw_column", "")).strip())
+        and str(c.get("column_name", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
+        and str(c.get("raw_column", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
     ]
+
     if primary_text:
-        return primary_text[0]["raw_column"]
+        # Chọn cột có letter_ratio >= 0.40 và avg_str_len lớn nhất
+        high_letter_candidates = [c for c in primary_text if c.get("letter_ratio", 0.0) >= 0.40]
+        if high_letter_candidates:
+            return max(high_letter_candidates, key=lambda c: c.get("avg_str_len", 0.0))["raw_column"]
+        return max(primary_text, key=lambda c: c.get("avg_str_len", 0.0))["raw_column"]
 
-    text_cols = [c for c in useful_columns if c.get("data_type") == "text" and not c.get("is_aux_code", False)]
+    # 2. Fallback sang bất kỳ cột text nào có avg_str_len lớn nhất
+    text_cols = [c for c in useful_columns if c.get("data_type") == "text"]
     if text_cols:
-        return text_cols[0]["raw_column"]
+        return max(text_cols, key=lambda c: c.get("avg_str_len", 0.0))["raw_column"]
 
-    text_cols_any = [c for c in useful_columns if c.get("data_type") == "text"]
-    if text_cols_any:
-        return text_cols_any[0]["raw_column"]
-
+    # 3. Fallback sang cột đầu tiên trong useful_columns
     return useful_columns[0]["raw_column"]
 
 
@@ -320,39 +369,57 @@ def _find_value_column(
     tieu_chi_phu: Optional[str] = None,
     columns: Optional[List[str]] = None,
 ) -> Optional[str]:
-    """Xác định cột giá trị một cách động dựa trên tiêu chí phụ và useful_columns."""
+    """Xác định cột giá trị một cách động dựa trên tiêu chí phụ, cột số và cột phần trăm (%)."""
     if not useful_columns:
         if columns:
             candidates = [c for c in columns if c not in METADATA_HEADER_COLUMNS and c != label_col]
             return candidates[0] if candidates else None
         return None
 
-    value_candidates = [c for c in useful_columns if c["raw_column"] != label_col]
+    value_candidates = [c for c in useful_columns if c.get("raw_column") != label_col]
     if not value_candidates:
         value_candidates = useful_columns
 
     if tieu_chi_phu and value_candidates:
         clean_tcp = str(tieu_chi_phu).strip().lower()
 
-        # 1. Exact or substring match theo column_name hoặc raw_column hoặc column_description
+        # 1. Exact or substring match (An toàn với mọi kiểu dữ liệu tên cột)
         for uc in value_candidates:
-            if clean_tcp in uc["column_name"].lower() or clean_tcp in uc["raw_column"].lower() or clean_tcp in uc.get("column_description", "").lower():
+            c_name = str(uc.get("column_name", "")).lower()
+            r_name = str(uc.get("raw_column", "")).lower()
+            c_desc = str(uc.get("column_description", "")).lower()
+            if clean_tcp in c_name or clean_tcp in r_name or clean_tcp in c_desc:
                 return uc["raw_column"]
 
-        # 2. Fuzzy match tiêu chí phụ với các tên cột
-        candidate_names = [uc["column_name"] for uc in value_candidates]
-        match, score = process.extractOne(
-            tieu_chi_phu, candidate_names, scorer=fuzz.token_set_ratio
-        )
-        if score >= 50:
+        # 2. Khớp chuyên biệt cho truy vấn tỷ lệ / phần trăm (%)
+        if any(pct_kw in clean_tcp for pct_kw in ["%", "phần trăm", "tỷ lệ", "ty le", "biểu quyết", "sở hữu", "lãi suất"]):
             for uc in value_candidates:
-                if uc["column_name"] == match:
+                c_name = str(uc.get("column_name", "")).lower()
+                r_name = str(uc.get("raw_column", "")).lower()
+                c_desc = str(uc.get("column_description", "")).lower()
+                if any(k in c_name or k in r_name or k in c_desc for k in ["%", "tỷ lệ", "ty le", "biểu quyết", "sở hữu", "lãi suất"]):
                     return uc["raw_column"]
+
+        # 3. Fuzzy match tiêu chí phụ với các tên cột ứng viên
+        candidate_names = [str(uc.get("column_name", "")) for uc in value_candidates]
+        if candidate_names:
+            match, score = process.extractOne(
+                clean_tcp, candidate_names, scorer=fuzz.token_set_ratio
+            )
+            if score >= 50:
+                for uc in value_candidates:
+                    if str(uc.get("column_name", "")) == match:
+                        return uc["raw_column"]
 
     # Ưu tiên các cột numeric KHÔNG phải là cột mã số / thuyết minh
     primary_numeric = [
         c for c in value_candidates 
-        if c.get("data_type") == "numeric" and c.get("column_name", "").strip().lower() not in _AUXILIARY_CODE_COLUMNS
+        if c.get("data_type") == "numeric" 
+        and not c.get("is_aux_code", False)
+        and not AUXILIARY_COL_REGEX.match(str(c.get("column_name", "")).strip())
+        and not AUXILIARY_COL_REGEX.match(str(c.get("raw_column", "")).strip())
+        and str(c.get("column_name", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
+        and str(c.get("raw_column", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
     ]
     if primary_numeric:
         return primary_numeric[0]["raw_column"]
@@ -584,11 +651,18 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         # ── 5. Xác định động label_column và value_column (Không dùng danh sách ưu tiên) ──
         label_col = _find_label_column(all_useful_detected, raw_columns)
 
-        # Chỉ giữ lại các cột numeric trong useful_columns (loại bỏ các cột text theo yêu cầu)
+        # Chỉ giữ lại các cột numeric trong useful_columns (loại bỏ các cột auxiliary code và text)
         useful_columns = [
             c for c in all_useful_detected 
-            if c.get("data_type") == "numeric" and c.get("column_name", "").strip().lower() not in _AUXILIARY_CODE_COLUMNS
+            if c.get("data_type") == "numeric" 
+            and not c.get("is_aux_code", False)
+            and not AUXILIARY_COL_REGEX.match(str(c.get("column_name", "")).strip())
+            and not AUXILIARY_COL_REGEX.match(str(c.get("raw_column", "")).strip())
+            and str(c.get("column_name", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
+            and str(c.get("raw_column", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
         ]
+        if not useful_columns:
+            useful_columns = [c for c in all_useful_detected if c.get("raw_column") != label_col]
 
         value_col = _find_value_column(useful_columns, label_col, tieu_chi_phu, raw_columns)
 

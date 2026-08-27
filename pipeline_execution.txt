@@ -1,0 +1,26 @@
+📝 Đã kích hoạt ghi log tự động ra file .txt: D:\hobby_project\cocopila\r2AI_2026\pipeline_execution.txt
+✅ System configuration, Logging to .txt & LLM Provider utilities loaded!
+✅ Prompt templates loaded (Query Parser, Schema Mapper, Code Generator, Reflection)!
+✅ AgentState definition updated with schema field!
+✅ Node 1: Query Parser Node loaded!
+NEGATIVE_BLOCKLIST: repo len=49, cell15 len=49, diff=set()
+ALIAS_TICKER_MAP: repo len=162, cell15 len=162, diff keys count=0
+
+--- Comparing _normalize_company_name behavior ---
+Query: CTCP Tập đoàn Đầu tư Địa ốc No Va        -> Repo: NVL   | Cell15: NVL   (Match: True)
+Query: Ngân hàng TMCP Xuất Nhập Khẩu Việt Nam   -> Repo: EIB   | Cell15: EIB   (Match: True)
+Query: CTCP Đầu tư Hạ tầng Giao thông Đèo Cả    -> Repo: HHV   | Cell15: HHV   (Match: True)
+Query: CTCP Tập đoàn Đức Long Gia Lai           -> Repo: DLG   | Cell15: DLG   (Match: True)
+Query: CTCP Chứng khoán FPT                     -> Repo: FTS   | Cell15: FTS   (Match: True)
+Query: CTCP FPT                                 -> Repo: FPT   | Cell15: FPT   (Match: True)
+Query: Công ty Cổ phần Sữa Việt Nam (VNM)       -> Repo: VNM   | Cell15: VNM   (Match: True)
+Query: Bảo Việt                                 -> Repo: BVH   | Cell15: BVH   (Match: True)
+Query: Thế giới di động                         -> Repo: MWG   | Cell15: MWG   (Match: True)
+
+--- Comparing _clean_financial_content behavior ---
+Metric: tốc độ tăng trưởng % doanh thu thuần               -> Repo: doanh thu thuần                | Cell15: doanh thu thuần                (Match: True)
+Metric: khoản phải thu ngắn hạn khác                       -> Repo: phải thu ngắn hạn khác         | Cell15: phải thu ngắn hạn khác         (Match: True)
+Metric: giá trị còn lại của tài sản cố định hữu hình       -> Repo: tài sản cố định hữu hình       | Cell15: tài sản cố định hữu hình       (Match: True)
+Metric: quỹ lương năm 2022 là bao nhiêu                    -> Repo: quỹ lương năm 2022             | Cell15: quỹ lương năm 2022             (Match: True)
+Metric: số dư tiền gửi không kỳ hạn                        -> Repo: tiền gửi không kỳ hạn          | Cell15: tiền gửi không kỳ hạn          (Match: True)
+Metric: tổng giá trị hàng tồn kho                          -> Repo: hàng tồn kho                   | Cell15: hàng tồn kho                   (Match: True)

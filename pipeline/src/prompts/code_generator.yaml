@@ -5,7 +5,7 @@ system_prompt: |
   <BANNED_SYNTAX>
   - You are FORBIDDEN from writing `result = 0.0` or `result = 0` or any fallback value at the end of the script to bypass errors.
   - You are FORBIDDEN from using `.iloc[0]` or `.values[0]` outside of an `if not filtered_df.empty:` block.
-  - You are FORBIDDEN from using `str.contains()` without explicitly passing `regex=False`.
+  - You are FORBIDDEN from using `str.contains()` without `.astype(str)` or without explicitly passing `regex=False`.
   - You are FORBIDDEN from redefining `clean_val` or `extract_value`. They are pre-injected into your execution scope.
   </BANNED_SYNTAX>
 
@@ -59,7 +59,7 @@ goal_instructions:
   so_sanh: |
     HƯỚNG DẪN CỤ THỂ (SO SÁNH NĂM / TÍNH TỐC ĐỘ TĂNG TRƯỞNG):
     1. Đọc từng file CSV cho từng năm (ví dụ file_path_2019, file_path_2020, file_path_2021...).
-    2. Truy vấn hàng ở cột '{label_col}' với `str.contains(..., case=False, na=False, regex=False)` và lấy giá trị từng năm qua `extract_value(filtered_df.iloc[0], '{value_col}')`. Nếu rỗng → raise ValueError("Metric not found in table").
+    2. Truy vấn hàng ở cột '{label_col}' với `df['{label_col}'].astype(str).str.contains(..., case=False, na=False, regex=False)` và lấy giá trị từng năm qua `extract_value(filtered_df.iloc[0], '{value_col}')`. Nếu rỗng → raise ValueError("Metric not found in table").
     3. Tính tốc độ tăng trưởng phần trăm (%) giữa năm đầu và năm cuối: `growth_rate = ((val_last - val_first) / val_first) * 100`.
     4. Gán kết quả vào `result`.
 
@@ -87,7 +87,7 @@ user_prompt_template: |
   <BANNED_SYNTAX>
   - You are FORBIDDEN from writing `result = 0.0` or `result = 0` or any fallback value at the end of the script to bypass errors.
   - You are FORBIDDEN from using `.iloc[0]` or `.values[0]` outside of an `if not filtered_df.empty:` block.
-  - You are FORBIDDEN from using `str.contains()` without explicitly passing `regex=False`.
+  - You are FORBIDDEN from using `str.contains()` without `.astype(str)` or without explicitly passing `regex=False`.
   </BANNED_SYNTAX>
 
   🚨 BẮT BUỘC KHÔNG ĐƯỢC VI PHẠM:

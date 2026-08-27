@@ -7,7 +7,9 @@ Không thực hiện tìm bảng — việc này do Data Discovery xử lý.
 import re
 import time
 import yaml
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Dict, Any, Optional, List, Tuple, Set
+import pandas as pd
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from pipeline.src.state import AgentState
@@ -26,42 +28,225 @@ def load_query_parser_prompt(cfg: Config) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def _normalize_company_name(company_input: str, user_query: str) -> str:
-    """Normalize company name or raw ticker input against rag_module/code_stock.csv map.
-    
-    Quy tắc:
-    1. Scan user_query directly for explicit 3-5 letter uppercase tickers in code_stock.csv.
-    2. Scan user_query against company names in code_stock.csv (longest match first).
-    3. If company_input provided by LLM is present in user_query, validate and return corresponding ticker.
-    4. If company_input is NOT in user_query and no match found, do NOT map to arbitrary tickers (e.g. VNM).
-    """
-    company_input = company_input.strip() if company_input else ""
-    user_query = user_query.strip() if user_query else ""
-    q_lower = user_query.lower()
+NEGATIVE_BLOCKLIST: Set[str] = {
+    # Corporate prefixes / legal forms
+    "CTCP", "TMCP", "TẬP ĐOÀN", "CÔNG TY", "NGÂN HÀNG", "TỔNG CÔNG TY",
+    "TNHH", "CP", "DN", "JSC", "CORP", "CORPORATION", "GROUP", "BANK",
+    "HOLDINGS", "SECURITIES", "CHỨNG KHOÁN", "BẢO HIỂM", "BẤT ĐỘNG SẢN",
+    # Financial report terms & abbreviations
+    "BÁO CÁO", "TÀI CHÍNH", "BCTC", "TCTD", "TNDN", "TNCN", "GTGT", "VAMC",
+    "CHKQT", "CHK", "HĐQT", "HDQT", "TSCĐ", "TSCD", "SXKD", "XDCB",
+    # Generic domain words
+    "VIỆT NAM", "QUỐC TẾ", "ĐẦU TƯ", "THƯƠNG MẠI", "XÂY DỰNG", "NĂNG LƯỢNG",
+    # Currencies & exchanges
+    "VND", "USD", "EUR", "HOSE", "HNX", "UPCOM", "VN30", "VNINDEX",
+}
 
-    try:
-        from pathlib import Path
-        import pandas as pd
+ALIAS_TICKER_MAP: Dict[str, str] = {
+    # Real Estate & Construction
+    "địa ốc no va": "NVL",
+    "đầu tư địa ốc no va": "NVL",
+    "tập đoàn đầu tư địa ốc no va": "NVL",
+    "novaland": "NVL",
+    "nova": "NVL",
+    "hạ tầng giao thông đèo cả": "HHV",
+    "giao thông đèo cả": "HHV",
+    "đèo cả": "HHV",
+    "đức long gia lai": "DLG",
+    "vincom retail": "VRE",
+    "vingroup": "VIC",
+    "đất xanh": "DXG",
+    "bất động sản đất xanh": "DXS",
+    "nam long": "NLG",
+    "phát đạt": "PDR",
+    "kinh bắc": "KBC",
+    "hà đô": "HDG",
+    "hòa bình": "HBC",
+    "xây dựng hòa bình": "HBC",
+    "sunshine homes": "SSH",
+    "sunshine": "SSH",
+    "bất động sản thế kỷ": "CRE",
+    "cenland": "CRE",
+    "bất động sản văn phú": "VPI",
+    "văn phú invest": "VPI",
+    "khải hoàn land": "KHG",
+    "hải phát": "HPX",
+    "tasco": "HUT",
+    "sông đà": "SJG",
+    "sonadezi": "SNZ",
+    "becamex ijc": "IJC",
 
-        # Tìm đường dẫn tới file code_stock.csv
-        possible_paths = [
-            Path("rag_module/code_stock.csv"),
-            Path("rag_module/ViFinQA/code_stock.csv"),
-            Path("/kaggle/working/r2AI_2026/rag_module/code_stock.csv"),
-            Path(__file__).resolve().parent.parent.parent / "rag_module" / "code_stock.csv",
-            Path(__file__).resolve().parent.parent.parent / "rag_module" / "ViFinQA" / "code_stock.csv",
-        ]
+    # Banking & Finance
+    "an bình": "ABB",
+    "ab bank": "ABB",
+    "abbank": "ABB",
+    "á châu": "ACB",
+    "bắc á": "BAB",
+    "baca bank": "BAB",
+    "đầu tư và phát triển việt nam": "BID",
+    "bidv": "BID",
+    "bảo việt": "BVH",
+    "tập đoàn bảo việt": "BVH",
+    "công thương việt nam": "CTG",
+    "vietinbank": "CTG",
+    "xuất nhập khẩu việt nam": "EIB",
+    "eximbank": "EIB",
+    "phát triển thành phố hồ chí minh": "HDB",
+    "hdbank": "HDB",
+    "kiên long": "KLB",
+    "kienlongbank": "KLB",
+    "quân đội": "MBB",
+    "mbbank": "MBB",
+    "hàng hải việt nam": "MSB",
+    "nam á": "NAB",
+    "nama bank": "NAB",
+    "quốc dân": "NVB",
+    "ncb": "NVB",
+    "phương đông": "OCB",
+    "sài gòn công thương": "SGB",
+    "saigonbank": "SGB",
+    "sài gòn - hà nội": "SHB",
+    "shb": "SHB",
+    "đông nam á": "SSB",
+    "seabank": "SSB",
+    "sài gòn thương tín": "STB",
+    "sacombank": "STB",
+    "sài gòn tài lộc": "STB",
+    "việt á": "VAB",
+    "viet a bank": "VAB",
+    "ngoại thương việt nam": "VCB",
+    "vietcombank": "VCB",
+    "quốc tế việt nam": "VIB",
+    "việt nam thịnh vượng": "VPB",
+    "vpbank": "VPB",
+    "evn finance": "EVF",
 
-        csv_path = None
-        for p in possible_paths:
-            if p.exists():
-                csv_path = p
-                break
+    # Securities
+    "chứng khoán fpt": "FTS",
+    "chứng khoán mb": "MBS",
+    "chứng khoán ssi": "SSI",
 
-        name_to_code = []
-        all_tickers = set()
+    # Technology & Telecommunications
+    "fpt": "FPT",
+    "viễn thông fpt": "FOX",
+    "fpt telecom": "FOX",
 
-        if csv_path:
+    # Retail & Consumer Goods
+    "thế giới di động": "MWG",
+    "sữa việt nam": "VNM",
+    "vinamilk": "VNM",
+    "sabeco": "SAB",
+    "bia sài gòn": "SAB",
+    "masan": "MSN",
+    "tập đoàn masan": "MSN",
+    "hàng tiêu dùng masan": "MCH",
+    "masan consumer": "MCH",
+    "masan meatlife": "MML",
+    "masan high-tech materials": "MSR",
+    "vàng bạc đá quý phú nhuận": "PNJ",
+    "pnj": "PNJ",
+    "đường quảng ngãi": "QNS",
+    "vinasoy": "QNS",
+    "dabaco": "DBC",
+
+    # Energy, Industry & Materials
+    "hòa phát": "HPG",
+    "hoa sen": "HSG",
+    "nam kim": "NKG",
+    "xăng dầu việt nam": "PLX",
+    "petrolimex": "PLX",
+    "lọc hóa dầu việt nam": "BSR",
+    "lọc dầu bình sơn": "BSR",
+    "bình sơn": "BSR",
+    "khí việt nam": "GAS",
+    "pv gas": "GAS",
+    "điện lực dầu khí": "POW",
+    "pv power": "POW",
+    "vận tải dầu khí": "PVT",
+    "pvtrans": "PVT",
+    "phân bón dầu khí cà mau": "DCM",
+    "đạm cà mau": "DCM",
+    "phân bón và hóa chất dầu khí": "DPM",
+    "đạm phú mỹ": "DPM",
+    "cao su việt nam": "GVR",
+    "công nghiệp cao su việt nam": "GVR",
+    "cảng hàng không việt nam": "ACV",
+    "cảng hàng không quốc tế": "ACV",
+    "hàng không vietjet": "VJC",
+    "vietjet": "VJC",
+    "vietjet air": "VJC",
+    "dệt may việt nam": "VGT",
+    "vinatex": "VGT",
+    "viglacera": "VGC",
+    "gelex": "GEX",
+    "tập đoàn gelex": "GEX",
+    "điện lực gelex": "GEE",
+    "gelex electric": "GEE",
+    "điện gia lai": "GEG",
+    "nhiệt điện hải phòng": "HND",
+    "điện lực tkv": "DTK",
+    "thủy điện đa nhim": "DNH",
+    "tập đoàn pc1": "PC1",
+    "xây lắp điện 1": "PC1",
+    "vicem hà tiên": "HT1",
+    "xi măng vicem hà tiên": "HT1",
+    "xi măng hà tiên": "HT1",
+    "hà tiên 1": "HT1",
+    "nhựa an phát xanh": "AAA",
+    "an phát xanh": "AAA",
+    "an phát": "AAA",
+    "thủy sản minh phú": "MPC",
+    "minh phú": "MPC",
+    "sao mai": "ASM",
+    "tập đoàn sao mai": "ASM",
+    "hoàng anh gia lai": "HAG",
+    "hagl": "HAG",
+    "nông nghiệp quốc tế hoàng anh gia lai": "HNG",
+    "hagl agrico": "HNG",
+    "nông nghiệp baf": "BAF",
+    "baf việt nam": "BAF",
+    "container việt nam": "VSC",
+    "viconship": "VSC",
+    "lương thực miền nam": "VSF",
+    "vinafood 2": "VSF",
+    "vinafood ii": "VSF",
+    "lâm nghiệp việt nam": "VIF",
+    "vinafor": "VIF",
+    "đại dương": "OGC",
+    "tập đoàn đại dương": "OGC",
+    "sam holdings": "SAM",
+    "gỗ trường thành": "TTF",
+}
+
+_CACHED_NAME_TO_CODE: Optional[List[Tuple[str, str]]] = None
+_CACHED_ALL_TICKERS: Optional[Set[str]] = None
+
+
+def _get_stock_mappings() -> Tuple[List[Tuple[str, str]], Set[str]]:
+    """Load and cache (name_to_code, all_tickers) from code_stock.csv."""
+    global _CACHED_NAME_TO_CODE, _CACHED_ALL_TICKERS
+    if _CACHED_NAME_TO_CODE is not None and _CACHED_ALL_TICKERS is not None:
+        return _CACHED_NAME_TO_CODE, _CACHED_ALL_TICKERS
+
+    name_to_code: List[Tuple[str, str]] = []
+    all_tickers: Set[str] = set()
+
+    possible_paths = [
+        Path("rag_module/code_stock.csv"),
+        Path("rag_module/ViFinQA/code_stock.csv"),
+        Path("/kaggle/working/r2AI_2026/rag_module/code_stock.csv"),
+        Path(__file__).resolve().parent.parent.parent / "rag_module" / "code_stock.csv",
+        Path(__file__).resolve().parent.parent.parent / "rag_module" / "ViFinQA" / "code_stock.csv",
+    ]
+
+    csv_path = None
+    for p in possible_paths:
+        if p.exists():
+            csv_path = p
+            break
+
+    if csv_path:
+        try:
             df = pd.read_csv(csv_path, encoding="utf-8-sig", dtype=str)
             ticker_col = next((c for c in df.columns if "CK" in c.upper()), df.columns[0])
             name_col = next((c for c in df.columns if "TÊN" in c.upper() or "TEN" in c.upper()), df.columns[1])
@@ -73,49 +258,92 @@ def _normalize_company_name(company_input: str, user_query: str) -> str:
                     all_tickers.add(code)
                 if code and name:
                     name_to_code.append((name, code))
-                    # Thêm các biến thể tên thương hiệu sạch (loại bỏ CTCP, Tập đoàn, Ngân hàng, - CTCP...)
-                    clean_name = re.sub(r"\b(CTCP|Tập đoàn|Công ty|Cổ phần|Ngân hàng|TMCP|\-\s*CTCP)\b", "", name, flags=re.IGNORECASE).strip(" -")
+                    clean_name = re.sub(
+                        r"\b(CTCP|Tập đoàn|Công ty|Cổ phần|Ngân hàng|TMCP|\-\s*CTCP|Tổng Công ty|TNHH)\b",
+                        "",
+                        name,
+                        flags=re.IGNORECASE
+                    ).strip(" -")
                     if clean_name and clean_name.lower() != name.lower() and len(clean_name) >= 3:
                         name_to_code.append((clean_name, code))
-        else:
-            # Fallback sang search_engine nếu không đọc được file CSV
+        except Exception as e:
+            print(f"⚠️ [Query Parser] Error loading code_stock.csv: {e}")
+    else:
+        try:
             from rag_module.search_engine import _ensure_resources, _company_map
             _ensure_resources()
             if _company_map:
                 name_to_code = list(_company_map)
                 all_tickers = {code.upper() for _, code in _company_map}
+        except Exception:
+            pass
 
-        # 1. Tra cứu các mã chứng khoán 3-5 ký tự in hoa xuất hiện trực tiếp trong câu hỏi người dùng
-        for w in re.findall(r"\b[A-Za-z]{3,5}\b", user_query):
-            if w.upper() in all_tickers:
-                return w.upper()
+    _CACHED_NAME_TO_CODE = name_to_code
+    _CACHED_ALL_TICKERS = all_tickers
+    return _CACHED_NAME_TO_CODE, _CACHED_ALL_TICKERS
 
-        # 2. Sắp xếp danh sách tên công ty theo độ dài giảm dần (longest-match first) và khớp vào user_query
-        name_to_code.sort(key=lambda x: len(x[0]), reverse=True)
-        for name, code in name_to_code:
-            if len(name) >= 3 and name.lower() in q_lower:
-                return code
 
-        # 3. Nếu company_input xuất hiện trong user_query, kiểm tra tên/mã
-        if company_input:
-            c_upper = company_input.upper()
-            if c_upper in all_tickers and c_upper.lower() in q_lower:
+def _normalize_company_name(company_input: str, user_query: str) -> str:
+    """Normalize company name or raw ticker input against brand aliases and code_stock.csv.
+
+    Resolution Precedence:
+    1. Filter out corporate prefix blocklist (CTCP, TMCP, Tập đoàn...).
+    2. Check explicit parentheses ticker in query: (TICKER), e.g. (VJC), (NVL), (HHV).
+    3. Check ALIAS_TICKER_MAP (sorted by length descending).
+    4. Check company names from code_stock.csv (sorted by length descending, including clean names).
+    5. Check standalone uppercase 3-5 letter words in query against all_tickers (excluding NEGATIVE_BLOCKLIST).
+    6. Validate fallback company_input from LLM.
+    """
+    company_input = company_input.strip() if company_input else ""
+    user_query = user_query.strip() if user_query else ""
+    q_lower = user_query.lower()
+
+    if company_input.upper() in NEGATIVE_BLOCKLIST:
+        company_input = ""
+
+    name_to_code, all_tickers = _get_stock_mappings()
+
+    # Priority 1: Check explicit parenthesized ticker: (TICKER)
+    paren_match = re.search(r"\(([A-Za-z]{2,5})\)", user_query)
+    if paren_match:
+        paren_code = paren_match.group(1).upper()
+        if paren_code in all_tickers and paren_code not in NEGATIVE_BLOCKLIST:
+            return paren_code
+
+    # Priority 2: Check ALIAS_TICKER_MAP (longest alias match first)
+    sorted_aliases = sorted(ALIAS_TICKER_MAP.items(), key=lambda x: len(x[0]), reverse=True)
+    for alias_name, alias_ticker in sorted_aliases:
+        if alias_name in q_lower:
+            return alias_ticker
+
+    # Priority 3: Check registered company names from code_stock.csv (longest name first)
+    sorted_names = sorted(name_to_code, key=lambda x: len(x[0]), reverse=True)
+    for name, code in sorted_names:
+        if len(name) >= 3 and name.lower() in q_lower:
+            return code
+
+    # Priority 4: Scan user_query directly for explicit 3-5 letter uppercase tickers in code_stock.csv
+    for w in re.findall(r"\b[A-Za-z]{3,5}\b", user_query):
+        w_up = w.upper()
+        if w_up in all_tickers and w_up not in NEGATIVE_BLOCKLIST:
+            return w_up
+
+    # Priority 5: Validate LLM-supplied company_input
+    if company_input:
+        c_upper = company_input.upper()
+        if c_upper in all_tickers and c_upper not in NEGATIVE_BLOCKLIST:
+            if c_upper.lower() in q_lower or c_upper in user_query:
                 return c_upper
-            c_lower = company_input.lower()
-            for name, code in name_to_code:
-                if len(name) >= 3 and (name.lower() in c_lower or c_lower in name.lower()):
-                    if name.lower() in q_lower or code.lower() in q_lower:
-                        return code
+        c_lower = company_input.lower()
+        for name, code in sorted_names:
+            if len(name) >= 3 and (name.lower() in c_lower or c_lower in name.lower()):
+                if name.lower() in q_lower or code.lower() in q_lower:
+                    return code
 
-    except Exception as e:
-        print(f"⚠️ [Query Parser] Stock code normalization error: {e}")
-
-    # Nếu company_input do LLM sinh ra KHÔNG hề có trong user_query -> Bỏ qua hallucination
-    if company_input and company_input.lower() not in q_lower and company_input.upper() not in user_query:
+    if company_input and (company_input.upper() in NEGATIVE_BLOCKLIST or (company_input.lower() not in q_lower and company_input.upper() not in user_query)):
         return ""
 
     return company_input
-
 
 
 def _clean_financial_content(text: str) -> str:
@@ -138,6 +366,11 @@ def _clean_financial_content(text: str) -> str:
         r"^tính\s+tổng\s*",
         r"^trích\s+xuất\s*",
         r"^cho\s+biết\s*",
+        r"^số\s+dư\s+",
+        r"^tổng\s+số\s+",
+        r"^tổng\s+giá\s+trị\s+",
+        r"^khoản\s+",
+        r"^giá\s+trị\s+còn\s+lại\s+của\s+",
     ]
 
     for pattern in strip_patterns:
@@ -159,7 +392,7 @@ def _clean_financial_content(text: str) -> str:
 def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     """Fallback rule-based parser when LLM is unreachable."""
     q = user_query.strip()
-    
+
     # Check for range pattern e.g. "từ năm 2021 đến năm 2023" or "từ 2021 đến 2023"
     range_match = re.search(r"từ\s*(?:năm\s*)?(\d{4})\s*đến\s*(?:năm\s*)?(\d{4})", q, re.IGNORECASE)
     if range_match:
@@ -177,14 +410,13 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     else:
         thao_tac = "trich_xuat"
 
-    m_ticker = re.search(r"\b([A-Z]{3,5})\b", q)
-    company = m_ticker.group(1) if m_ticker else ""
-    company = _normalize_company_name(company, user_query)
+    # Extract company / ticker
+    company = _normalize_company_name("", user_query)
 
     clean_content = re.sub(r"\b(20\d{2})\b", "", q)
     if company:
         clean_content = re.sub(rf"\b{company}\b", "", clean_content, flags=re.IGNORECASE)
-    
+
     # Remove growth/comparison stop words
     stop_phrases = [
         "tốc độ tăng trưởng %", "tốc độ tăng trưởng", "tăng trưởng %", "tăng trưởng",
@@ -193,7 +425,7 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     ]
     for word in stop_phrases:
         clean_content = re.sub(rf"\b{re.escape(word)}\b", "", clean_content, flags=re.IGNORECASE)
-    
+
     clean_content = _clean_financial_content(clean_content or q)
 
     return {
@@ -263,20 +495,20 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         think_match = re.search(r"<think>(.*?)</think>", raw_content, re.DOTALL)
         if think_match:
             thought = think_match.group(1).strip()
-            indented_thought = thought.replace('\n', '\n  ')
+            indented_thought = thought.replace("\n", "\n  ")
             print(f"💭 [Tư duy - Query Parser]:\n  {indented_thought}")
         else:
             json_start = raw_content.find("{")
             if json_start > 10:
                 thought = raw_content[:json_start].strip()
-                indented_thought = thought.replace('\n', '\n  ')
+                indented_thought = thought.replace("\n", "\n  ")
                 print(f"💭 [Tư duy - Query Parser]:\n  {indented_thought}")
 
         # Parse output JSON
         parsed_json = safe_parse_json(raw_content)
 
-        # Map strict schema keys {"ticker", "year", "metric"} to state schema keys
-        ticker_val = parsed_json.get("ticker") or parsed_json.get("ten_cong_ty") or ""
+        # Map strict schema keys {\"ticker\", \"year\", \"metric\"} to state schema keys
+        raw_ticker_val = parsed_json.get("ticker") or parsed_json.get("ten_cong_ty") or ""
         metric_val = parsed_json.get("metric") or parsed_json.get("noi_dung") or ""
         year_val = parsed_json.get("year") if "year" in parsed_json else parsed_json.get("so_nam")
 
@@ -296,27 +528,27 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         else:
             so_nam_list = re.findall(r"\b(20\d{2})\b", user_query)
 
-        # Sync keys
-        parsed_json["ticker"] = ticker_val
-        parsed_json["ten_cong_ty"] = _normalize_company_name(ticker_val, user_query)
+        # Synchronize ticker / ten_cong_ty strictly
+        resolved_ticker = _normalize_company_name(raw_ticker_val, user_query)
+        parsed_json["ticker"] = resolved_ticker
+        parsed_json["ten_cong_ty"] = resolved_ticker
         parsed_json["year"] = ", ".join(so_nam_list) if so_nam_list else ""
         parsed_json["so_nam"] = so_nam_list
-        parsed_json["metric"] = metric_val
-        parsed_json["noi_dung"] = metric_val
 
         # Ensure minimal structure and sync thao_tac / muc_tieu (only trich_xuat or so_sanh)
-        thao_tac = parsed_json.get("thao_tac") or parsed_json.get("muc_tieu") or ("so_sanh" if len(so_nam_list) > 1 or "so sánh" in user_query.lower() or "tăng trưởng" in user_query.lower() else "trich_xuat")
+        thao_tac = parsed_json.get("thao_tac") or parsed_json.get("muc_tieu") or (
+            "so_sanh" if len(so_nam_list) > 1 or "so sánh" in user_query.lower() or "tăng trưởng" in user_query.lower() else "trich_xuat"
+        )
         if thao_tac not in ["trich_xuat", "so_sanh"]:
             thao_tac = "trich_xuat"
-        
+
         parsed_json["thao_tac"] = thao_tac
         parsed_json["muc_tieu"] = thao_tac
 
-        # Clean content only for so_sanh (strip measurement prefixes)
-        raw_noi_dung = parsed_json.get("noi_dung", "")
-        if thao_tac == "so_sanh":
-            parsed_json["noi_dung"] = _clean_financial_content(raw_noi_dung) or raw_noi_dung
-            parsed_json["metric"] = parsed_json["noi_dung"]
+        # Clean metric / noi_dung using _clean_financial_content
+        cleaned_content = _clean_financial_content(metric_val) or metric_val
+        parsed_json["metric"] = cleaned_content
+        parsed_json["noi_dung"] = cleaned_content
 
         if "tieu_chi_phu" not in parsed_json:
             parsed_json["tieu_chi_phu"] = None
