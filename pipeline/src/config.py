@@ -18,7 +18,7 @@ class Config:
     """System configuration parameters."""
 
     # LLM Settings
-    MODEL_NAME: str = os.getenv("MODEL_NAME", "Qwen/Qwen3.5-2B")
+    MODEL_NAME: str = os.getenv("MODEL_NAME", "Qwen/Qwen3.5-9B")
     LLM_API_BASE: str = os.getenv(
         "LLM_API_BASE",
         "http://localhost:8000/v1" if is_kaggle_environment() else "http://localhost:8000/v1",
