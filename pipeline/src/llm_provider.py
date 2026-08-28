@@ -31,18 +31,24 @@ def get_llm(
     temp = temperature if temperature is not None else cfg.TEMPERATURE
     tokens = max_tokens if max_tokens is not None else cfg.MAX_TOKENS
 
-    # Construct server URL
-    api_base = cfg.LLM_API_BASE
+    # Read environment variables directly to ensure runtime overrides (e.g. Kaggle Ollama at port 11434) are honored
+    import os
+    model_name = os.getenv("MODEL_NAME", cfg.MODEL_NAME)
+    api_base = os.getenv("LLM_API_BASE", cfg.LLM_API_BASE)
+    api_key = os.getenv("LLM_API_KEY", cfg.LLM_API_KEY)
 
     llm_kwargs = {
-        "model": cfg.MODEL_NAME,
+        "model": model_name,
+        "base_url": api_base,
+        "api_key": api_key,
         "openai_api_base": api_base,
-        "openai_api_key": cfg.LLM_API_KEY,
+        "openai_api_key": api_key,
         "temperature": temp,
         "max_tokens": tokens,
         "streaming": False,
     }
     if timeout is not None:
         llm_kwargs["request_timeout"] = timeout
+        llm_kwargs["timeout"] = timeout
 
     return ChatOpenAI(**llm_kwargs)

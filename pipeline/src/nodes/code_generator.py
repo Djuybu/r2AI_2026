@@ -348,14 +348,19 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     # Build file path variables for code
     paths_str = ""
     if discovered_tables:
-        if len(discovered_tables) == 1:
-            escaped = discovered_tables[0]["csv_path"].replace('\\', '\\\\')
-            paths_str = f"file_path = '{escaped}'"
-        else:
-            for tbl in discovered_tables:
-                nam = tbl.get("Nam_Tai_Chinh", "default")
-                escaped = tbl["csv_path"].replace('\\', '\\\\')
-                paths_str += f"file_path_{nam} = '{escaped}'\n"
+        top_csv = discovered_tables[0]["csv_path"].replace('\\', '\\\\')
+        paths_str = f"file_path = '{top_csv}'\n"
+
+        year_paths = {}
+        for tbl in discovered_tables:
+            nam = str(tbl.get("Nam_Tai_Chinh", "")).strip()
+            csv_p = tbl.get("csv_path", "").replace('\\', '\\\\')
+            if nam and nam not in year_paths:
+                year_paths[nam] = csv_p
+        if len(year_paths) > 1:
+            for nam, csv_p in year_paths.items():
+                paths_str += f"file_path_{nam} = '{csv_p}'\n"
+    paths_str = paths_str.strip()
 
     try:
         # Scenario A: Initial Code Generation
