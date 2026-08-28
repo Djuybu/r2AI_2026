@@ -10,7 +10,7 @@ import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple, Set
 import pandas as pd
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from pipeline.src.state import AgentState
 from pipeline.src.config import Config, config as default_config
@@ -487,7 +487,7 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
 
         for example in few_shots:
             prompt_messages.append(HumanMessage(content=example["user_query"]))
-            prompt_messages.append(SystemMessage(content=example["parsed_output"]))
+            prompt_messages.append(AIMessage(content=example["parsed_output"]))
 
         prompt_messages.append(HumanMessage(content=f"Câu hỏi: {user_query}"))
 

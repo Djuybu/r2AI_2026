@@ -558,7 +558,7 @@ def _enrich_column_descriptions(
         )
 
         print(f"\n   🤖 [Workflow Step 5: Gọi LLM sinh mô tả cho {len(useful_columns)} cột useful...]")
-        llm = get_llm(cfg=cfg, temperature=0.0, timeout=3)
+        llm = get_llm(cfg=cfg, temperature=0.0, timeout=30)
         response = llm.invoke([
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_content),

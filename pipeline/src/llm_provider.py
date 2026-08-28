@@ -8,13 +8,29 @@ from langchain_openai import ChatOpenAI
 from pipeline.src.config import Config, config as default_config, is_kaggle_environment
 
 
-def check_vllm_health(api_base: str, timeout: int = 2) -> bool:
-    """Check if the vLLM server endpoint is responsive."""
+def check_vllm_health(api_base: str, timeout: int = 3) -> bool:
+    """Check if the LLM server endpoint (vLLM, Ollama, or OpenAI-compatible) is responsive."""
     try:
-        # Extract base URL (remove /v1 if present)
-        health_url = api_base.rstrip("/").replace("/v1", "") + "/health"
-        response = requests.get(health_url, timeout=timeout)
-        return response.status_code == 200
+        base = api_base.rstrip("/")
+        # 1. Check standard OpenAI /v1/models endpoint
+        models_url = f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
+        try:
+            r = requests.get(models_url, timeout=timeout)
+            if r.status_code == 200:
+                return True
+        except Exception:
+            pass
+
+        # 2. Check root / or /health
+        root_url = base.replace("/v1", "")
+        for ep in ["", "/health"]:
+            try:
+                r = requests.get(f"{root_url}{ep}", timeout=timeout)
+                if r.status_code == 200:
+                    return True
+            except Exception:
+                pass
+        return False
     except Exception:
         return False
 
@@ -23,7 +39,7 @@ def get_llm(
     cfg: Optional[Config] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
-    timeout: Optional[int] = 30,
+    timeout: Optional[int] = 120,
     **kwargs,
 ) -> BaseChatModel:
     """Factory function to instantiate ChatOpenAI connecting to self-hosted vLLM or local server."""

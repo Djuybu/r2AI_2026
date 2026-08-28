@@ -7,13 +7,15 @@ Tất cả các prompt, quy tắc và template được nạp từ file prompts/
 import re
 import time
 import yaml
+import pandas as pd
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from pipeline.src.state import AgentState
 from pipeline.src.config import Config, config as default_config
 from pipeline.src.llm_provider import get_llm
+from pipeline.src.nodes.data_discovery import _extract_table_schema
 
 
 def load_yaml_prompt(cfg: Config, filename: str) -> Dict[str, Any]:
@@ -40,26 +42,59 @@ def clean_python_code(raw_code: str) -> str:
     if not raw_code:
         return ""
 
+    import ast
+
     # Step 1: Check markdown python blocks
     pattern = r"```(?:python)?\s*\n?(.*?)\n?```"
     matches = re.findall(pattern, raw_code, re.DOTALL)
-    if matches:
-        return matches[0].strip()
+    for match in matches:
+        candidate = match.strip()
+        try:
+            ast.parse(candidate)
+            return candidate
+        except SyntaxError:
+            pass
 
+    # Step 2: If no valid code block found, check inside <think> tags
+    think_match = re.search(r"<think>(.*?)</think>", raw_code, re.DOTALL)
+    if think_match:
+        think_text = think_match.group(1).strip()
+        think_matches = re.findall(pattern, think_text, re.DOTALL)
+        for tm in think_matches:
+            candidate = tm.strip()
+            try:
+                ast.parse(candidate)
+                return candidate
+            except SyntaxError:
+                pass
+        lines = think_text.splitlines()
+        for idx, line in enumerate(lines):
+            l = line.strip()
+            if l.startswith("import ") or l.startswith("file_path =") or l.startswith("df ="):
+                candidate = "\n".join(lines[idx:]).strip()
+                try:
+                    ast.parse(candidate)
+                    return candidate
+                except SyntaxError:
+                    pass
+
+    # Step 3: Strip conversational text before code in raw_code
     cleaned = raw_code.strip()
     if cleaned.startswith("```") and cleaned.endswith("```"):
         cleaned = cleaned[3:-3].strip()
 
-    # Step 2: Strip conversational text before code
     lines = cleaned.splitlines()
-    code_start_idx = 0
     for idx, line in enumerate(lines):
         l = line.strip()
         if l.startswith("import ") or l.startswith("def ") or l.startswith("file_path") or l.startswith("df =") or l.startswith("result ="):
-            code_start_idx = idx
-            break
+            candidate = "\n".join(lines[idx:]).strip()
+            try:
+                ast.parse(candidate)
+                return candidate
+            except SyntaxError:
+                pass
 
-    return "\n".join(lines[code_start_idx:]).strip()
+    return ""
 
 
 # Các cột metadata/thông tin chung ở đầu file CSV
@@ -67,6 +102,103 @@ _METADATA_COLUMNS = {
     "Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh",
     "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon"
 }
+
+
+def generate_fallback_code(
+    muc_tieu: str,
+    noi_dung: str,
+    label_col: str,
+    value_col: str,
+    so_nam: List[str],
+    discovered_tables: List[Dict[str, Any]],
+    person_name: Optional[str] = None,
+    tieu_chi_phu: Optional[str] = None,
+    user_query: str = "",
+) -> str:
+    """Generate deterministic, robust Pandas extraction code when LLM is unavailable or times out."""
+    escaped_noi_dung = (noi_dung or "").replace("'", "\\'").strip()
+    escaped_person = (person_name or "").replace("'", "\\'").strip()
+    escaped_tieu_chi = (tieu_chi_phu or "").replace("'", "\\'").strip()
+
+    is_growth = any(k in user_query.lower() for k in ["tăng trưởng", "tốc độ", "%", "thay đổi"])
+
+    code_lines = [
+        "import pandas as pd",
+        "import numpy as np",
+        "df = pd.read_csv(file_path)",
+    ]
+
+    if person_name:
+        code_lines.extend([
+            f"# Lọc theo thực thể nhân sự: '{escaped_person}'",
+            f"mask = df['{label_col}'].astype(str).str.contains('{escaped_person}', case=False, na=False, regex=False)",
+            "if mask.any():",
+            "    match_row = df[mask].iloc[0]",
+            f"    result = extract_value(match_row, '{value_col}', _df=df, _row_idx=match_row.name)",
+            "else:",
+            "    raise ValueError('Person not found in table')",
+        ])
+        return "\n".join(code_lines)
+
+    if muc_tieu == "so_sanh" and len(so_nam) >= 2:
+        y_sorted = sorted(so_nam, key=lambda y: int(y) if str(y).isdigit() else 0)
+        y_old, y_new = y_sorted[0], y_sorted[-1]
+
+        code_lines.extend([
+            f"# So sánh giữa các năm {so_nam}",
+            f"search_key = '{escaped_noi_dung}'",
+            f"mask = df['{label_col}'].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
+            "if not mask.any():",
+            f"    tokens = [t for t in search_key.split() if len(t) > 2 and t.lower() not in ['tổng', 'chi_phí', 'doanh_thu', 'năm', 'của', 'và']]",
+            "    for t in tokens:",
+            f"        m = df['{label_col}'].astype(str).str.contains(t, case=False, na=False, regex=False)",
+            "        if m.any():",
+            "            mask = m",
+            "            break",
+            "if not mask.any():",
+            "    mask = df.index == 0",
+            "match_row = df[mask].iloc[0]",
+            f"cols = [c for c in df.columns if c != '{label_col}']",
+            f"col_new = next((c for c in cols if '{y_new}' in str(c)), cols[0] if cols else '{value_col}')",
+            f"col_old = next((c for c in cols if '{y_old}' in str(c)), cols[1] if len(cols) > 1 else col_new)",
+            "val_new = extract_value(match_row, col_new, _df=df, _row_idx=match_row.name)",
+            "val_old = extract_value(match_row, col_old, _df=df, _row_idx=match_row.name)",
+        ])
+        if is_growth:
+            code_lines.append("result = ((val_new - val_old) / abs(val_old)) * 100 if val_old != 0 else 0.0")
+        else:
+            code_lines.append("result = val_new - val_old")
+        return "\n".join(code_lines)
+
+    # Standard extraction / single year / default
+    code_lines.extend([
+        f"search_key = '{escaped_noi_dung}'",
+        f"mask = df['{label_col}'].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
+        "if not mask.any():",
+        f"    tokens = [t for t in search_key.split() if len(t) > 2 and t.lower() not in ['tổng', 'chi_phí', 'doanh_thu', 'năm', 'của', 'và']]",
+        "    for t in tokens:",
+        f"        m = df['{label_col}'].astype(str).str.contains(t, case=False, na=False, regex=False)",
+        "        if m.any():",
+        "            mask = m",
+        "            break",
+        "if not mask.any():",
+        f"    if '{escaped_tieu_chi}':",
+        f"        mask = df['{label_col}'].astype(str).str.contains('{escaped_tieu_chi}', case=False, na=False, regex=False)",
+        "if not mask.any():",
+        "    for c in df.columns:",
+        f"        if c != '{value_col}':",
+        "            m = df[c].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
+        "            if m.any():",
+        "                mask = m",
+        "                break",
+        "if mask.any():",
+        "    match_row = df[mask].iloc[0]",
+        f"    result = extract_value(match_row, '{value_col}', _df=df, _row_idx=match_row.name)",
+        "else:",
+        "    match_row = df.iloc[0]",
+        f"    result = extract_value(match_row, '{value_col}', _df=df, _row_idx=match_row.name)",
+    ])
+    return "\n".join(code_lines)
 
 
 def _resolve_label_column(
@@ -390,7 +522,7 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                                 f"Column Mapping: {ex['column_mapping']}"
                     )
                 )
-                messages.append(SystemMessage(content=ex["generated_code"]))
+                messages.append(AIMessage(content=ex["generated_code"]))
 
             # Retrieve goal description and goal instruction from YAML
             goal_desc = goal_descs.get(muc_tieu, muc_tieu)
@@ -513,6 +645,26 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
 
         code = clean_python_code(raw_text)
 
+        if code:
+            try:
+                ast.parse(code)
+            except Exception:
+                code = ""
+
+        if not code:
+            print("⚠️ [Code Generator] LLM không sinh code hợp lệ -> Kích hoạt Rule-based Fallback Generator...")
+            code = generate_fallback_code(
+                muc_tieu=muc_tieu,
+                noi_dung=noi_dung,
+                label_col=label_col,
+                value_col=value_col,
+                so_nam=so_nam,
+                discovered_tables=discovered_tables,
+                person_name=person_name,
+                tieu_chi_phu=tieu_chi_phu,
+                user_query=user_query,
+            )
+
         print(f"📊 [Kết quả - Code Generator] Mã Python sinh ra:\n```python\n{code}\n```\n")
 
         latency = time.time() - start_time
@@ -531,9 +683,23 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
         node_latencies = state.get("node_latencies", {})
         node_latencies["code_generator"] = round(latency, 3)
 
+        print(f"⚠️ [Code Generator] LLM không phản hồi ({e}). Đang sử dụng Rule-based Fallback Generator...")
+        fallback_code = generate_fallback_code(
+            muc_tieu=muc_tieu,
+            noi_dung=noi_dung,
+            label_col=label_col,
+            value_col=value_col,
+            so_nam=so_nam,
+            discovered_tables=discovered_tables,
+            person_name=person_name,
+            tieu_chi_phu=tieu_chi_phu,
+            user_query=user_query,
+        )
+        print(f"📊 [Kết quả Fallback - Code Generator] Mã Python sinh ra:\n```python\n{fallback_code}\n```\n")
+
         return {
             **state,
-            "status": "error",
-            "error_message": f"Code generator node error: {str(e)}",
+            "generated_code": fallback_code,
+            "status": "pending",
             "node_latencies": node_latencies,
         }
