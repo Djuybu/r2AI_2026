@@ -318,17 +318,32 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     so_nam = parsed_query.get("so_nam", [])
     tieu_chi_phu = parsed_query.get("tieu_chi_phu")
 
+    # Detect person name if query involves remuneration / salary / executive personnel (Q15)
+    person_name = parsed_query.get("ten_nhan_su") or parsed_query.get("person_name")
+    if not person_name and isinstance(user_query, str):
+        p_match = re.search(r"(?:thù lao|tiền lương|cổ phần|lương)\s+(?:của\s+)?([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+){1,3})", user_query, re.IGNORECASE)
+        if p_match:
+            person_name = p_match.group(1).strip()
+
     # Get column names from mapping, sử dụng schema thực tế nếu có
     label_col = _resolve_label_column(table_schema, first_row_values, column_mapping, schema=schema)
     value_col = _resolve_value_column(table_schema, first_row_values, parsed_query, column_mapping, label_col, schema=schema)
 
     print(f"   📋 [Code Generator] Schema: {table_schema}")
     print(f"   📋 [Code Generator] Label col: '{label_col}', Value col: '{value_col}'")
+    if person_name:
+        print(f"   👤 [Code Generator] Nhận diện nhân sự/lãnh đạo: '{person_name}'")
     if first_row_values:
         print(f"   📋 [Code Generator] First row values: {first_row_values}")
 
     # Build files context (bao gồm schema và first_row info)
     files_context = _build_files_context(discovered_tables, column_mapping, table_schema, first_row_values, schema=schema)
+    if person_name:
+        files_context += f"\n\n👤 THỰC THỂ NHÂN SỰ/LÃNH ĐẠO: '{person_name}'. ƯU TIÊN LỌC THEO TÊN NÀY TRÊN CỘT NHÃN '{label_col}'."
+
+    core_tokens = [t for t in re.findall(r"\w+", noi_dung) if len(t) > 2 and t.lower() not in ["tổng", "tổng_số", "số_dư", "chi_phí", "giá_trị", "chỉ_tiêu", "năm", "báo", "cáo"]]
+    if core_tokens:
+        files_context += f"\n🔑 TỪ KHÓA CỐT LÕI (DÙNG CHO MULTI-STAGE QUERY NẾU CẤP 1 RỖNG): {core_tokens}"
 
     # Build file path variables for code
     paths_str = ""

@@ -588,6 +588,101 @@ def _enrich_column_descriptions(
     return useful_columns
 
 
+def analyze_single_table_schema(
+    table_dict: Dict[str, Any],
+    tieu_chi_phu: Optional[str] = None,
+    cfg: Optional[Config] = None,
+) -> Dict[str, Any]:
+    """Phân tích schema, label_column, value_column cho một bảng bất kỳ."""
+    cfg = cfg or default_config
+    csv_path = table_dict.get("csv_path", "")
+    if not csv_path or not Path(csv_path).exists():
+        return {"column_mapping": {}, "schema": {}}
+
+    metadata_set = set(METADATA_HEADER_COLUMNS)
+    table_name = table_dict.get("Ten_Bang", Path(csv_path).stem)
+    try:
+        df_full = pd.read_csv(csv_path)
+        raw_columns = list(df_full.columns)
+        all_useful = _extract_useful_columns(df_full, metadata_cols=metadata_set)
+        label_col = _find_label_column(all_useful, raw_columns)
+        useful_cols = [
+            c for c in all_useful
+            if c.get("data_type") == "numeric"
+            and not c.get("is_aux_code", False)
+            and not AUXILIARY_COL_REGEX.match(str(c.get("column_name", "")).strip())
+            and not AUXILIARY_COL_REGEX.match(str(c.get("raw_column", "")).strip())
+            and str(c.get("column_name", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
+            and str(c.get("raw_column", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
+        ]
+        if not useful_cols:
+            useful_cols = [c for c in all_useful if c.get("raw_column") != label_col]
+        value_col = _find_value_column(useful_cols, label_col, tieu_chi_phu, raw_columns)
+        return {
+            "column_mapping": {
+                "label_column": label_col,
+                "value_column": value_col,
+                "all_columns": str(raw_columns),
+                "all_useful_columns": [c["raw_column"] for c in useful_cols],
+            },
+            "schema": {
+                "useful_columns": useful_cols,
+                "sub_sections": _extract_sub_sections(df_full, label_col, metadata_set),
+            }
+        }
+    except Exception as e:
+        return {"column_mapping": {}, "schema": {}}
+
+
+def map_multi_tables(
+    tables: List[Dict[str, Any]],
+    parsed_query: Dict[str, Any],
+    cfg: Optional[Config] = None,
+) -> List[Dict[str, Any]]:
+    """Enrich candidate tables with schema mappings, label/value columns, and table summaries.
+
+    Args:
+        tables: List of candidate table dicts (each having 'csv_path', 'Ten_Bang', etc.)
+        parsed_query: Parsed query dictionary (containing 'tieu_chi_phu', 'noi_dung', etc.)
+        cfg: Configuration instance
+
+    Returns:
+        Enriched list of table dicts, each updated with:
+        - 'column_mapping': {'label_column': ..., 'value_column': ..., 'all_columns': ..., 'all_useful_columns': ...}
+        - 'schema': {'useful_columns': [...], 'sub_sections': [...]}
+        - 'useful_columns': List of useful column names or dicts
+        - 'label_column': str
+        - 'value_column': str
+        - 'table_summary': str
+    """
+    cfg = cfg or default_config
+    tieu_chi_phu = parsed_query.get("tieu_chi_phu") if isinstance(parsed_query, dict) else None
+    enriched_tables = []
+
+    for tbl in tables:
+        tbl_copy = dict(tbl)
+        tbl_res = analyze_single_table_schema(tbl_copy, tieu_chi_phu=tieu_chi_phu, cfg=cfg)
+        col_mapping = tbl_res.get("column_mapping", {})
+        tbl_schema = tbl_res.get("schema", {})
+
+        label_col = col_mapping.get("label_column", "")
+        value_col = col_mapping.get("value_column", "")
+        useful_cols = tbl_schema.get("useful_columns", [])
+        csv_p = tbl_copy.get("csv_path", "")
+        table_name = tbl_copy.get("Ten_Bang", Path(csv_p).stem if csv_p else "")
+
+        tbl_copy["column_mapping"] = col_mapping
+        tbl_copy["schema"] = tbl_schema
+        tbl_copy["label_column"] = label_col
+        tbl_copy["value_column"] = value_col
+        tbl_copy["useful_columns"] = useful_cols
+        tbl_copy["table_summary"] = f"Bảng: {table_name} | Cột nhãn: {label_col} | Cột giá trị: {value_col}"
+
+        enriched_tables.append(tbl_copy)
+
+    return enriched_tables
+
+
 def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
     """LangGraph Node 3: Schema Mapper Node.
 
@@ -605,6 +700,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
 
     parsed_query = state.get("parsed_query", {})
     discovered_tables = state.get("discovered_tables", [])
+    top_candidates = state.get("top_k_candidates", discovered_tables[:5])
     tieu_chi_phu = parsed_query.get("tieu_chi_phu")
 
     print(f"\n" + "=" * 65)
@@ -624,6 +720,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
             **state,
             "column_mapping": {},
             "schema": schema,
+            "top_k_candidates": [],
             "status": "pending",
             "node_latencies": node_latencies,
         }
@@ -690,6 +787,9 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
             "sub_sections": sub_sections,
         }
 
+        # Ánh xạ schema cho toàn bộ danh sách candidate tables qua map_multi_tables
+        top_candidates = map_multi_tables(top_candidates, parsed_query, cfg=cfg)
+
         # ── 8. In Output JSON phục vụ kiểm thử ──
         output_json = {
             "column_mapping": column_mapping,
@@ -717,6 +817,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         **state,
         "column_mapping": column_mapping,
         "schema": schema,
+        "top_k_candidates": top_candidates,
         "status": "pending",
         "node_latencies": node_latencies,
     }

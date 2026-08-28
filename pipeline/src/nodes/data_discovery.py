@@ -79,6 +79,107 @@ def _resolve_csv_path(csv_path_str: str, cfg: Config) -> Optional[Path]:
     return None
 
 
+def _get_processed_data_dir(cfg: Config) -> Optional[Path]:
+    """Find processed_data directory across local repo and Kaggle environments."""
+    candidates = [
+        Path(cfg.BASE_DIR.parent / "rag_module" / "ViFinQA" / "processed_data"),
+        Path(__file__).resolve().parents[3] / "rag_module" / "ViFinQA" / "processed_data",
+        Path("r2AI_2026/rag_module/ViFinQA/processed_data"),
+        Path("rag_module/ViFinQA/processed_data"),
+        Path("/kaggle/input/datasets/duymcminh/r2-ai-output/r2AI_data/ViFinQA/processed_data"),
+        Path("/kaggle/input/r2-ai-output/r2AI_data/ViFinQA/processed_data"),
+    ]
+    for c in candidates:
+        if c.exists():
+            return c.resolve()
+    return None
+
+
+def _find_offline_candidate_tables(
+    ticker: str,
+    so_nam: List[Any],
+    noi_dung: str,
+    report_type: Optional[str],
+    cfg: Config,
+    top_k: int = 5,
+) -> List[Dict[str, Any]]:
+    """Offline scanner: locate top candidate CSV files directly from local processed_data directory."""
+    data_dir = _get_processed_data_dir(cfg)
+    if not data_dir or not data_dir.exists():
+        return []
+
+    if not ticker:
+        return []
+
+    ticker_dir = data_dir / ticker.upper()
+    if not ticker_dir.exists() or not ticker_dir.is_dir():
+        return []
+
+    year_dirs = []
+    if so_nam:
+        for y in so_nam:
+            yd = ticker_dir / str(y)
+            if yd.exists() and yd.is_dir():
+                year_dirs.append((str(y), yd))
+    if not year_dirs:
+        for yd in ticker_dir.iterdir():
+            if yd.is_dir():
+                year_dirs.append((yd.name, yd))
+
+    tokens = [t.lower() for t in re.findall(r"\w+", noi_dung) if len(t) > 1]
+    candidates_with_score = []
+
+    for year_str, yd in year_dirs:
+        csv_files = list(yd.glob("**/*.csv"))
+        for csv_f in csv_files:
+            score = 0.0
+            p_lower = str(csv_f).lower()
+
+            if report_type == "consolidated" and "consolidated" in p_lower:
+                score += 2.0
+            elif report_type == "separate" and "separate" in p_lower:
+                score += 2.0
+
+            try:
+                sample_df = pd.read_csv(csv_f, nrows=15)
+                cols_str = " ".join([str(c) for c in sample_df.columns]).lower()
+                cells_str = sample_df.astype(str).to_string().lower()
+
+                for tok in tokens:
+                    if tok in cols_str:
+                        score += 3.0
+                    if tok in cells_str:
+                        score += 1.5
+
+                if noi_dung.lower() in cells_str:
+                    score += 10.0
+            except Exception:
+                pass
+
+            candidates_with_score.append((score, year_str, csv_f))
+
+    candidates_with_score.sort(key=lambda x: x[0], reverse=True)
+
+    discovered = []
+    seen_paths = set()
+    for score, year_str, csv_f in candidates_with_score:
+        resolved_p = str(csv_f.resolve())
+        if resolved_p not in seen_paths:
+            seen_paths.add(resolved_p)
+            discovered.append({
+                "csv_path": resolved_p,
+                "Ten_Bang": csv_f.stem,
+                "rrf_score": max(score, 0.1),
+                "Ma_Doanh_Nghiep": ticker.upper(),
+                "Nam_Tai_Chinh": year_str,
+                "Loai_Bao_Cao": report_type or ("consolidated" if "consolidated" in str(csv_f) else "separate"),
+            })
+            if len(discovered) >= top_k:
+                break
+
+    return discovered
+
+
 def _log_candidates(results: List[Dict[str, Any]], year_label: str = "") -> None:
     """In log chi tiết các ứng viên top-K tìm được từ Search Engine kèm minh chứng khớp cột."""
     prefix = f" (Năm {year_label})" if year_label else ""
@@ -233,7 +334,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 )
             if results:
                 _log_candidates(results)
-                for match in results[:3]:
+                for match in results[:5]:
                     csv_path = _resolve_csv_path(match.get("csv_path", ""), cfg)
                     if csv_path:
                         table_entry = {
@@ -272,7 +373,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                     )
                 if results:
                     _log_candidates(results, year_label=str(year))
-                    for match in results[:3]:
+                    for match in results[:5]:
                         csv_path = _resolve_csv_path(match.get("csv_path", ""), cfg)
                         if csv_path:
                             table_entry = {
@@ -282,7 +383,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                                 "Ma_Doanh_Nghiep": match.get("Ma_Doanh_Nghiep", ten_cong_ty),
                                 "Nam_Tai_Chinh": str(year),
                                 "Loai_Bao_Cao": match.get("Loai_Bao_Cao", ""),
-                            "matched_sample": match.get("matched_sample", ""),
+                                "matched_sample": match.get("matched_sample", ""),
                             }
                             if not any(t["csv_path"] == str(csv_path) for t in all_discovered_tables):
                                 all_discovered_tables.append(table_entry)
@@ -291,9 +392,28 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                         print(f"   🏆 Năm {year} - Bảng khớp CAO NHẤT: {Path(best['csv_path']).name} — {best['Ten_Bang']} (RRF: {best['rrf_score']:.6f})")
 
     except Exception as e:
-        print(f"⚠️ [Data Discovery] Lỗi/Không dùng được Search Engine: {e}. Thử DataRegistry fallback...")
+        print(f"⚠️ [Data Discovery] Lỗi/Không dùng được Search Engine: {e}. Thử quét thư mục offline...")
 
-    # Fallback using DataRegistry if Search Engine returned nothing
+    # Fallback 1: Offline directory scanner when Search Engine is offline/unavailable
+    if not all_discovered_tables and ten_cong_ty:
+        try:
+            offline_tables = _find_offline_candidate_tables(
+                ticker=ten_cong_ty,
+                so_nam=so_nam,
+                noi_dung=noi_dung,
+                report_type=report_type,
+                cfg=cfg,
+                top_k=5,
+            )
+            for tbl in offline_tables:
+                if not any(t["csv_path"] == tbl["csv_path"] for t in all_discovered_tables):
+                    all_discovered_tables.append(tbl)
+            if all_discovered_tables:
+                print(f"   📂 [Data Discovery] Đã nạp thành công {len(all_discovered_tables)} bảng từ thư mục processed_data offline.")
+        except Exception as scan_err:
+            print(f"⚠️ [Data Discovery] Offline scanner error: {scan_err}")
+
+    # Fallback 2: DataRegistry if still nothing found
     if not all_discovered_tables:
         try:
             registry = DataRegistry(cfg=cfg)
@@ -321,31 +441,36 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             "status": "error",
             "error_message": "Không tìm thấy bảng dữ liệu phù hợp từ Search Engine.",
             "discovered_tables": [],
+            "top_k_candidates": [],
             "matched_table_path": None,
             "table_schema": [],
             "first_row_values": {},
             "node_latencies": node_latencies,
         }
 
+    # Extract schema và first_row_values cho tất cả các bảng trong Top 5
+    for tbl in all_discovered_tables[:5]:
+        schema_info = _extract_table_schema(tbl["csv_path"])
+        tbl["table_schema"] = schema_info["table_schema"]
+        tbl["first_row_values"] = schema_info["first_row_values"]
+
     first_table_path = all_discovered_tables[0]["csv_path"]
+    first_schema = all_discovered_tables[0].get("table_schema", [])
+    first_row_val = all_discovered_tables[0].get("first_row_values", {})
 
-    # Extract schema và giá trị hàng đầu tiên từ bảng tốt nhất
-    schema_info = _extract_table_schema(first_table_path)
-    all_discovered_tables[0]["table_schema"] = schema_info["table_schema"]
-    all_discovered_tables[0]["first_row_values"] = schema_info["first_row_values"]
-
-    print(f"\n📊 [Kết quả - Data Discovery]: Đã chọn {len(all_discovered_tables)} bảng có độ khớp cao nhất.")
-    print(f"   📋 Schema bảng: {schema_info['table_schema']}")
-    if schema_info["first_row_values"]:
-        print(f"   📋 Giá trị hàng đầu tiên (cột số): {schema_info['first_row_values']}")
+    print(f"\n📊 [Kết quả - Data Discovery]: Đã chọn {len(all_discovered_tables)} bảng có độ khớp cao nhất (Top-K candidates: {min(5, len(all_discovered_tables))}).")
+    print(f"   📋 Schema bảng Top 1: {first_schema}")
+    if first_row_val:
+        print(f"   📋 Giá trị hàng đầu tiên (cột số): {first_row_val}")
     print()
 
     return {
         **state,
         "discovered_tables": all_discovered_tables,
+        "top_k_candidates": all_discovered_tables[:5],
         "matched_table_path": first_table_path,
-        "table_schema": schema_info["table_schema"],
-        "first_row_values": schema_info["first_row_values"],
+        "table_schema": first_schema,
+        "first_row_values": first_row_val,
         "status": "pending",
         "node_latencies": node_latencies,
     }

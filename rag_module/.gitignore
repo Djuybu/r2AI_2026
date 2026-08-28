@@ -4,3 +4,4 @@ qdrant_local_db/
 test/
 *.pkl
 bm25_index.pkl
+.agents/

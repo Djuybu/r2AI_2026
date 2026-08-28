@@ -22,7 +22,7 @@ class AgentState(TypedDict, total=False):
 
     # Node 2: Data Discovery Output
     discovered_tables: List[Dict[str, Any]]  # List bảng từ Search Engine
-    # Each table dict contains: csv_path, Ten_Bang, rrf_score, Ma_Doanh_Nghiep, Nam_Tai_Chinh, etc.
+    matched_table_path: Optional[str]        # Đường dẫn bảng Top-1 (hoặc bảng tốt nhất)
     table_schema: List[str]                  # Danh sách tên cột của bảng tốt nhất
     first_row_values: Dict[str, str]         # Giá trị hàng đầu tiên (khi cột có tên là số)
 
@@ -37,6 +37,12 @@ class AgentState(TypedDict, total=False):
     execution_result: Any
     error_traceback: Optional[str]
     retry_count: int
+
+    # Multi-Table Top-5 Candidate Execution & Aggregator
+    multi_table_results: List[Dict[str, Any]]
+    top_k_candidates: List[Dict[str, Any]]
+    current_table_index: int
+    aggregated_value: Optional[Any]
 
     # General Workflow Metadata
     status: Literal["pending", "success", "error"]
