@@ -7,6 +7,7 @@ Tất cả các prompt, quy tắc và template được nạp từ file prompts/
 import re
 import time
 import yaml
+from pathlib import Path
 from typing import Dict, Any, Optional, List
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -16,13 +17,22 @@ from pipeline.src.llm_provider import get_llm
 
 
 def load_yaml_prompt(cfg: Config, filename: str) -> Dict[str, Any]:
-    """Load prompt template YAML."""
-    prompt_path = cfg.get_prompt_path(filename)
-    if not prompt_path.exists():
-        raise FileNotFoundError(f"Prompt file not found at: {prompt_path}")
+    """Load prompt template YAML with fallback to Kaggle global prompt dicts."""
+    try:
+        if hasattr(cfg, "get_prompt_path"):
+            prompt_path = cfg.get_prompt_path(filename)
+            if prompt_path and Path(prompt_path).exists():
+                with open(prompt_path, "r", encoding="utf-8") as f:
+                    return yaml.safe_load(f)
+    except Exception:
+        pass
 
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    if "code_generator" in filename and "PROMPT_CODE_GENERATOR" in globals():
+        return globals()["PROMPT_CODE_GENERATOR"]
+    elif "reflection" in filename and "PROMPT_REFLECTION" in globals():
+        return globals()["PROMPT_REFLECTION"]
+
+    raise FileNotFoundError(f"Prompt file {filename} not found and no global fallback available.")
 
 
 def clean_python_code(raw_code: str) -> str:

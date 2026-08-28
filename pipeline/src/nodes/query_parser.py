@@ -19,13 +19,20 @@ from pipeline.src.utils.json_repair import safe_parse_json
 
 
 def load_query_parser_prompt(cfg: Config) -> Dict[str, Any]:
-    """Load prompt templates and few-shot examples from YAML."""
-    prompt_path = cfg.get_prompt_path("query_parser.yaml")
-    if not prompt_path.exists():
-        raise FileNotFoundError(f"Prompt file not found at: {prompt_path}")
+    """Load prompt templates and few-shot examples from YAML with fallback to Kaggle globals."""
+    try:
+        if hasattr(cfg, "get_prompt_path"):
+            prompt_path = cfg.get_prompt_path("query_parser.yaml")
+            if prompt_path and Path(prompt_path).exists():
+                with open(prompt_path, "r", encoding="utf-8") as f:
+                    return yaml.safe_load(f)
+    except Exception:
+        pass
 
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    if "PROMPT_QUERY_PARSER" in globals():
+        return globals()["PROMPT_QUERY_PARSER"]
+
+    raise FileNotFoundError("Prompt file query_parser.yaml not found and no global fallback available.")
 
 
 NEGATIVE_BLOCKLIST: Set[str] = {

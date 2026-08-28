@@ -524,13 +524,21 @@ def _enrich_column_descriptions(
             print(f"   ℹ️ [Schema Mapper] vLLM server offline -> Dùng mô tả cấu trúc mặc định.")
             return useful_columns
 
-        prompt_path = cfg.get_prompt_path("schema_mapper.yaml")
-        if not prompt_path.exists():
-            print(f"   ⚠️ [Schema Mapper] File prompt không tồn tại: {prompt_path}")
-            return useful_columns
+        prompt_data = None
+        try:
+            if hasattr(cfg, "get_prompt_path"):
+                prompt_path = cfg.get_prompt_path("schema_mapper.yaml")
+                if prompt_path and Path(prompt_path).exists():
+                    with open(prompt_path, "r", encoding="utf-8") as f:
+                        prompt_data = yaml.safe_load(f)
+        except Exception:
+            pass
 
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            prompt_data = yaml.safe_load(f)
+        if not prompt_data and "PROMPT_SCHEMA_MAPPER" in globals():
+            prompt_data = globals()["PROMPT_SCHEMA_MAPPER"]
+
+        if not prompt_data:
+            return useful_columns
 
         system_prompt = prompt_data.get("system_prompt", "")
         user_template = prompt_data.get("user_prompt_template", "")
