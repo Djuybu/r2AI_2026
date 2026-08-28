@@ -30,7 +30,7 @@ FORBIDDEN_BUILTINS = {
     "globals", "locals", "input", "breakpoint"
 }
 
-ALLOWED_MODULES = {"pandas", "pd", "numpy", "np", "datetime", "math", "re"}
+ALLOWED_MODULES = {"pandas", "pd", "numpy", "np", "datetime", "math", "re", "pathlib", "Path"}
 
 
 def validate_ast(code_str: str) -> None:
@@ -275,11 +275,15 @@ def execute_code_on_table(code_str: str, file_path: str, all_tables: Optional[Li
     if file_path:
         df_loaded = pd.read_csv(file_path) if file_path.endswith('.csv') else pd.read_excel(file_path)
 
+    from pathlib import Path
+    import pathlib
     exec_globals = {
         "pd": pd,
         "np": np,
         "pandas": pd,
         "numpy": np,
+        "Path": Path,
+        "pathlib": pathlib,
         "file_path": file_path,
         "df": df_loaded,
         "clean_val": clean_val,
