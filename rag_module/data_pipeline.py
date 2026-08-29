@@ -305,9 +305,9 @@ def clean_line_noise(line: str) -> str:
     #         'thị trấn Nam Sách, huyện Nam Sách, tỉnh Hải Dương'
     line = re.sub(r"(?i)\b(?:lô|cụm\s+công\s+nghiệp|thị\s+trấn|huyện|tỉnh|phường|quận|thành\s+phố)\b.*", "", line)
 
-    # Clean up dangling punctuation & outer whitespace
+    # Clean up dangling punctuation & outer whitespace (preserve closing parentheses)
     line = line.strip()
-    line = re.sub(r"^[-–—\s,\.:;()\[\]]+|[-–—\s,\.:;()\[\]]+$", "", line)
+    line = re.sub(r"^[-–—\s,\.:;()\[\]]+|[-–—\s,\.:;]+$", "", line)
     return line.strip()
 
 def extract_table_name(pre_text: str) -> str:
@@ -318,8 +318,7 @@ def extract_table_name(pre_text: str) -> str:
     - If the cleaned line becomes empty or matches generic number/page patterns, it is skipped.
     - Lines entirely wrapped in parentheses (e.g. ``(Theo phương pháp trực tiếp)``)
       are collected as trailing suffixes and skipped.
-    - The first remaining (valid) line becomes the main heading; the line
-      directly above it is also cleaned and included if valid.
+    - Scans upward to collect up to 4 valid heading lines, preserving natural top-down order.
     """
     lines = [ln.strip() for ln in pre_text.splitlines()]
 
@@ -329,6 +328,7 @@ def extract_table_name(pre_text: str) -> str:
         re.IGNORECASE
     )
 
+    collected_lines: List[str] = []
     suffixes: List[str] = []
 
     for i in range(len(lines) - 1, -1, -1):
@@ -341,43 +341,23 @@ def extract_table_name(pre_text: str) -> str:
             continue
 
         if _PAREN_RE.match(cleaned):
-            suffixes.append(cleaned)
+            if not collected_lines:
+                suffixes.append(cleaned)
             continue
 
-        # Found the valid line — also grab the cleaned line above if meaningful
-        parts: List[str] = []
-        if i > 0:
-            prev_line = lines[i - 1]
-            cleaned_prev = clean_line_noise(prev_line)
-            
-            # Heading prefix checks
-            starts_with_heading_prefix = bool(
-                re.match(r"^(?:\d+\.|[I-VX]+\.|[A-H]\.|[a-z]\))", cleaned)
-            )
-            
-            prev_ends_with_punctuation = bool(
-                cleaned_prev.endswith(".") or cleaned_prev.endswith(":") or cleaned_prev.endswith("?") or cleaned_prev.endswith("!")
-            )
-            
-            is_valid_prev = (
-                cleaned_prev 
-                and not _FULL_LINE_NOISE.match(cleaned_prev) 
-                and not _PAREN_RE.match(cleaned_prev)
-                and not starts_with_heading_prefix
-                and not prev_ends_with_punctuation
-                and len(cleaned_prev) <= 80
-                and not _TEMPLATE_CODE_RE.search(cleaned_prev)
-            )
-            
-            if is_valid_prev:
-                parts.append(cleaned_prev)
-                
-        parts.append(cleaned)
-        suffixes.reverse()
-        parts.extend(suffixes)
-        return " ".join(parts)
+        collected_lines.append(cleaned)
+        if len(collected_lines) >= 4:
+            break
 
-    return ""
+    if not collected_lines:
+        return ""
+
+    collected_lines.reverse()
+    suffixes.reverse()
+    collected_lines.extend(suffixes)
+    return " ".join(collected_lines)
+
+
 def extract_unit(pre_text: str) -> str:
     """Extract monetary unit from preceding context text."""
     for pattern in _UNIT_PATTERNS:
@@ -406,8 +386,6 @@ def parse_tables_from_content(
     # Pre-compute 1-indexed source line numbers for every <table> tag by
     # scanning raw_content (before <br> injection) for literal '<table'
     # occurrences and counting newlines before each hit.
-    # This avoids relying on lxml .sourceline, which is unreliable after
-    # BeautifulSoup wraps the fragment in implicit <html>/<body> elements.
     raw_lower   = raw_content.lower()
     raw_lines   = raw_content.splitlines()   # 0-indexed list for context lookup
     table_source_lines: List[int] = []
@@ -420,12 +398,16 @@ def parse_tables_from_content(
         table_source_lines.append(line_num)
         search_start = pos + 1
 
-    soup = BeautifulSoup(content, "lxml")
+    try:
+        soup = BeautifulSoup(content, "lxml")
+    except Exception:
+        soup = BeautifulSoup(content, "html.parser")
+
     for idx, table_tag in enumerate(soup.find_all("table")):
         source_line = table_source_lines[idx] if idx < len(table_source_lines) else (table_source_lines[-1] if table_source_lines else 1)
         orig_line_0 = max(0, source_line - 1)   # convert to 0-indexed
 
-        pre_text   = _get_preceding_lines_from_raw(raw_lines, orig_line_0, n=15)
+        pre_text   = _get_preceding_lines_from_raw(raw_lines, orig_line_0, n=20)
         table_name = extract_table_name(pre_text)
         unit       = extract_unit(pre_text)
         yield idx, table_tag, pre_text, table_name, unit, source_line
@@ -988,9 +970,12 @@ def process_txt_file(
         parent_source_ref = f"{file_path.as_posix()}#table_{idx}@line_{source_line}"
         parent_df, parent_clean_unit = clean_subtable_df(df_cleaned.copy())
         final_parent_unit = parent_clean_unit if parent_clean_unit else table_unit
+
+        parent_table_name = f"{table_name} @line_{source_line}" if table_name else f"Table_{idx} @line_{source_line}"
+
         enriched_parent_df = attach_metadata(
             parent_df, ticker, company_name, year,
-            report_type, table_name, final_parent_unit, parent_source_ref
+            report_type, parent_table_name, final_parent_unit, parent_source_ref
         )
         if has_numeric_data_columns(enriched_parent_df):
             tables.append(enriched_parent_df)
@@ -1002,9 +987,12 @@ def process_txt_file(
                 # Include the original source line number for each sub-table
                 source_ref = f"{file_path.as_posix()}#table_{idx}_{sub_idx}@line_{source_line}"
                 final_unit = sub_unit if sub_unit else table_unit
+
+                sub_table_name_with_line = f"{sub_table_name} @line_{source_line}" if sub_table_name else f"Table_{idx}_{sub_idx} @line_{source_line}"
+
                 enriched_df = attach_metadata(
                     sub_df, ticker, company_name, year,
-                    report_type, sub_table_name, final_unit, source_ref
+                    report_type, sub_table_name_with_line, final_unit, source_ref
                 )
                 # Only keep tables that contain numeric data columns
                 if has_numeric_data_columns(enriched_df):
