@@ -422,7 +422,7 @@ def parse_tables_from_content(
 
     soup = BeautifulSoup(content, "lxml")
     for idx, table_tag in enumerate(soup.find_all("table")):
-        source_line = table_source_lines[idx] if idx < len(table_source_lines) else 0
+        source_line = table_source_lines[idx] if idx < len(table_source_lines) else (table_source_lines[-1] if table_source_lines else 1)
         orig_line_0 = max(0, source_line - 1)   # convert to 0-indexed
 
         pre_text   = _get_preceding_lines_from_raw(raw_lines, orig_line_0, n=15)
@@ -983,23 +983,32 @@ def process_txt_file(
 
         # Update unit metadata if currency row was dropped and preceding text had no unit
         table_unit = unit if unit else (extracted_unit if extracted_unit else "")
+
+        # Always attach metadata and include the complete parent table with its source line number
+        parent_source_ref = f"{file_path.as_posix()}#table_{idx}@line_{source_line}"
+        parent_df, parent_clean_unit = clean_subtable_df(df_cleaned.copy())
+        final_parent_unit = parent_clean_unit if parent_clean_unit else table_unit
+        enriched_parent_df = attach_metadata(
+            parent_df, ticker, company_name, year,
+            report_type, table_name, final_parent_unit, parent_source_ref
+        )
+        if has_numeric_data_columns(enriched_parent_df):
+            tables.append(enriched_parent_df)
+
         # Split into sub-tables if section headers exist
         subtables = split_dataframe_into_subtables(df_cleaned, table_name)
-
-        for sub_idx, (sub_table_name, sub_df, sub_unit) in enumerate(subtables):
-            # Include the original source line number so a result can be traced
-            # back to the exact location in the .txt file (Issue 2 fix).
-            source_ref = f"{file_path.as_posix()}#table_{idx}_{sub_idx}@line_{source_line}"
-            final_unit = sub_unit if sub_unit else table_unit
-            enriched_df = attach_metadata(
-                sub_df, ticker, company_name, year,
-                report_type, sub_table_name, final_unit, source_ref
-            )
-            # Only keep tables that contain numeric data columns
-            if has_numeric_data_columns(enriched_df):
-                tables.append(enriched_df)
-            # else:
-            #     # logger.info("Discarding text-only table/subtable: %s", sub_table_name)
+        if len(subtables) > 1:
+            for sub_idx, (sub_table_name, sub_df, sub_unit) in enumerate(subtables):
+                # Include the original source line number for each sub-table
+                source_ref = f"{file_path.as_posix()}#table_{idx}_{sub_idx}@line_{source_line}"
+                final_unit = sub_unit if sub_unit else table_unit
+                enriched_df = attach_metadata(
+                    sub_df, ticker, company_name, year,
+                    report_type, sub_table_name, final_unit, source_ref
+                )
+                # Only keep tables that contain numeric data columns
+                if has_numeric_data_columns(enriched_df):
+                    tables.append(enriched_df)
 
     return tables
 # ---------------------------------------------------------------------------
@@ -1226,17 +1235,23 @@ def run_indexing(
             except Exception:
                 pass
 
+        # Extract line number explicitly from Tep_Nguon or filename
+        m_line = re.search(r"@line_(\d+)", meta.get("Tep_Nguon", "")) or re.search(r"@line_(\d+)", csv_path.name)
+        table_line = int(m_line.group(1)) if m_line else 0
+
         content_strings.append(content_str)
         # col_names: comma-separated data column headers stored in payload
         # for use by search_by_column_name() in search_engine.py.
         col_names_str = ", ".join(str(c) for c in data_cols)
         payloads.append({
             **meta,
-            "csv_path":   csv_path.as_posix(),
-            "row_count":  len(df),
-            "col_count":  len(data_cols),
-            "line_items": line_items,
-            "col_names":  col_names_str,
+            "csv_path":    csv_path.as_posix(),
+            "row_count":   len(df),
+            "col_count":   len(data_cols),
+            "line_items":  line_items,
+            "col_names":   col_names_str,
+            "table_line":  table_line,
+            "source_line": table_line,
         })
 
     logger.info("Phase 2A complete. Documents: %d  |  Skipped: %d",
