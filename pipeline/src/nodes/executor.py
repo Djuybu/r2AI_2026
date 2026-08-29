@@ -179,7 +179,20 @@ def extract_value(row, preferred_col, _df=None, _row_idx=None):
     Enhanced: If all columns on the matched row are NaN/empty (hierarchical parent row),
     automatically tries the next rows below (child rows) which often contain the actual value.
     """
-    cols_to_try = [preferred_col, '1', '2', '3', '4', '5']
+    _meta = {'Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', 'Cột_0', '0', 'STT'}
+    avail_cols = []
+    if hasattr(row, 'index'):
+        avail_cols = [c for c in row.index if c not in _meta]
+    elif isinstance(row, pd.DataFrame) and not row.empty:
+        avail_cols = [c for c in row.columns if c not in _meta]
+
+    ordered_fallbacks = ['Năm nay', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015', '31/12/2024', '31/12/2023', '1', '2', '3', '4', '5']
+    seen = set()
+    cols_to_try = []
+    for c in [preferred_col] + ordered_fallbacks + avail_cols:
+        if c and c not in seen:
+            seen.add(c)
+            cols_to_try.append(c)
     
     # Try extracting from the current row first
     for c in cols_to_try:

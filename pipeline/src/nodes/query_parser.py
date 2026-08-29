@@ -239,9 +239,13 @@ def _get_stock_mappings() -> Tuple[List[Tuple[str, str]], Set[str]]:
     all_tickers: Set[str] = set()
 
     possible_paths = [
+        Path("r2AI_2026/rag_module/code_stock.csv"),
+        Path("r2AI_2026/rag_module/ViFinQA/code_stock.csv"),
         Path("rag_module/code_stock.csv"),
         Path("rag_module/ViFinQA/code_stock.csv"),
         Path("/kaggle/working/r2AI_2026/rag_module/code_stock.csv"),
+        Path(__file__).resolve().parent.parent.parent.parent / "rag_module" / "code_stock.csv",
+        Path(__file__).resolve().parent.parent.parent.parent / "rag_module" / "ViFinQA" / "code_stock.csv",
         Path(__file__).resolve().parent.parent.parent / "rag_module" / "code_stock.csv",
         Path(__file__).resolve().parent.parent.parent / "rag_module" / "ViFinQA" / "code_stock.csv",
     ]
@@ -433,7 +437,9 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     for word in stop_phrases:
         clean_content = re.sub(rf"\b{re.escape(word)}\b", "", clean_content, flags=re.IGNORECASE)
 
-    clean_content = _clean_financial_content(clean_content or q)
+    # Check for personnel entity in query
+    from pipeline.src.nodes.code_generator import extract_person_name
+    person_name = extract_person_name(user_query)
 
     return {
         "ticker": company,
@@ -445,6 +451,7 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
         "thao_tac": thao_tac,
         "muc_tieu": thao_tac,
         "tieu_chi_phu": tieu_chi_phu,
+        "ten_nhan_su": person_name,
     }
 
 
@@ -560,6 +567,10 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         if "tieu_chi_phu" not in parsed_json:
             parsed_json["tieu_chi_phu"] = None
 
+        from pipeline.src.nodes.code_generator import extract_person_name
+        person_name = parsed_json.get("ten_nhan_su") or extract_person_name(user_query)
+        parsed_json["ten_nhan_su"] = person_name
+
         print(
             f"📊 [Kết quả - Query Parser]:\n"
             f"   Công ty: {parsed_json.get('ten_cong_ty')}\n"
@@ -567,6 +578,7 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
             f"   Nội dung: {parsed_json.get('noi_dung')}\n"
             f"   Thao tác: {parsed_json.get('thao_tac')}\n"
             f"   Tiêu chí phụ: {parsed_json.get('tieu_chi_phu')}\n"
+            f"   Nhân sự: {parsed_json.get('ten_nhan_su')}\n"
         )
 
         latency = time.time() - start_time

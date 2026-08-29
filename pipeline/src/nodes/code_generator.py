@@ -103,6 +103,47 @@ _METADATA_COLUMNS = {
     "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon"
 }
 
+_PERSON_BLOCKLIST = {
+    "và các khoản khác", "các khoản khác", "đã phát hành", "đã phát hành của",
+    "quản lý doanh nghiệp", "phát hành thêm", "công ty mẹ", "chi phí",
+    "doanh thu", "lợi nhuận", "vốn chủ sở hữu", "vốn cổ phần", "tổng giám đốc",
+    "hội đồng quản trị", "chứng khoán fpt", "báo cáo tài chính", "tổng công ty",
+    "hàng không vietjet", "ngân hàng tmcp", "tập đoàn", "công ty cổ phần"
+}
+
+
+def extract_person_name(user_query: str) -> Optional[str]:
+    """Extract executive person name from financial query, rejecting financial line item false positives."""
+    if not user_query:
+        return None
+    q_lower = user_query.lower()
+    if any(k in q_lower for k in [
+        "chi phí lương", "quỹ lương", "vốn cổ phần", "cổ phần đã phát hành",
+        "tỷ lệ sở hữu", "quyền biểu quyết", "tỷ lệ biểu quyết", "chi phí quản lý"
+    ]):
+        return None
+
+    # Priority 1: Match title prefix + Capitalized Name
+    m = re.search(
+        r"(?i:(?:thành viên\s+(?:hđqt|hội đồng quản trị|bqt|bks|ban kiểm soát|ban tổng giám đốc|ban giám đốc)|chủ tịch(?:\s+hđqt)?|tổng giám đốc|tgđ|phó tổng giám đốc|phó tgđ|ông|bà))\s+([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+){1,3})",
+        user_query
+    )
+    if m:
+        cand = m.group(1).strip()
+        if cand.lower() not in _PERSON_BLOCKLIST:
+            return cand
+
+    # Priority 2: Remuneration / Salary of person
+    m2 = re.search(
+        r"(?i:(?:thù lao|tiền lương|thưởng|thu nhập)\s+(?:của\s+)?(?:ông\s+|bà\s+)?)([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+){1,3})",
+        user_query
+    )
+    if m2:
+        cand = m2.group(1).strip()
+        if cand.lower() not in _PERSON_BLOCKLIST and not any(cand.lower().startswith(b) for b in ["ctcp", "ngân hàng", "công ty", "tập đoàn", "chứng khoán"]):
+            return cand
+    return None
+
 
 def generate_fallback_code(
     muc_tieu: str,
@@ -126,15 +167,30 @@ def generate_fallback_code(
         "import pandas as pd",
         "import numpy as np",
         "df = pd.read_csv(file_path)",
+        "# Dò tìm cột nhãn thực tế của bảng hiện tại",
+        "_meta = {'Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon'}",
+        f"_cand_labels = [c for c in ['{label_col}', 'Cột_0', '0', '1', 'STT', 'Chỉ tiêu', 'Nội dung', 'Loại chi phí quản lý CTCK'] if c in df.columns and c not in _meta]",
+        "_lbl = _cand_labels[0] if _cand_labels else next((c for c in df.columns if c not in _meta), df.columns[0])",
+        "# Dò tìm cột giá trị thực tế của bảng hiện tại",
+        f"_cand_values = [c for c in ['{value_col}', 'Năm nay', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015', '31/12/2024', '31/12/2023', '1', '2', '3'] if c in df.columns and c != _lbl and c not in _meta]",
+        f"_val = _cand_values[0] if _cand_values else ('{value_col}' if '{value_col}' in df.columns else (df.columns[-1] if len(df.columns) > 1 else df.columns[0]))",
     ]
 
     if person_name:
         code_lines.extend([
             f"# Lọc theo thực thể nhân sự: '{escaped_person}'",
-            f"mask = df['{label_col}'].astype(str).str.contains('{escaped_person}', case=False, na=False, regex=False)",
+            f"mask = df[_lbl].astype(str).str.contains('{escaped_person}', case=False, na=False, regex=False)",
+            "if not mask.any():",
+            "    for c in df.columns:",
+            "        if c not in _meta and c != _val:",
+            f"            m = df[c].astype(str).str.contains('{escaped_person}', case=False, na=False, regex=False)",
+            "            if m.any():",
+            "                mask = m",
+            "                _lbl = c",
+            "                break",
             "if mask.any():",
             "    match_row = df[mask].iloc[0]",
-            f"    result = extract_value(match_row, '{value_col}', _df=df, _row_idx=match_row.name)",
+            "    result = extract_value(match_row, _val, _df=df, _row_idx=match_row.name)",
             "else:",
             "    raise ValueError('Person not found in table')",
         ])
@@ -147,19 +203,27 @@ def generate_fallback_code(
         code_lines.extend([
             f"# So sánh giữa các năm {so_nam}",
             f"search_key = '{escaped_noi_dung}'",
-            f"mask = df['{label_col}'].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
+            "mask = df[_lbl].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
             "if not mask.any():",
-            f"    tokens = [t for t in search_key.split() if len(t) > 2 and t.lower() not in ['tổng', 'chi_phí', 'doanh_thu', 'năm', 'của', 'và']]",
+            "    for c in df.columns:",
+            "        if c not in _meta and c != _val:",
+            "            m = df[c].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
+            "            if m.any():",
+            "                mask = m",
+            "                _lbl = c",
+            "                break",
+            "if not mask.any():",
+            "    tokens = [t for t in search_key.split() if len(t) > 2 and t.lower() not in ['tổng', 'chi_phí', 'doanh_thu', 'năm', 'của', 'và', 'các', 'khoản', 'theo']]",
             "    for t in tokens:",
-            f"        m = df['{label_col}'].astype(str).str.contains(t, case=False, na=False, regex=False)",
+            "        m = df[_lbl].astype(str).str.contains(t, case=False, na=False, regex=False)",
             "        if m.any():",
             "            mask = m",
             "            break",
             "if not mask.any():",
             "    mask = df.index == 0",
             "match_row = df[mask].iloc[0]",
-            f"cols = [c for c in df.columns if c != '{label_col}']",
-            f"col_new = next((c for c in cols if '{y_new}' in str(c)), cols[0] if cols else '{value_col}')",
+            "cols = [c for c in df.columns if c not in _meta and c != _lbl]",
+            f"col_new = next((c for c in cols if '{y_new}' in str(c)), cols[0] if cols else _val)",
             f"col_old = next((c for c in cols if '{y_old}' in str(c)), cols[1] if len(cols) > 1 else col_new)",
             "val_new = extract_value(match_row, col_new, _df=df, _row_idx=match_row.name)",
             "val_old = extract_value(match_row, col_old, _df=df, _row_idx=match_row.name)",
@@ -173,30 +237,31 @@ def generate_fallback_code(
     # Standard extraction / single year / default
     code_lines.extend([
         f"search_key = '{escaped_noi_dung}'",
-        f"mask = df['{label_col}'].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
+        "mask = df[_lbl].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
         "if not mask.any():",
-        f"    tokens = [t for t in search_key.split() if len(t) > 2 and t.lower() not in ['tổng', 'chi_phí', 'doanh_thu', 'năm', 'của', 'và']]",
+        "    for c in df.columns:",
+        "        if c not in _meta and c != _val:",
+        "            m = df[c].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
+        "            if m.any():",
+        "                mask = m",
+        "                _lbl = c",
+        "                break",
+        "if not mask.any():",
+        "    tokens = [t for t in search_key.split() if len(t) > 2 and t.lower() not in ['tổng', 'chi_phí', 'doanh_thu', 'năm', 'của', 'và', 'các', 'khoản', 'theo', 'công', 'mẹ', 'đã', 'phát', 'hành']]",
         "    for t in tokens:",
-        f"        m = df['{label_col}'].astype(str).str.contains(t, case=False, na=False, regex=False)",
+        "        m = df[_lbl].astype(str).str.contains(t, case=False, na=False, regex=False)",
         "        if m.any():",
         "            mask = m",
         "            break",
         "if not mask.any():",
         f"    if '{escaped_tieu_chi}':",
-        f"        mask = df['{label_col}'].astype(str).str.contains('{escaped_tieu_chi}', case=False, na=False, regex=False)",
-        "if not mask.any():",
-        "    for c in df.columns:",
-        f"        if c != '{value_col}':",
-        "            m = df[c].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
-        "            if m.any():",
-        "                mask = m",
-        "                break",
+        f"        mask = df[_lbl].astype(str).str.contains('{escaped_tieu_chi}', case=False, na=False, regex=False)",
         "if mask.any():",
         "    match_row = df[mask].iloc[0]",
-        f"    result = extract_value(match_row, '{value_col}', _df=df, _row_idx=match_row.name)",
+        "    result = extract_value(match_row, _val, _df=df, _row_idx=match_row.name)",
         "else:",
         "    match_row = df.iloc[0]",
-        f"    result = extract_value(match_row, '{value_col}', _df=df, _row_idx=match_row.name)",
+        "    result = extract_value(match_row, _val, _df=df, _row_idx=match_row.name)",
     ])
     return "\n".join(code_lines)
 
@@ -463,9 +528,7 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     # Detect person name if query involves remuneration / salary / executive personnel (Q15)
     person_name = parsed_query.get("ten_nhan_su") or parsed_query.get("person_name")
     if not person_name and isinstance(user_query, str):
-        p_match = re.search(r"(?:thù lao|tiền lương|cổ phần|lương)\s+(?:của\s+)?([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+){1,3})", user_query, re.IGNORECASE)
-        if p_match:
-            person_name = p_match.group(1).strip()
+        person_name = extract_person_name(user_query)
 
     # Get column names from mapping, sử dụng schema thực tế nếu có
     label_col = _resolve_label_column(table_schema, first_row_values, column_mapping, schema=schema)
