@@ -400,6 +400,72 @@ def _clean_financial_content(text: str) -> str:
     return cleaned.strip()
 
 
+def extract_secondary_criteria(user_query: str) -> List[str]:
+    """Phân tích và trích xuất tất cả tiêu chí phụ (secondary criteria) từ câu hỏi tài chính."""
+    if not user_query:
+        return []
+    
+    q_lower = user_query.lower()
+    criteria = []
+
+    # 1. Phạm vi báo cáo (Reporting Scope)
+    if "công ty mẹ" in q_lower or "cty mẹ" in q_lower:
+        criteria.append("công ty mẹ")
+    elif "hợp nhất" in q_lower:
+        criteria.append("hợp nhất")
+    elif "báo cáo riêng" in q_lower or "bctc riêng" in q_lower:
+        criteria.append("báo cáo riêng")
+
+    # 2. Mốc thời gian & Cột số liệu (Time & Column Marker)
+    m_end_year = re.search(r"(?:cuối năm|kết thúc năm)\s*(\d{4})", q_lower)
+    if m_end_year:
+        criteria.append(f"cuối năm {m_end_year.group(1)}")
+    
+    m_date = re.search(r"(?:ngày\s*)?31[/_\s-]12[/_\s-](\d{4})|(?:ngày\s*)?31\s+tháng\s+12\s+năm\s+(\d{4})", q_lower)
+    if m_date:
+        yr = m_date.group(1) or m_date.group(2)
+        criteria.append(f"31/12/{yr}")
+        
+    m_start_year = re.search(r"đầu năm\s*(\d{4})?", q_lower)
+    if m_start_year:
+        criteria.append("đầu năm")
+
+    # 3. Tỷ lệ & Phần trăm (Ratios & Percentages)
+    if any(k in q_lower for k in ["quyền biểu quyết", "tỷ lệ biểu quyết", "tỷ lệ sở hữu", "lãi suất", "%", "phần trăm"]):
+        if "quyền biểu quyết" in q_lower:
+            criteria.append("quyền biểu quyết")
+        elif "tỷ lệ biểu quyết" in q_lower:
+            criteria.append("tỷ lệ biểu quyết")
+        elif "tỷ lệ sở hữu" in q_lower:
+            criteria.append("tỷ lệ sở hữu")
+        else:
+            criteria.append("tỷ lệ %")
+
+    # 4. Ngành / Đối tượng / Phân đoạn / Cá nhân (Sector / Breakdown / Entity)
+    m_sector = re.search(r"ngành\s+([a-zA-Zà-ỹÀ-Ỹ\s]+?)(?=\s+của|\s+cuối|\s+năm|\s+là|\Z)", q_lower)
+    if m_sector:
+        criteria.append(f"ngành {m_sector.group(1).strip()}")
+
+    specific_keywords = [
+        ("cho thuê khô tàu bay", "khô tàu bay"),
+        ("khô tàu bay", "khô tàu bay"),
+        ("nhà ga hành khách t2", "Nhà ga T2"),
+        ("quỹ bình ổn giá xăng dầu", "Quỹ bình ổn giá xăng dầu"),
+        ("trái phiếu đặc biệt", "trái phiếu VAMC"),
+        ("vamc", "VAMC"),
+        ("hoàng anh gia lai", "Hoàng Anh Gia Lai"),
+        ("bảo việt nhân thọ", "Bảo Việt Nhân Thọ"),
+        ("visorutex", "Visorutex"),
+        ("phát hành thêm", "phát hành thêm"),
+        ("góp vốn vào đơn vị khác", "đầu tư đơn vị khác"),
+    ]
+    for kw, label in specific_keywords:
+        if kw in q_lower and label not in criteria:
+            criteria.append(label)
+
+    return criteria
+
+
 def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     """Fallback rule-based parser when LLM is unreachable."""
     q = user_query.strip()
@@ -413,7 +479,8 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
         tieu_chi_phu = range_match.group(0)
     else:
         years = re.findall(r"\b(20\d{2})\b", q)
-        tieu_chi_phu = None
+        extracted_crit = extract_secondary_criteria(q)
+        tieu_chi_phu = ', '.join(extracted_crit) if extracted_crit else None
 
     q_lower = q.lower()
     if "so sánh" in q_lower or "thay đổi" in q_lower or "tăng trưởng" in q_lower or "từ năm" in q_lower or "đến năm" in q_lower:

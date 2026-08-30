@@ -508,91 +508,15 @@ def _enrich_column_descriptions(
     table_name: str,
     don_vi_tinh: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Gọi LLM để sinh mô tả ngắn gọn kết hợp tên bảng, thời kỳ và đơn vị tính cho từng cột useful_columns."""
+    """Gán mô tả cấu trúc mặc định cho các cột hữu ích KHÔNG gọi LLM (xử lý tức thì)."""
     if not useful_columns:
         return useful_columns
 
-    # Gán mô tả mặc định chi tiết kết hợp tên bảng, thời kỳ và đơn vị tính
     for col in useful_columns:
         c_name = col.get("column_name", "")
         r_name = col.get("raw_column", "")
         if not col.get("column_description"):
             col["column_description"] = _build_default_column_description(table_name, c_name, r_name, don_vi_tinh)
-
-    try:
-        from pipeline.src.llm_provider import check_vllm_health
-        if ("localhost" in cfg.LLM_API_BASE or "127.0.0.1" in cfg.LLM_API_BASE) and not check_vllm_health(cfg.LLM_API_BASE, timeout=1):
-            print(f"   ℹ️ [Schema Mapper] vLLM server offline -> Dùng mô tả cấu trúc mặc định.")
-            return useful_columns
-
-        prompt_data = None
-        try:
-            if hasattr(cfg, "get_prompt_path"):
-                prompt_path = cfg.get_prompt_path("schema_mapper.yaml")
-                if prompt_path and Path(prompt_path).exists():
-                    with open(prompt_path, "r", encoding="utf-8") as f:
-                        prompt_data = yaml.safe_load(f)
-        except Exception:
-            pass
-
-        if not prompt_data and "PROMPT_SCHEMA_MAPPER" in globals():
-            prompt_data = globals()["PROMPT_SCHEMA_MAPPER"]
-
-        if not prompt_data:
-            return useful_columns
-
-        system_prompt = prompt_data.get("system_prompt", "")
-        user_template = prompt_data.get("user_prompt_template", "")
-
-        columns_info_lines = []
-        for uc in useful_columns:
-            samples_str = ", ".join(uc.get("sample_values", [])[:3])
-            columns_info_lines.append(
-                f"- Cột: '{uc['column_name']}' (raw: '{uc.get('raw_column')}', Kiểu: {uc['data_type']}, Mẫu: [{samples_str}])"
-            )
-        columns_info = "\n".join(columns_info_lines)
-
-        user_content = user_template.format(
-            table_name=_clean_table_name(table_name),
-            don_vi_tinh=don_vi_tinh or "(không có thông tin riêng)",
-            columns_info=columns_info,
-        )
-
-        print(f"\n   🤖 [Workflow Step 5: Gọi LLM sinh mô tả cho {len(useful_columns)} cột useful...]")
-        llm = get_llm(cfg=cfg, temperature=0.0, timeout=30)
-        response = llm.invoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_content),
-        ])
-
-        raw_text = response.content if isinstance(response.content, str) else str(response.content)
-        parsed = safe_parse_json(raw_text)
-
-        descriptions_list = parsed if isinstance(parsed, list) else (parsed.get("columns", []) if isinstance(parsed, dict) else [])
-
-        desc_map = {}
-        for item in descriptions_list:
-            if isinstance(item, dict):
-                col_key = item.get("column_name") or item.get("raw_column") or ""
-                desc_map[col_key] = item.get("column_description", "")
-
-        for col in useful_columns:
-            c_name = col["column_name"]
-            r_name = col.get("raw_column", "")
-            if c_name in desc_map and desc_map[c_name]:
-                col["column_description"] = desc_map[c_name]
-            elif r_name in desc_map and desc_map[r_name]:
-                col["column_description"] = desc_map[r_name]
-            else:
-                for k, v in desc_map.items():
-                    if k and (k in c_name or c_name in k or k in r_name) and v:
-                        col["column_description"] = v
-                        break
-
-        print(f"   ✅ [Schema Mapper] LLM đã cập nhật mô tả cho các cột thành công.")
-
-    except Exception as e:
-        print(f"   ⚠️ [Schema Mapper] LLM enrichment fallback: {e}. Sử dụng mô tả cấu trúc mặc định.")
 
     return useful_columns
 

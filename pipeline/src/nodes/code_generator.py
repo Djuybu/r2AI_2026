@@ -287,18 +287,7 @@ def _resolve_value_column(
     label_col: Optional[str] = None,
     schema: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """Chọn cột giá trị dựa trên schema thực tế và dữ liệu hàng đầu tiên.
-
-    Logic:
-    1. Nếu schema rỗng hoặc không có thông tin: fallback column_mapping.
-    2. Lọc ra các cột dữ liệu (loại bỏ metadata và label_column).
-    3. Nếu chỉ có 1 cột dữ liệu (sau khi trừ label) → lấy cột đó.
-    4. Nếu có >1 cột VÀ có schema useful_columns:
-       so sánh tieu_chi_phu/noi_dung với column_name + column_description.
-    5. Nếu có >1 cột VÀ các cột có tên là số (0,1,2,3...):
-       dùng first_row_values để đoán cột đúng dựa vào tieu_chi_phu hoặc noi_dung/fallback.
-    6. Fallback: dùng column_mapping["value_column"] như cũ.
-    """
+    """Chọn cột giá trị dựa trên schema thực tế, tiêu chí phụ và dữ liệu hàng đầu tiên."""
     fallback = column_mapping.get("value_column", "Năm nay")
     schema = schema or {}
 
@@ -316,63 +305,57 @@ def _resolve_value_column(
     if not data_cols:
         return fallback
 
-    # Trường hợp 1: Chỉ có 1 cột dữ liệu (sau khi đã trừ label) → lấy cột đó
     if len(data_cols) == 1:
         return data_cols[0]
 
-    # Trường hợp 2: Có >1 cột VÀ có schema useful_columns → so sánh với mô tả
-    useful_columns = schema.get("useful_columns", [])
-    if len(useful_columns) > 1:
-        tieu_chi_phu = parsed_query.get("tieu_chi_phu", "")
-        noi_dung = parsed_query.get("noi_dung", "")
-        search_terms = [t for t in [tieu_chi_phu, noi_dung] if t]
+    tieu_chi_phu = parsed_query.get("tieu_chi_phu", "")
+    noi_dung = parsed_query.get("noi_dung", "")
 
-        for search_term in search_terms:
-            search_lower = str(search_term).strip().lower()
-            for uc in useful_columns:
-                col_name = uc.get("column_name", "")
-                col_desc = uc.get("column_description", "")
-                # So sánh search_term với tên và mô tả cột
-                if (search_lower in col_name.lower() or
-                    search_lower in col_desc.lower() or
-                    col_name.lower() in search_lower or
-                    col_desc.lower() in search_lower):
-                    # Tìm cột thực tế trong data_cols tương ứng
-                    if col_name in data_cols:
-                        print(f"   🎯 [Schema] Chọn cột '{col_name}' (mô tả: '{col_desc}') dựa trên '{search_term}'")
-                        return col_name
-                    # Cột có thể đã được rename từ số → tìm cột gốc
-                    for dc in data_cols:
-                        if str(dc).strip().isdigit():
-                            # Cột gốc là số, useful_columns đã đổi tên
-                            print(f"   🎯 [Schema] Chọn cột '{dc}' (→ '{col_name}', mô tả: '{col_desc}') dựa trên '{search_term}'")
-                            return dc
-
-    # Kiểm tra xem có cột tên là số không
-    numeric_named_cols = [c for c in data_cols if str(c).strip().isdigit()]
-
-    # Trường hợp 3: Có >1 cột và cột có tên là số → dùng first_row_values để đoán
-    if numeric_named_cols and first_row_values:
-        tieu_chi_phu = parsed_query.get("tieu_chi_phu", "")
-
-        if tieu_chi_phu:
-            # Tìm cột mà giá trị hàng đầu tiên khớp với tiêu chí phụ
-            tieu_chi_lower = str(tieu_chi_phu).strip().lower()
-            for col in data_cols:
-                val = first_row_values.get(str(col), "")
-                if tieu_chi_lower in val.lower():
-                    print(f"   🎯 Chọn cột '{col}' (giá trị hàng đầu: '{val}') dựa trên tiêu chí phụ '{tieu_chi_phu}'")
-                    return col
-
-        # Nếu không tìm được theo tiêu chí phụ, dùng column_mapping fallback
-        # nhưng ưu tiên tìm trong first_row_values xem cột nào có giá trị giống fallback
+    # 1. So sánh tiêu chí phụ trực tiếp với tên các cột dữ liệu
+    if tieu_chi_phu:
+        tcp_lower = str(tieu_chi_phu).strip().lower()
         for col in data_cols:
-            val = first_row_values.get(str(col), "")
-            if fallback.lower() in val.lower():
-                print(f"   🎯 Chọn cột '{col}' (giá trị hàng đầu: '{val}') khớp với '{fallback}'")
+            col_str = str(col).strip().lower()
+            if tcp_lower in col_str or col_str in tcp_lower:
+                print(f"   🎯 [Code Generator] Tự chọn cột '{col}' khớp với tiêu chí phụ '{tieu_chi_phu}'")
                 return col
 
-    # Trường hợp 4: Không có cột tên số, hoặc không đoán được → dùng fallback nếu có trong data_cols, hoặc cột đầu tiên
+        m_year = re.search(r"\b(19|20)\d{2}\b", tcp_lower)
+        if m_year:
+            target_year = m_year.group(0)
+            for col in data_cols:
+                if target_year in str(col):
+                    print(f"   🎯 [Code Generator] Tự chọn cột '{col}' khớp với năm '{target_year}' từ tiêu chí phụ")
+                    return col
+
+        if any(kw in tcp_lower for kw in ["%", "phần trăm", "tỷ lệ", "biểu quyết", "sở hữu"]):
+            for col in data_cols:
+                if any(k in str(col).lower() for k in ["%", "tỷ lệ", "biểu quyết", "sở hữu"]):
+                    print(f"   🎯 [Code Generator] Tự chọn cột '{col}' khớp với chỉ tiêu tỷ lệ % từ tiêu chí phụ")
+                    return col
+
+    # 2. So sánh với useful_columns từ schema
+    useful_columns = schema.get("useful_columns", [])
+    if useful_columns:
+        for uc in useful_columns:
+            c_name = str(uc.get("column_name", ""))
+            r_name = str(uc.get("raw_column", ""))
+            if tieu_chi_phu and (str(tieu_chi_phu).lower() in c_name.lower() or str(tieu_chi_phu).lower() in r_name.lower()):
+                target_col = r_name if r_name in data_cols else c_name
+                if target_col in data_cols:
+                    print(f"   🎯 [Code Generator] Tự chọn cột '{target_col}' từ useful_columns dựa trên '{tieu_chi_phu}'")
+                    return target_col
+
+    # 3. Nếu cột có tên là số (0, 1, 2...), dùng first_row_values để đoán cột đúng
+    numeric_named_cols = [c for c in data_cols if str(c).strip().isdigit()]
+    if numeric_named_cols and first_row_values and tieu_chi_phu:
+        tcp_lower = str(tieu_chi_phu).strip().lower()
+        for col in data_cols:
+            val = str(first_row_values.get(str(col), "")).lower()
+            if tcp_lower in val:
+                print(f"   🎯 [Code Generator] Tự chọn cột '{col}' (hàng 1: '{val}') từ tiêu chí phụ '{tieu_chi_phu}'")
+                return col
+
     if fallback in data_cols:
         return fallback
 
