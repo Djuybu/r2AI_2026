@@ -308,6 +308,7 @@ def _extract_useful_columns(
             useful.append({
                 "raw_column": str(col),
                 "column_name": resolved_name,
+                "column_index": list(df.columns).index(col),
                 "data_type": data_type,
                 "is_aux_code": is_aux_code,
                 "avg_str_len": avg_str_len,
@@ -626,10 +627,14 @@ def analyze_single_table_schema(
         if not useful_cols:
             useful_cols = [c for c in all_useful if c.get("raw_column") != label_col]
         value_col = _find_value_column(useful_cols, label_col, tieu_chi_phu, raw_columns)
+        label_col_idx = raw_columns.index(label_col) if (label_col and label_col in raw_columns) else 0
+        value_col_idx = raw_columns.index(value_col) if (value_col and value_col in raw_columns) else 1
         return {
             "column_mapping": {
                 "label_column": label_col,
                 "value_column": value_col,
+                "label_column_idx": label_col_idx,
+                "value_column_idx": value_col_idx,
                 "all_columns": str(raw_columns),
                 "all_useful_columns": [c["raw_column"] for c in useful_cols],
             },
@@ -771,9 +776,14 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
 
         value_col = _find_value_column(useful_columns, label_col, tieu_chi_phu, raw_columns)
 
+        label_col_idx = raw_columns.index(label_col) if (label_col and label_col in raw_columns) else 0
+        value_col_idx = raw_columns.index(value_col) if (value_col and value_col in raw_columns) else 1
+
         column_mapping = {
             "label_column": label_col,
             "value_column": value_col,
+            "label_column_idx": label_col_idx,
+            "value_column_idx": value_col_idx,
             "all_columns": str(raw_columns),
             "all_useful_columns": [c["raw_column"] for c in useful_columns],
         }

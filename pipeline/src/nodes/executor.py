@@ -173,12 +173,17 @@ def clean_val(val):
         raise ValueError("Metric not found in table")
 
 
-def extract_value(row, preferred_col, _df=None, _row_idx=None):
+def extract_value(row, preferred_col, _df=None, _row_idx=None, abs_val=False):
     """Extract a numeric value from a row, trying preferred_col first then fallback columns.
     
-    Enhanced: If all columns on the matched row are NaN/empty (hierarchical parent row),
-    automatically tries the next rows below (child rows) which often contain the actual value.
+    Enhanced: Supports integer column indices as preferred_col and optional abs_val conversion.
     """
+    if isinstance(preferred_col, (int, np.integer)):
+        if hasattr(row, 'index') and 0 <= preferred_col < len(row.index):
+            preferred_col = row.index[preferred_col]
+        elif isinstance(row, pd.DataFrame) and not row.empty and 0 <= preferred_col < len(row.columns):
+            preferred_col = row.columns[preferred_col]
+
     _meta = {'Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon', 'Cột_0', '0', 'STT'}
     avail_cols = []
     if hasattr(row, 'index'):
@@ -198,12 +203,14 @@ def extract_value(row, preferred_col, _df=None, _row_idx=None):
     for c in cols_to_try:
         if hasattr(row, 'index') and c in row.index:
             try:
-                return clean_val(row[c])
+                v = clean_val(row[c])
+                return abs(v) if abs_val else v
             except ValueError:
                 continue
         elif isinstance(row, pd.DataFrame) and c in row.columns and not row.empty:
             try:
-                return clean_val(row[c].iloc[0])
+                v = clean_val(row[c].iloc[0])
+                return abs(v) if abs_val else v
             except ValueError:
                 continue
     
@@ -224,7 +231,7 @@ def extract_value(row, preferred_col, _df=None, _row_idx=None):
                             try:
                                 v_cand = clean_val(r_cand[c])
                                 if v_cand != 0.0:
-                                    return v_cand
+                                    return abs(v_cand) if abs_val else v_cand
                             except ValueError:
                                 pass
         except Exception:
@@ -240,7 +247,8 @@ def extract_value(row, preferred_col, _df=None, _row_idx=None):
                 for c in cols_to_try:
                     if hasattr(next_row, 'index') and c in next_row.index:
                         try:
-                            return clean_val(next_row[c])
+                            v_next = clean_val(next_row[c])
+                            return abs(v_next) if abs_val else v_next
                         except ValueError:
                             continue
     

@@ -155,44 +155,35 @@ def generate_fallback_code(
     person_name: Optional[str] = None,
     tieu_chi_phu: Optional[str] = None,
     user_query: str = "",
+    label_col_idx: Optional[int] = None,
+    value_col_idx: Optional[int] = None,
 ) -> str:
-    """Generate deterministic, robust Pandas extraction code when LLM is unavailable or times out."""
+    """Generate concise Pandas extraction code using column position indices from Schema Mapper."""
     escaped_noi_dung = (noi_dung or "").replace("'", "\\'").strip()
     escaped_person = (person_name or "").replace("'", "\\'").strip()
     escaped_tieu_chi = (tieu_chi_phu or "").replace("'", "\\'").strip()
 
     is_growth = any(k in user_query.lower() for k in ["tăng trưởng", "tốc độ", "%", "thay đổi"])
 
+    lbl_ref = f"df.iloc[:, {label_col_idx}]" if label_col_idx is not None else f"df['{label_col}']"
+    val_arg = value_col_idx if value_col_idx is not None else f"'{value_col}'"
+
     code_lines = [
         "import pandas as pd",
         "import numpy as np",
         "df = pd.read_csv(file_path)",
-        "# Dò tìm cột nhãn thực tế của bảng hiện tại",
-        "_meta = {'Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon'}",
-        f"_cand_labels = [c for c in ['{label_col}', 'Cột_0', '0', '1', 'STT', 'Chỉ tiêu', 'Nội dung', 'Loại chi phí quản lý CTCK'] if c in df.columns and c not in _meta]",
-        "_lbl = _cand_labels[0] if _cand_labels else next((c for c in df.columns if c not in _meta), df.columns[0])",
-        "# Dò tìm cột giá trị thực tế của bảng hiện tại",
-        f"_cand_values = [c for c in ['{value_col}', 'Năm nay', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015', '31/12/2024', '31/12/2023', '1', '2', '3'] if c in df.columns and c != _lbl and c not in _meta]",
-        f"_val = _cand_values[0] if _cand_values else ('{value_col}' if '{value_col}' in df.columns else (df.columns[-1] if len(df.columns) > 1 else df.columns[0]))",
+        f"# Truy vấn trực tiếp theo vị trí cột: label_col='{label_col}', value_col='{value_col}'",
     ]
 
     if person_name:
         code_lines.extend([
-            f"# Lọc theo thực thể nhân sự: '{escaped_person}'",
-            f"mask = df[_lbl].astype(str).str.contains('{escaped_person}', case=False, na=False, regex=False)",
-            "if not mask.any():",
-            "    for c in df.columns:",
-            "        if c not in _meta and c != _val:",
-            f"            m = df[c].astype(str).str.contains('{escaped_person}', case=False, na=False, regex=False)",
-            "            if m.any():",
-            "                mask = m",
-            "                _lbl = c",
-            "                break",
-            "if mask.any():",
-            "    match_row = df[mask].iloc[0]",
-            "    result = extract_value(match_row, _val, _df=df, _row_idx=match_row.name)",
+            f"# Lọc trực tiếp theo thực thể nhân sự: '{escaped_person}'",
+            f"filtered_df = df[{lbl_ref}.astype(str).str.contains('{escaped_person}', case=False, na=False, regex=False)]",
+            "if not filtered_df.empty:",
+            "    match_row = filtered_df.iloc[0]",
+            f"    result = extract_value(match_row, {val_arg}, _df=df, _row_idx=match_row.name)",
             "else:",
-            "    raise ValueError('Person not found in table')",
+            f"    raise ValueError(\"Person '{escaped_person}' not found in table\")",
         ])
         return "\n".join(code_lines)
 
@@ -203,65 +194,47 @@ def generate_fallback_code(
         code_lines.extend([
             f"# So sánh giữa các năm {so_nam}",
             f"search_key = '{escaped_noi_dung}'",
-            "mask = df[_lbl].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
-            "if not mask.any():",
-            "    for c in df.columns:",
-            "        if c not in _meta and c != _val:",
-            "            m = df[c].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
-            "            if m.any():",
-            "                mask = m",
-            "                _lbl = c",
-            "                break",
-            "if not mask.any():",
-            "    tokens = [t for t in search_key.split() if len(t) > 2 and t.lower() not in ['tổng', 'chi_phí', 'doanh_thu', 'năm', 'của', 'và', 'các', 'khoản', 'theo']]",
+            f"filtered_df = df[{lbl_ref}.astype(str).str.contains(search_key, case=False, na=False, regex=False)]",
+            "if filtered_df.empty:",
+            f"    tokens = [t for t in search_key.split() if len(t) > 2 and t.lower() not in ['tổng', 'chi_phí', 'doanh_thu', 'năm', 'của', 'và', 'các', 'khoản', 'theo']]",
             "    for t in tokens:",
-            "        m = df[_lbl].astype(str).str.contains(t, case=False, na=False, regex=False)",
-            "        if m.any():",
-            "            mask = m",
+            f"        filtered_df = df[{lbl_ref}.astype(str).str.contains(t, case=False, na=False, regex=False)]",
+            "        if not filtered_df.empty:",
             "            break",
-            "if not mask.any():",
-            "    mask = df.index == 0",
-            "match_row = df[mask].iloc[0]",
-            "cols = [c for c in df.columns if c not in _meta and c != _lbl]",
-            f"col_new = next((c for c in cols if '{y_new}' in str(c)), cols[0] if cols else _val)",
-            f"col_old = next((c for c in cols if '{y_old}' in str(c)), cols[1] if len(cols) > 1 else col_new)",
-            "val_new = extract_value(match_row, col_new, _df=df, _row_idx=match_row.name)",
-            "val_old = extract_value(match_row, col_old, _df=df, _row_idx=match_row.name)",
+            "if not filtered_df.empty:",
+            "    match_row = filtered_df.iloc[0]",
+            "    _meta = {'Ma_Doanh_Nghiep', 'Ten_Doanh_Nghiep', 'Nam_Tai_Chinh', 'Loai_Bao_Cao', 'Ten_Bang', 'Don_Vi_Tinh', 'Tep_Nguon'}",
+            "    cols = [c for c in df.columns if c not in _meta]",
+            f"    col_new = next((c for c in cols if '{y_new}' in str(c)), {val_arg})",
+            f"    col_old = next((c for c in cols if '{y_old}' in str(c)), cols[1] if len(cols) > 1 else col_new)",
+            "    val_new = extract_value(match_row, col_new, _df=df, _row_idx=match_row.name)",
+            "    val_old = extract_value(match_row, col_old, _df=df, _row_idx=match_row.name)",
         ])
         if is_growth:
-            code_lines.append("result = ((val_new - val_old) / abs(val_old)) * 100 if val_old != 0 else 0.0")
+            code_lines.append("    result = ((val_new - val_old) / abs(val_old)) * 100 if val_old != 0 else 0.0")
         else:
-            code_lines.append("result = val_new - val_old")
+            code_lines.append("    result = val_new - val_old")
+        code_lines.extend([
+            "else:",
+            f"    raise ValueError(\"Metric '{escaped_noi_dung}' not found in table\")",
+        ])
         return "\n".join(code_lines)
 
-    # Standard extraction / single year / default
+    # Standard direct extraction
     code_lines.extend([
         f"search_key = '{escaped_noi_dung}'",
-        "mask = df[_lbl].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
-        "if not mask.any():",
-        "    for c in df.columns:",
-        "        if c not in _meta and c != _val:",
-        "            m = df[c].astype(str).str.contains(search_key, case=False, na=False, regex=False)",
-        "            if m.any():",
-        "                mask = m",
-        "                _lbl = c",
-        "                break",
-        "if not mask.any():",
+        f"filtered_df = df[{lbl_ref}.astype(str).str.contains(search_key, case=False, na=False, regex=False)]",
+        "if filtered_df.empty:",
         "    tokens = [t for t in search_key.split() if len(t) > 2 and t.lower() not in ['tổng', 'chi_phí', 'doanh_thu', 'năm', 'của', 'và', 'các', 'khoản', 'theo', 'công', 'mẹ', 'đã', 'phát', 'hành']]",
         "    for t in tokens:",
-        "        m = df[_lbl].astype(str).str.contains(t, case=False, na=False, regex=False)",
-        "        if m.any():",
-        "            mask = m",
+        f"        filtered_df = df[{lbl_ref}.astype(str).str.contains(t, case=False, na=False, regex=False)]",
+        "        if not filtered_df.empty:",
         "            break",
-        "if not mask.any():",
-        f"    if '{escaped_tieu_chi}':",
-        f"        mask = df[_lbl].astype(str).str.contains('{escaped_tieu_chi}', case=False, na=False, regex=False)",
-        "if mask.any():",
-        "    match_row = df[mask].iloc[0]",
-        "    result = extract_value(match_row, _val, _df=df, _row_idx=match_row.name)",
+        "if not filtered_df.empty:",
+        "    match_row = filtered_df.iloc[0]",
+        f"    result = extract_value(match_row, {val_arg}, _df=df, _row_idx=match_row.name)",
         "else:",
-        "    match_row = df.iloc[0]",
-        "    result = extract_value(match_row, _val, _df=df, _row_idx=match_row.name)",
+        f"    raise ValueError(\"Metric '{escaped_noi_dung}' not found in table\")",
     ])
     return "\n".join(code_lines)
 
@@ -534,8 +507,16 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     label_col = _resolve_label_column(table_schema, first_row_values, column_mapping, schema=schema)
     value_col = _resolve_value_column(table_schema, first_row_values, parsed_query, column_mapping, label_col, schema=schema)
 
+    label_col_idx = column_mapping.get("label_column_idx")
+    if label_col_idx is None and label_col in table_schema:
+        label_col_idx = table_schema.index(label_col)
+
+    value_col_idx = column_mapping.get("value_column_idx")
+    if value_col_idx is None and value_col in table_schema:
+        value_col_idx = table_schema.index(value_col)
+
     print(f"   📋 [Code Generator] Schema: {table_schema}")
-    print(f"   📋 [Code Generator] Label col: '{label_col}', Value col: '{value_col}'")
+    print(f"   📋 [Code Generator] Label col: '{label_col}' (idx={label_col_idx}), Value col: '{value_col}' (idx={value_col_idx})")
     if person_name:
         print(f"   👤 [Code Generator] Nhận diện nhân sự/lãnh đạo: '{person_name}'")
     if first_row_values:
@@ -726,6 +707,8 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 person_name=person_name,
                 tieu_chi_phu=tieu_chi_phu,
                 user_query=user_query,
+                label_col_idx=label_col_idx,
+                value_col_idx=value_col_idx,
             )
 
         print(f"📊 [Kết quả - Code Generator] Mã Python sinh ra:\n```python\n{code}\n```\n")
@@ -757,6 +740,8 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             person_name=person_name,
             tieu_chi_phu=tieu_chi_phu,
             user_query=user_query,
+            label_col_idx=label_col_idx,
+            value_col_idx=value_col_idx,
         )
         print(f"📊 [Kết quả Fallback - Code Generator] Mã Python sinh ra:\n```python\n{fallback_code}\n```\n")
 
