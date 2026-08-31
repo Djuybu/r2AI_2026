@@ -621,7 +621,7 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             ]
 
         # Call LLM safely
-        llm = get_llm(cfg=cfg, temperature=0.0, timeout=20)
+        llm = get_llm(cfg=cfg, temperature=0.0, timeout=120)
         response = llm.invoke(messages)
         raw_text = response.content if isinstance(response.content, str) else str(response.content)
 
@@ -634,6 +634,8 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
         print(f"📄 [LLM Raw Response]:\n{raw_text.strip()}\n")
 
         code = clean_python_code(raw_text)
+        if code:
+            code = ensure_code_variables(code, top_csv, label_col, value_col, label_col_idx, value_col_idx)
 
         if not code:
             print("⚠️ [Code Generator] LLM không sinh code hợp lệ -> Kích hoạt Rule-based Fallback Generator...")
