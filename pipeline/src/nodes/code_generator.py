@@ -572,11 +572,12 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
         top_csv_escaped = top_csv.replace('\\', '\\\\')
         paths_str = f"file_path = '{top_csv_escaped}'\n"
 
-    # Kiểm tra ngân sách thời gian (50s): Nếu retry và thời gian đã trôi qua > 25s, dùng ngay Fallback
+    # Kiểm tra ngân sách thời gian (70s): Nếu retry và thời gian đã trôi qua > 50s, dùng ngay Fallback
     query_start_time = state.get("query_start_time", start_time)
     total_elapsed = time.time() - query_start_time
-    if retry_count >= 1 and (total_elapsed >= 25.0 or retry_count >= cfg.MAX_RETRIES):
-        print(f"⏱️ [Code Generator] Thời gian câu hỏi đã trôi qua {total_elapsed:.1f}s (gần mức 50s) -> Kích hoạt ngay Rule-based Fallback Generator...")
+    max_budget = getattr(cfg, "EXECUTION_TIMEOUT", 70)
+    if retry_count >= 1 and (total_elapsed >= (max_budget - 20.0) or retry_count >= cfg.MAX_RETRIES):
+        print(f"⏱️ [Code Generator] Thời gian câu hỏi đã trôi qua {total_elapsed:.1f}s (gần mức {max_budget}s) -> Kích hoạt ngay Rule-based Fallback Generator...")
         fallback_code = generate_fallback_code(
             muc_tieu=muc_tieu,
             noi_dung=noi_dung,
@@ -605,56 +606,42 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     try:
         if retry_count == 0:
             prompt_data = load_yaml_prompt(cfg, "code_generator.yaml")
-            system_prompt = prompt_data.get("system_prompt", "")
-            few_shots = prompt_data.get("few_shots", [])
-            goal_descs = prompt_data.get("goal_descriptions", {})
-            goal_instructions = prompt_data.get("goal_instructions", {})
+            target_search_key = person_name or noi_dung
+            cols_str = str(table_schema) if table_schema else "[]"
 
-            messages = [SystemMessage(content=system_prompt)]
-            for ex in few_shots:
-                messages.append(
-                    HumanMessage(
-                        content=f"Yêu cầu: {ex['user_query']}\nFile Path: {ex['file_path']}\nColumn Mapping: {ex['column_mapping']}"
-                    )
+            if muc_tieu == "so_sanh" and len(so_nam) >= 2:
+                y_sorted = sorted(so_nam, key=lambda y: int(y) if str(y).isdigit() else 0)
+                y_old, y_new = y_sorted[0], y_sorted[-1]
+                cols = [c for c in table_schema if c not in _METADATA_COLUMNS]
+                col_new = next((c for c in cols if y_new in str(c)), value_col)
+                col_old = next((c for c in cols if y_old in str(c)), cols[1] if len(cols) > 1 else col_new)
+
+                system_prompt = prompt_data.get("system_prompt_so_sanh", "")
+                user_template = prompt_data.get("user_prompt_so_sanh", "")
+                human_content = user_template.format(
+                    noi_dung=target_search_key,
+                    so_nam=so_nam,
+                    label_col=label_col,
+                    col_new=col_new,
+                    col_old=col_old,
+                    table_columns=cols_str,
+                    paths_str=paths_str,
                 )
-                messages.append(AIMessage(content=ex["generated_code"]))
+            else:
+                system_prompt = prompt_data.get("system_prompt_trich_xuat", "")
+                user_template = prompt_data.get("user_prompt_trich_xuat", "")
+                human_content = user_template.format(
+                    noi_dung=target_search_key,
+                    label_col=label_col,
+                    value_col=value_col,
+                    table_columns=cols_str,
+                    paths_str=paths_str,
+                )
 
-            goal_desc = goal_descs.get(muc_tieu, muc_tieu)
-            goal_inst_template = goal_instructions.get(muc_tieu, "")
-            goal_inst = goal_inst_template.format(
-                noi_dung=noi_dung, label_col=label_col, value_col=value_col
-            ) if goal_inst_template else ""
-
-            sample_labels = []
-            if discovered_tables:
-                for tbl in discovered_tables[:2]:
-                    c_path = tbl.get("csv_path")
-                    if c_path and Path(c_path).exists():
-                        try:
-                            sub_df = pd.read_csv(c_path)
-                            if label_col in sub_df.columns:
-                                labels = sub_df[label_col].dropna().astype(str).head(5).tolist()
-                                sample_labels.append(f"Mẫu chỉ tiêu trong '{Path(c_path).name}': {labels}")
-                        except Exception:
-                            pass
-            sample_labels_str = "\n".join(sample_labels) if sample_labels else ""
-
-            user_template = prompt_data.get("user_prompt_template", "")
-            human_content = user_template.format(
-                user_query=user_query,
-                muc_tieu_desc=goal_desc,
-                noi_dung=noi_dung,
-                ten_cong_ty=ten_cong_ty,
-                so_nam=so_nam,
-                tieu_chi_phu=tieu_chi_phu or "(không có)",
-                files_context=files_context,
-                label_col=label_col,
-                value_col=value_col,
-                paths_str=paths_str,
-                sample_labels_str=sample_labels_str,
-                goal_instruction=goal_inst,
-            )
-            messages.append(HumanMessage(content=human_content))
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=human_content)
+            ]
 
         else:
             prompt_data = load_yaml_prompt(cfg, "reflection.yaml")
@@ -680,8 +667,8 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 HumanMessage(content=human_content)
             ]
 
-        # Call LLM safely
-        llm = get_llm(cfg=cfg, temperature=0.0, timeout=50)
+        # Call LLM safely with strict 12s timeout and compact 256 tokens limit
+        llm = get_llm(cfg=cfg, temperature=0.0, timeout=12, max_tokens=256)
         response = llm.invoke(messages)
         raw_text = response.content if isinstance(response.content, str) else str(response.content)
 

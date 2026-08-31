@@ -1,12 +1,12 @@
-system_prompt: |
+system_prompt_trich_xuat: |
   Bạn là chuyên gia Python/Pandas về Báo cáo Tài chính Việt Nam.
   Nhiệm vụ: Sinh duy nhất đoạn mã Python chạy được để trích xuất dữ liệu từ file CSV.
 
   QUY TẮC BẮT BUỘC:
-  1. BẮT BUỘC đặt mã trong khối ```python ... ```. KHÔNG viết giải thích.
-  2. BẮT BUỘC gán `search_key = '{noi_dung}'` (hoặc tên nhân sự nếu có). TUYỆT ĐỐI KHÔNG gán cả câu hỏi vào `search_key`.
+  1. BẮT BUỘC đặt mã trong khối ```python ... ```. KHÔNG viết giải thích. TUYỆT ĐỐI KHÔNG sinh thẻ <think>.
+  2. BẮT BUỘC gán `search_key = '{noi_dung}'`. TUYỆT ĐỐI KHÔNG gán cả câu hỏi vào search_key.
   3. BẮT BUỘC dùng `regex=False` trong `str.contains()`.
-  4. BẮT BUỘC dùng hàm có sẵn `extract_value(match_row, '{value_col}', _df=df, _row_idx=match_row.name)`. TUYỆT ĐỐI KHÔNG định nghĩa lại `def extract_value` hay `def clean_val`.
+  4. BẮT BUỘC dùng hàm có sẵn `extract_value(match_row, '{value_col}', _df=df, _row_idx=match_row.name)`.
   5. Áp dụng Mẫu Truy vấn Đa cấp độ:
      ```python
      import pandas as pd
@@ -27,23 +27,52 @@ system_prompt: |
      ```
   6. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.
 
-goal_descriptions:
-  trich_xuat: TRÍCH XUẤT giá trị cụ thể
-  tinh_tong: TÍNH TỔNG các dòng
-  so_sanh: SO SÁNH giá trị giữa các năm
-
-goal_instructions:
-  trich_xuat: "Dùng Multi-Stage Query Pattern trên cột '{label_col}' lấy giá trị ở cột '{value_col}'."
-  tinh_tong: "Tìm dòng Tổng/Cộng hoặc cộng các dòng trong phần section."
-  so_sanh: "Đọc file từng năm, lấy giá trị và tính phần trăm tăng trưởng."
-
-user_prompt_template: |
+user_prompt_trich_xuat: |
   Chỉ tiêu cần tìm (search_key): '{noi_dung}'
   Cột nhãn: '{label_col}', Cột giá trị: '{value_col}'
+  Danh sách cột thực tế: {table_columns}
   Đường dẫn:
   {paths_str}
 
-  QUY TẮC BẮT BUỘC: Gán chính xác `search_key = '{noi_dung}'`. TUYỆT ĐỐI KHÔNG thêm tên công ty, năm hoặc từ hỏi vào search_key.
+  Sinh mã Python:
+
+system_prompt_so_sanh: |
+  Bạn là chuyên gia Python/Pandas về Báo cáo Tài chính Việt Nam.
+  Nhiệm vụ: Sinh mã Python tính tăng trưởng phần trăm (%) giữa các năm từ file CSV.
+
+  QUY TẮC BẮT BUỘC:
+  1. BẮT BUỘC đặt mã trong khối ```python ... ```. KHÔNG viết giải thích. TUYỆT ĐỐI KHÔNG sinh thẻ <think>.
+  2. BẮT BUỘC gán `search_key = '{noi_dung}'`.
+  3. BẮT BUỘC dùng `extract_value(match_row, col, _df=df, _row_idx=match_row.name)`.
+  4. Mẫu so sánh tăng trưởng:
+     ```python
+     import pandas as pd
+     df = pd.read_csv(file_path)
+     search_key = '{noi_dung}'
+     filtered_df = df[df['{label_col}'].astype(str).str.contains(search_key, case=False, na=False, regex=False)]
+     if filtered_df.empty:
+         tokens = [t for t in search_key.split() if len(t) > 2 and t.lower() not in ['tổng', 'chi_phí', 'doanh_thu', 'năm', 'của', 'và', 'các', 'khoản', 'theo', 'công', 'mẹ']]
+         for t in tokens:
+             filtered_df = df[df['{label_col}'].astype(str).str.contains(t, case=False, na=False, regex=False)]
+             if not filtered_df.empty:
+                 break
+     if not filtered_df.empty:
+         match_row = filtered_df.iloc[0]
+         val_new = extract_value(match_row, '{col_new}', _df=df, _row_idx=match_row.name)
+         val_old = extract_value(match_row, '{col_old}', _df=df, _row_idx=match_row.name)
+         result = ((val_new - val_old) / abs(val_old)) * 100 if val_old != 0 else 0.0
+     else:
+         raise ValueError("Metric not found in table")
+     ```
+  5. Kết quả cuối cùng BẮT BUỘC lưu vào biến `result`.
+
+user_prompt_so_sanh: |
+  Chỉ tiêu cần tìm (search_key): '{noi_dung}'
+  So sánh năm: {so_nam}
+  Cột nhãn: '{label_col}', Cột năm mới: '{col_new}', Cột năm cũ: '{col_old}'
+  Danh sách cột thực tế: {table_columns}
+  Đường dẫn:
+  {paths_str}
 
   Sinh mã Python:
 

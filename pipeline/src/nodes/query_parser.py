@@ -575,10 +575,8 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
             prompt_messages.append(HumanMessage(content=example["user_query"]))
             prompt_messages.append(AIMessage(content=example["parsed_output"]))
 
-        prompt_messages.append(HumanMessage(content=f"Câu hỏi: {user_query}"))
-
-        # Call LLM with strict 12s timeout for fast parsing; quick fallback to rule-based parser on latency
-        llm = get_llm(cfg=cfg, temperature=0.1, timeout=12)
+        # Call LLM with strict 8s timeout and small token budget for fast parsing; quick fallback on latency
+        llm = get_llm(cfg=cfg, temperature=0.1, timeout=8, max_tokens=64)
         response = llm.invoke(prompt_messages)
 
         raw_content = response.content if isinstance(response.content, str) else str(response.content)

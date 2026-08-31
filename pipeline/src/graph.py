@@ -39,8 +39,9 @@ def route_after_execution(state: AgentState, cfg: Optional[Config] = None) -> Li
         return END
 
     if status == "error":
-        if retry_count < cfg.MAX_RETRIES and total_elapsed < 30.0:
-            print(f"🔄 Reflection Loop Activated! Retrying code generation ({retry_count}/{cfg.MAX_RETRIES})...")
+        max_time_allowed = getattr(cfg, "EXECUTION_TIMEOUT", 70) - 10.0
+        if retry_count < cfg.MAX_RETRIES and total_elapsed < max_time_allowed:
+            print(f"🔄 Reflection Loop Activated! Retrying code generation ({retry_count}/{cfg.MAX_RETRIES}) [Elapsed: {total_elapsed:.1f}s]...")
             return "code_generator"
 
     return END

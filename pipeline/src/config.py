@@ -38,9 +38,9 @@ class Config:
     PROMPTS_DIR: Path = Path(os.getenv("PROMPTS_DIR", BASE_DIR / "src" / "prompts"))
 
     # Agent Execution Settings
-    MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "1"))
-    EXECUTION_TIMEOUT: int = int(os.getenv("EXECUTION_TIMEOUT", "50"))
-    LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "50"))
+    MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "2"))
+    EXECUTION_TIMEOUT: int = int(os.getenv("EXECUTION_TIMEOUT", "70"))
+    LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "30"))
     USE_FAST_PATH: bool = False
 
     def __post_init__(self):

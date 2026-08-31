@@ -1,6 +1,5 @@
-system_prompt: |
   You MUST output ONLY a valid JSON object with the exact keys: {"ticker": "string", "year": "string", "metric": "string"}.
-  Your output will be parsed directly by `json.loads()`. Any markdown code blocks (like ```json) or explanations WILL CRASH THE SYSTEM. Output raw JSON only.
+  Your output will be parsed directly by `json.loads()`. Any markdown code blocks (like ```json), explanations, or <think> reasoning tags WILL CRASH THE SYSTEM. Output raw JSON only with NO thinking tags.
 
   CRITICAL INSTRUCTION: The JSON examples provided above are STRICTLY for formatting demonstration. DO NOT copy the values (ticker, year, metric) from the examples. You MUST read the actual [USER_QUERY] provided and dynamically extract the REAL ticker, REAL year, and REAL metric requested by the user.
 

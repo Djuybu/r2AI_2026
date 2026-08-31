@@ -39,10 +39,11 @@ def get_llm(
     cfg: Optional[Config] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
-    timeout: Optional[int] = 50,
+    timeout: Optional[int] = None,
+    max_retries: Optional[int] = None,
     **kwargs,
 ) -> BaseChatModel:
-    """Factory function to instantiate ChatOpenAI connecting to self-hosted vLLM or local server."""
+    """Factory function to instantiate ChatOpenAI connecting to self-hosted vLLM or local Ollama server."""
     cfg = cfg or default_config
     temp = temperature if temperature is not None else cfg.TEMPERATURE
     tokens = max_tokens if max_tokens is not None else cfg.MAX_TOKENS
@@ -53,9 +54,22 @@ def get_llm(
     api_base = os.getenv("LLM_API_BASE", cfg.LLM_API_BASE)
     api_key = os.getenv("LLM_API_KEY", cfg.LLM_API_KEY)
 
-    # Enforce maximum timeout of 50s
-    raw_timeout = timeout if timeout is not None else cfg.LLM_TIMEOUT
-    effective_timeout = min(raw_timeout, 50)
+    # Set timeout to 30s max
+    raw_timeout = timeout if timeout is not None else getattr(cfg, "LLM_TIMEOUT", 30)
+    effective_timeout = min(raw_timeout, 30)
+    retries = max_retries if max_retries is not None else getattr(cfg, "MAX_RETRIES", 2)
+
+    # Disable thinking mode for Qwen / DeepSeek models on Ollama by setting think=False
+    model_kwargs = kwargs.pop("model_kwargs", {})
+    extra_body = model_kwargs.pop("extra_body", {})
+    extra_body.update({
+        "think": False,
+        "options": {
+            "think": False,
+            "temperature": temp,
+        }
+    })
+    model_kwargs["extra_body"] = extra_body
 
     llm_kwargs = {
         "model": model_name,
@@ -65,9 +79,13 @@ def get_llm(
         "max_tokens": tokens,
         "timeout": effective_timeout,
         "request_timeout": effective_timeout,
+        "max_retries": retries,
         "streaming": False,
+        "model_kwargs": model_kwargs,
         **kwargs,
     }
 
     return ChatOpenAI(**llm_kwargs)
+
+
 
