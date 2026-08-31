@@ -495,14 +495,22 @@ def _fallback_parse_query(user_query: str) -> Dict[str, Any]:
     if company:
         clean_content = re.sub(rf"\b{company}\b", "", clean_content, flags=re.IGNORECASE)
 
-    # Remove growth/comparison stop words
+    # Remove noise, company suffixes, question words, and financial terms
     stop_phrases = [
         "tốc độ tăng trưởng %", "tốc độ tăng trưởng", "tăng trưởng %", "tăng trưởng",
-        "so sánh", "từ năm", "đến năm", "của", "năm", "báo cáo", "tài chính",
-        "cho", "là bao nhiêu", "bao nhiêu"
+        "so sánh", "từ năm", "đến năm", "của", "năm", "báo cáo tài chính", "báo cáo riêng",
+        "báo cáo hợp nhất", "bctc riêng", "bctc hợp nhất", "công ty mẹ", "công ty cổ phần",
+        "tập đoàn", "ngân hàng tmcp", "ngân hàng", "ctcp", "tmcp", "tổng công ty",
+        "tại ngày", "vào ngày", "cuối năm", "đầu năm", "trong năm", "đến ngày",
+        "cho", "trong", "vào", "tại", "đến", "từ",
+        "là bao nhiêu", "bao nhiêu", "triệu đồng", "tỷ đồng", "nghìn tỷ đồng",
+        "đồng", "vnd", "usd", "%", "phần trăm"
     ]
     for word in stop_phrases:
         clean_content = re.sub(rf"\b{re.escape(word)}\b", "", clean_content, flags=re.IGNORECASE)
+
+    clean_content = re.sub(r"[?,.!()\"\':]", " ", clean_content)
+    clean_content = re.sub(r"\s+", " ", clean_content).strip()
 
     # Check for personnel entity in query
     from pipeline.src.nodes.code_generator import extract_person_name
@@ -569,8 +577,8 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
 
         prompt_messages.append(HumanMessage(content=f"Câu hỏi: {user_query}"))
 
-        # Call LLM with slight temperature=0.1 to avoid overfitting/copy-pasting examples
-        llm = get_llm(cfg=cfg, temperature=0.1, timeout=50)
+        # Call LLM with strict 12s timeout for fast parsing; quick fallback to rule-based parser on latency
+        llm = get_llm(cfg=cfg, temperature=0.1, timeout=12)
         response = llm.invoke(prompt_messages)
 
         raw_content = response.content if isinstance(response.content, str) else str(response.content)

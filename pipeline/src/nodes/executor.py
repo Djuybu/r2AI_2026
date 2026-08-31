@@ -115,22 +115,43 @@ def sanitize_code_str(code_str: str) -> str:
             fixed_lines.append(line)
     code_str = "\n".join(fixed_lines)
 
-    # Fix bug 1: `if 'X' in df[col].str.contains(...)` -> replace with `if (df[col].str.contains(...)).any():`
+    # Fix bug 1: Remove LLM redefined dummy helper functions (def extract_value, def clean_val)
+    temp_lines = []
+    skip_def = False
+    for line in fixed_lines:
+        if re.match(r"^\s*def\s+(extract_value|clean_val)\s*\(", line):
+            skip_def = True
+            continue
+        if skip_def:
+            if line.startswith(" ") or line.startswith("\t") or not line.strip():
+                continue
+            else:
+                skip_def = False
+        temp_lines.append(line)
+    code_str = "\n".join(temp_lines)
+
+    # Fix bug 2: `if 'X' in df[col].str.contains(...)` -> replace with `if (df[col].str.contains(...)).any():`
     code_str = re.sub(
         r"if\s+['\"].*?['\"]\s+in\s+([^\n:]+?\.str\.contains\([^:\n]+\)):[ \t]*",
         r"if (\1).any():",
         code_str
     )
-    # Fix bug 2: `df[df[col] == 'keyword']` -> replace with `df[df[col].astype(str).str.contains('keyword', case=False, na=False, regex=False)]`
+    # Fix bug 3: `df[df[col] == 'keyword']` -> replace with `df[df[col].astype(str).str.contains('keyword', case=False, na=False, regex=False)]`
     code_str = re.sub(
         r"df\[\s*df\[(['\"].*?['\"])\s*\]\s*==\s*(['\"].*?['\"])\s*\]",
         r"df[df[\1].astype(str).str.contains(\2, case=False, na=False, regex=False)]",
         code_str
     )
-    # Fix bug 3: Ensure automatic insertion of `.astype(str)` before any `.str.` operations if missing
+    # Fix bug 4: Ensure automatic insertion of `.astype(str)` before any `.str.` operations if missing
     code_str = re.sub(
         r"(df\[\s*['\"][^'\"]+['\"]\s*\])(?!\.astype\(str\))\.str\.",
         r"\1.astype(str).str.",
+        code_str
+    )
+    # Fix bug 5: `result = match_row[...]` -> replace with `result = extract_value(match_row, ..., _df=df, _row_idx=match_row.name if hasattr(match_row, 'name') else None)`
+    code_str = re.sub(
+        r"result\s*=\s*match_row\[\s*([a-zA-Z0-9_'\"]+)\s*\]",
+        r"result = extract_value(match_row, \1, _df=df, _row_idx=match_row.name if hasattr(match_row, 'name') else None)",
         code_str
     )
     return code_str
@@ -319,9 +340,14 @@ def execute_code_on_table(code_str: str, file_path: str, all_tables: Optional[Li
 
     exec(code_str, exec_globals)
     result_val = exec_globals.get("result")
-    if result_val is None:
-        raise ValueError("Biến `result` không được tìm thấy sau khi thực thi mã.")
-    return result_val
+    if result_val is None or (isinstance(result_val, float) and np.isnan(result_val)):
+        raise ValueError("Biến `result` rỗng hoặc mang giá trị NaN sau khi thực thi mã.")
+
+    try:
+        cleaned_num = clean_val(result_val)
+        return cleaned_num
+    except Exception:
+        return result_val
 
 
 def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
@@ -410,19 +436,19 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
                 print(f"⚠️ [Executor] Mã LLM không trích xuất được kết quả -> Kích hoạt thực thi Rule-based Fallback...")
                 from pipeline.src.nodes.code_generator import generate_fallback_code
                 parsed_query = state.get("parsed_query", {})
-                schema_mapping = state.get("schema_mapping", {})
+                column_mapping = state.get("column_mapping") or state.get("schema_mapping", {})
                 fallback_code = generate_fallback_code(
                     muc_tieu=parsed_query.get("muc_tieu") or parsed_query.get("thao_tac", "trich_xuat"),
                     noi_dung=parsed_query.get("noi_dung", ""),
-                    label_col=schema_mapping.get("label_column", "CHỈ TIÊU"),
-                    value_col=schema_mapping.get("value_column", "Giá trị"),
+                    label_col=column_mapping.get("label_column", "CHỈ TIÊU"),
+                    value_col=column_mapping.get("value_column", "Giá trị"),
                     so_nam=parsed_query.get("so_nam", []),
                     discovered_tables=discovered_tables,
                     person_name=parsed_query.get("ten_nhan_su"),
                     tieu_chi_phu=parsed_query.get("tieu_chi_phu"),
                     user_query=user_query,
-                    label_col_idx=schema_mapping.get("label_col_idx"),
-                    value_col_idx=schema_mapping.get("value_col_idx"),
+                    label_col_idx=column_mapping.get("label_column_idx") or column_mapping.get("label_col_idx"),
+                    value_col_idx=column_mapping.get("value_column_idx") or column_mapping.get("value_col_idx"),
                 )
                 fb_results = []
                 for idx, tbl in enumerate(top_candidates):

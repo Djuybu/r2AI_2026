@@ -36,13 +36,13 @@ METADATA_HEADER_COLUMNS = [
 
 
 AUXILIARY_COL_REGEX = re.compile(
-    r"^(stt|số\s*tt|số\s*thứ\s*tự|sothutu|mã\s*số|mãsố|thuyết\s*minh|thuyếtminh|ghi\s*chú|note|code|ms|tm|cột_\d+|unnamed.*)$",
+    r"^(stt|số\s*tt|số\s*thứ\s*tự|sothutu|mã\s*số|mãsố|mã|thuyết\s*minh|thuyếtminh|ghi\s*chú|note|code|ms|tm|[a-dA-D]|cột_\d+|unnamed.*)$",
     re.IGNORECASE,
 )
 
 _AUXILIARY_CODE_COLUMNS = {
-    "mã số", "mãsố", "thuyết minh", "thuyếtminh", "stt", "số tt", "số thứ tự", "sothutu",
-    "ghi chú", "note", "code", "ms", "tm", "cột_0", "cột 0", "cot_0", "cot 0", "unnamed: 0"
+    "mã số", "mãsố", "mã", "thuyết minh", "thuyếtminh", "stt", "số tt", "số thứ tự", "sothutu",
+    "ghi chú", "note", "code", "ms", "tm", "a", "b", "c", "d", "cột_0", "cột 0", "cot_0", "cot 0", "unnamed: 0"
 }
 
 
@@ -367,23 +367,41 @@ def _find_value_column(
     """Xác định cột giá trị một cách động dựa trên tiêu chí phụ, cột số và cột phần trăm (%)."""
     if not useful_columns:
         if columns:
-            candidates = [c for c in columns if c not in METADATA_HEADER_COLUMNS and c != label_col]
-            return candidates[0] if candidates else None
+            candidates = [
+                c for c in columns
+                if c not in METADATA_HEADER_COLUMNS
+                and c != label_col
+                and not AUXILIARY_COL_REGEX.match(str(c).strip())
+                and str(c).strip().lower() not in _AUXILIARY_CODE_COLUMNS
+            ]
+            return candidates[0] if candidates else (columns[0] if columns else None)
         return None
 
-    value_candidates = [c for c in useful_columns if c.get("raw_column") != label_col]
+    # Lọc bỏ cột nhãn và tất cả các cột mã số / auxiliary code / single letter
+    value_candidates = [
+        c for c in useful_columns
+        if c.get("raw_column") != label_col
+        and not c.get("is_aux_code", False)
+        and not AUXILIARY_COL_REGEX.match(str(c.get("column_name", "")).strip())
+        and not AUXILIARY_COL_REGEX.match(str(c.get("raw_column", "")).strip())
+        and str(c.get("column_name", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
+        and str(c.get("raw_column", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
+    ]
+    if not value_candidates:
+        value_candidates = [c for c in useful_columns if c.get("raw_column") != label_col]
     if not value_candidates:
         value_candidates = useful_columns
 
     if tieu_chi_phu and value_candidates:
         clean_tcp = str(tieu_chi_phu).strip().lower()
 
-        # 1. Exact or substring match (An toàn với mọi kiểu dữ liệu tên cột)
+        # 1. Exact or substring match TRÊN TÊN CỘT THỰC TẾ (TUYỆT ĐỐI KHÔNG match trên c_desc)
         for uc in value_candidates:
             c_name = str(uc.get("column_name", "")).lower()
             r_name = str(uc.get("raw_column", "")).lower()
-            c_desc = str(uc.get("column_description", "")).lower()
-            if clean_tcp in c_name or clean_tcp in r_name or clean_tcp in c_desc:
+            if clean_tcp == c_name or clean_tcp == r_name:
+                return uc["raw_column"]
+            if len(clean_tcp) >= 3 and (clean_tcp in c_name or clean_tcp in r_name):
                 return uc["raw_column"]
 
         # 2. Khớp chuyên biệt cho truy vấn tỷ lệ / phần trăm (%)
@@ -391,8 +409,7 @@ def _find_value_column(
             for uc in value_candidates:
                 c_name = str(uc.get("column_name", "")).lower()
                 r_name = str(uc.get("raw_column", "")).lower()
-                c_desc = str(uc.get("column_description", "")).lower()
-                if any(k in c_name or k in r_name or k in c_desc for k in ["%", "tỷ lệ", "ty le", "biểu quyết", "sở hữu", "lãi suất"]):
+                if any(k in c_name or k in r_name for k in ["%", "tỷ lệ", "ty le", "biểu quyết", "sở hữu", "lãi suất"]):
                     return uc["raw_column"]
 
         # 3. Fuzzy match tiêu chí phụ với các tên cột ứng viên
@@ -401,12 +418,12 @@ def _find_value_column(
             match, score = process.extractOne(
                 clean_tcp, candidate_names, scorer=fuzz.token_set_ratio
             )
-            if score >= 50:
+            if score >= 65:
                 for uc in value_candidates:
                     if str(uc.get("column_name", "")) == match:
                         return uc["raw_column"]
 
-    # Ưu tiên các cột numeric KHÔNG phải là cột mã số / thuyết minh
+    # Ưu tiên các cột numeric KHÔNG phải là cột mã số / thuyết minh / số lượng cổ phiếu
     primary_numeric = [
         c for c in value_candidates 
         if c.get("data_type") == "numeric" 
@@ -417,7 +434,24 @@ def _find_value_column(
         and str(c.get("raw_column", "")).strip().lower() not in _AUXILIARY_CODE_COLUMNS
     ]
     if primary_numeric:
-        return primary_numeric[0]["raw_column"]
+        def _col_priority(col_dict):
+            raw_c = str(col_dict.get("raw_column", "")).lower()
+            name_c = str(col_dict.get("column_name", "")).lower()
+            check = f"{raw_c} {name_c}"
+            # Cột số tiền hiện tại / năm nay / cuối năm: Ưu tiên cao nhất (0)
+            if any(kw in check for kw in ["năm nay", "kỳ này", "cuối năm", "cuối kỳ", "31/12", "số tiền", "giá trị", "thực hiện", "thành tiền"]):
+                return 0
+            # Cột số lượng / số cổ phiếu: ưu tiên thấp hơn số tiền (3)
+            if any(kw in check for kw in ["số cổ phiếu", "số lượng", "cổ phần", "cp"]):
+                return 3
+            # Cột năm trước / kỳ trước / đầu năm: ưu tiên sau năm nay (2)
+            if any(kw in check for kw in ["năm trước", "kỳ trước", "đầu năm", "đầu kỳ", "01/01"]):
+                return 2
+            # Các cột số liệu thông thường khác: (1)
+            return 1
+
+        sorted_numeric = sorted(primary_numeric, key=_col_priority)
+        return sorted_numeric[0]["raw_column"]
 
     # Default: Chọn cột dạng 'numeric' đầu tiên trong các cột ứng viên
     numeric_candidates = [c for c in value_candidates if c.get("data_type") == "numeric"]

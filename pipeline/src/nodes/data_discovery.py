@@ -291,14 +291,22 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     # Làm sạch noi_dung trước khi truyền vào Search Engine
     noi_dung = clean_query_content(noi_dung_raw, ten_cong_ty, so_nam)
 
-    # Determine report type: mặc định None để tìm kiếm trên CẢ 2 loại báo cáo (consolidated & separate)
+    # Trích xuất tên nhân sự nếu có để tìm đúng bảng thuyết minh thù lao / thu nhập HĐQT
+    person_name = parsed_query.get("ten_nhan_su") or parsed_query.get("person_name")
+    if not person_name and isinstance(user_query, str):
+        from pipeline.src.nodes.code_generator import extract_person_name
+        person_name = extract_person_name(user_query)
+
+    search_content = f"{noi_dung} {person_name}".strip() if person_name else noi_dung
+
+    # Determine report type: 'công ty mẹ' / 'riêng' -> separate, 'hợp nhất' -> consolidated
     report_type = None
     if isinstance(user_query, str):
         q_lower = user_query.lower()
-        if "hợp nhất" in q_lower and "riêng" not in q_lower:
-            report_type = "consolidated"
-        elif "báo cáo riêng" in q_lower:
+        if any(k in q_lower for k in ["công ty mẹ", "cty mẹ", "báo cáo riêng", "bctc riêng", "riêng"]):
             report_type = "separate"
+        elif "hợp nhất" in q_lower:
+            report_type = "consolidated"
 
     all_discovered_tables: List[Dict[str, Any]] = []
 
@@ -310,10 +318,10 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
         se._ensure_resources()
 
         if not so_nam:
-            print(f"   - Tra cứu bảng cho công ty '{ten_cong_ty}' và nội dung '{noi_dung}'...")
+            print(f"   - Tra cứu bảng cho công ty '{ten_cong_ty}' và nội dung '{search_content}' (Scope: {report_type or 'All'})...")
             results = search_by_company_and_content(
                 company_name=ten_cong_ty,
-                content=noi_dung,
+                content=search_content,
                 raw_query=user_query,
                 year=None,
                 report_type=report_type,
@@ -322,7 +330,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             if not results and report_type is not None:
                 results = search_by_company_and_content(
                     company_name=ten_cong_ty,
-                    content=noi_dung,
+                    content=search_content,
                     raw_query=user_query,
                     year=None,
                     report_type=None,
@@ -346,10 +354,10 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                             all_discovered_tables.append(table_entry)
         else:
             for year in so_nam:
-                print(f"   - Tra cứu bảng cho năm {year}...")
+                print(f"   - Tra cứu bảng cho năm {year} (Scope: {report_type or 'All'})...")
                 results = search_by_company_and_content(
                     company_name=ten_cong_ty,
-                    content=noi_dung,
+                    content=search_content,
                     raw_query=user_query,
                     year=str(year),
                     report_type=report_type,
@@ -358,7 +366,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 if not results and report_type is not None:
                     results = search_by_company_and_content(
                         company_name=ten_cong_ty,
-                        content=noi_dung,
+                        content=search_content,
                         raw_query=user_query,
                         year=str(year),
                         report_type=None,

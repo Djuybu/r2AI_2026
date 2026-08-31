@@ -444,8 +444,18 @@ def _build_files_context(
     return "\n".join(lines)
 
 
-def ensure_code_variables(code: str, file_path: str, label_col: str, value_col: str, label_col_idx: Optional[int], value_col_idx: Optional[int]) -> str:
-    """Prepend variable definitions to LLM generated code if referenced but undefined."""
+def ensure_code_variables(
+    code: str,
+    file_path: str,
+    label_col: str,
+    value_col: str,
+    label_col_idx: Optional[int],
+    value_col_idx: Optional[int],
+    target_metric: Optional[str] = None,
+    ten_cong_ty: Optional[str] = None,
+    user_query: Optional[str] = None,
+) -> str:
+    """Prepend variable definitions to LLM generated code if referenced but undefined, and sanitize search_key."""
     if not code:
         return ""
 
@@ -461,6 +471,26 @@ def ensure_code_variables(code: str, file_path: str, label_col: str, value_col: 
         header_lines.append(f"label_col_idx = {label_col_idx}")
     if value_col_idx is not None and "value_col_idx" in code and not ("value_col_idx =" in code or "value_col_idx=" in code):
         header_lines.append(f"value_col_idx = {value_col_idx}")
+
+    # Tự động chuẩn hóa search_key nếu LLM vô tình gán cả câu hỏi hoặc gán quá dài
+    if target_metric:
+        target_metric_escaped = target_metric.replace("'", "\\'")
+        m_sk = re.search(r"search_key\s*=\s*(['\"])(.*?)\1", code)
+        if m_sk:
+            curr_sk = m_sk.group(2)
+            # Luôn chuẩn hóa search_key nếu curr_sk dài hơn target_metric hoặc chứa từ khóa nhiễu
+            if (
+                curr_sk != target_metric
+                and (
+                    len(curr_sk) > len(target_metric) + 4
+                    or (ten_cong_ty and ten_cong_ty.lower() in curr_sk.lower())
+                    or (user_query and len(curr_sk) > len(target_metric) and curr_sk.lower() in user_query.lower())
+                    or any(noise in curr_sk.lower() for noise in ["là bao nhiêu", "công ty mẹ", "ngân hàng", "năm 20", "bao nhiêu", "ctcp", "tập đoàn"])
+                )
+            ):
+                code = re.sub(r"search_key\s*=\s*(['\"]).*?\1", f"search_key = '{target_metric_escaped}'", code, count=1)
+        elif "search_key" not in code:
+            header_lines.append(f"search_key = '{target_metric_escaped}'")
 
     if header_lines:
         code = "\n".join(header_lines) + "\n" + code
@@ -665,7 +695,17 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
 
         code = clean_python_code(raw_text)
         if code:
-            code = ensure_code_variables(code, top_csv, label_col, value_col, label_col_idx, value_col_idx)
+            code = ensure_code_variables(
+                code,
+                top_csv,
+                label_col,
+                value_col,
+                label_col_idx,
+                value_col_idx,
+                target_metric=person_name or noi_dung,
+                ten_cong_ty=ten_cong_ty,
+                user_query=user_query,
+            )
 
         if not code:
             print("⚠️ [Code Generator] LLM không sinh code hợp lệ -> Kích hoạt Rule-based Fallback Generator...")
