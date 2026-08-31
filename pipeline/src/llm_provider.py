@@ -39,7 +39,7 @@ def get_llm(
     cfg: Optional[Config] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
-    timeout: Optional[int] = 120,
+    timeout: Optional[int] = 20,
     **kwargs,
 ) -> BaseChatModel:
     """Factory function to instantiate ChatOpenAI connecting to self-hosted vLLM or local server."""

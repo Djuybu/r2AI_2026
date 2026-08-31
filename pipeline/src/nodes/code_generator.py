@@ -621,7 +621,7 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             ]
 
         # Call LLM safely
-        llm = get_llm(cfg=cfg, temperature=0.0)
+        llm = get_llm(cfg=cfg, temperature=0.0, timeout=20)
         response = llm.invoke(messages)
         raw_text = response.content if isinstance(response.content, str) else str(response.content)
 
