@@ -38,66 +38,71 @@ def load_yaml_prompt(cfg: Config, filename: str) -> Dict[str, Any]:
 
 
 def clean_python_code(raw_code: str) -> str:
-    """Extract clean Python code from LLM response, stripping markdown and conversational text."""
+    """Extract clean Python code from LLM response, stripping markdown and trailing conversational text."""
     if not raw_code:
         return ""
 
     import ast
+    import re
 
-    # Step 1: Check markdown python blocks
-    pattern = r"```(?:python)?\s*\n?(.*?)\n?```"
-    matches = re.findall(pattern, raw_code, re.DOTALL)
-    for match in matches:
-        candidate = match.strip()
+    # Remove thinking tags first
+    cleaned_raw = re.sub(r"<think>.*?</think>", "", raw_code, flags=re.DOTALL).strip()
+
+    def try_parse_and_trim(code_text: str) -> str:
+        code_text = code_text.strip()
+        if not code_text:
+            return ""
+        # 1. Try parsing directly
         try:
-            ast.parse(candidate)
-            return candidate
+            ast.parse(code_text)
+            return code_text
         except SyntaxError:
             pass
 
-    # Step 2: If no valid code block found, check inside <think> tags
-    think_match = re.search(r"<think>(.*?)</think>", raw_code, re.DOTALL)
-    if think_match:
-        think_text = think_match.group(1).strip()
-        think_matches = re.findall(pattern, think_text, re.DOTALL)
-        for tm in think_matches:
-            candidate = tm.strip()
+        # 2. Try trimming trailing non-python text line-by-line from bottom
+        lines = code_text.splitlines()
+        for i in range(len(lines) - 1, 0, -1):
+            sub_code = "\n".join(lines[:i]).strip()
+            if not sub_code:
+                break
             try:
-                ast.parse(candidate)
-                return candidate
+                ast.parse(sub_code)
+                return sub_code
             except SyntaxError:
                 pass
-        lines = think_text.splitlines()
-        for idx, line in enumerate(lines):
-            l = line.strip()
-            if l.startswith("import ") or l.startswith("file_path =") or l.startswith("df ="):
-                candidate = "\n".join(lines[idx:]).strip()
-                try:
-                    ast.parse(candidate)
-                    return candidate
-                except SyntaxError:
-                    pass
+        return ""
 
-    # Step 3: Strip conversational text before code in raw_code
-    cleaned = raw_code.strip()
-    if cleaned.startswith("```") and cleaned.endswith("```"):
-        cleaned = cleaned[3:-3].strip()
+    # Step 1: Check markdown python blocks
+    pattern = r"```(?:python)?\s*\n?(.*?)\n?```"
+    matches = re.findall(pattern, cleaned_raw, re.DOTALL)
+    for match in matches:
+        res = try_parse_and_trim(match)
+        if res:
+            return res
 
-    lines = cleaned.splitlines()
+    # Step 2: Strip code fences if present at boundary
+    if cleaned_raw.startswith("```") and cleaned_raw.endswith("```"):
+        boundary_stripped = cleaned_raw.strip("`").strip()
+        if boundary_stripped.startswith("python"):
+            boundary_stripped = boundary_stripped[6:].strip()
+        res = try_parse_and_trim(boundary_stripped)
+        if res:
+            return res
+
+    # Step 3: Strip conversational text before and after code
+    lines = cleaned_raw.splitlines()
     for idx, line in enumerate(lines):
         l = line.strip()
         if l.startswith("import ") or l.startswith("def ") or l.startswith("file_path") or l.startswith("df =") or l.startswith("result ="):
             candidate = "\n".join(lines[idx:]).strip()
-            try:
-                ast.parse(candidate)
-                return candidate
-            except SyntaxError:
-                pass
+            res = try_parse_and_trim(candidate)
+            if res:
+                return res
 
     return ""
 
 
-# Các cột metadata/thông tin chung ở đầu file CSV
+
 _METADATA_COLUMNS = {
     "Ma_Doanh_Nghiep", "Ten_Doanh_Nghiep", "Nam_Tai_Chinh",
     "Loai_Bao_Cao", "Ten_Bang", "Don_Vi_Tinh", "Tep_Nguon"
