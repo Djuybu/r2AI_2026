@@ -537,11 +537,15 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
     """
     cfg = cfg or default_config
     start_time = time.time()
+    query_start_time = state.get("query_start_time") or start_time
     user_query = state.get("user_query", "").strip()
+
+    print(f"\n🔍 [Node 1: Query Parser] Bắt đầu phân tích câu hỏi: '{user_query}'...")
 
     if not user_query:
         return {
             **state,
+            "query_start_time": query_start_time,
             "status": "error",
             "error_message": "User query is empty.",
             "parsed_query": {},
@@ -572,18 +576,15 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         raw_content = response.content if isinstance(response.content, str) else str(response.content)
 
         # Extract and print agent thoughts
-        # print(f"\n🔍 [Query Parser] Đang phân tích câu hỏi: '{user_query}'")
         think_match = re.search(r"<think>(.*?)</think>", raw_content, re.DOTALL)
         if think_match:
             thought = think_match.group(1).strip()
             indented_thought = thought.replace("\n", "\n  ")
-            # print(f"💭 [Tư duy - Query Parser]:\n  {indented_thought}")
         else:
             json_start = raw_content.find("{")
             if json_start > 10:
                 thought = raw_content[:json_start].strip()
                 indented_thought = thought.replace("\n", "\n  ")
-                # print(f"💭 [Tư duy - Query Parser]:\n  {indented_thought}")
 
         # Parse output JSON
         parsed_json = safe_parse_json(raw_content)
@@ -644,8 +645,12 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         node_latencies = state.get("node_latencies", {})
         node_latencies["query_parser"] = round(latency, 3)
 
+        print(f"✅ [Node 1: Query Parser] Hoàn thành trong {node_latencies['query_parser']}s")
+        print(f"   📋 Công ty: {parsed_json.get('ten_cong_ty')} | Năm: {parsed_json.get('so_nam')} | Chỉ tiêu: '{parsed_json.get('noi_dung')}' | Thao tác: {parsed_json.get('thao_tac')}")
+
         return {
             **state,
+            "query_start_time": query_start_time,
             "parsed_query": parsed_json,
             "status": "pending",
             "node_latencies": node_latencies,
@@ -659,17 +664,15 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         node_latencies = state.get("node_latencies", {})
         node_latencies["query_parser"] = round(latency, 3)
 
+        print(f"✅ [Node 1: Query Parser] Hoàn thành (Fallback) trong {node_latencies['query_parser']}s")
         print(
-            f"📊 [Kết quả Fallback - Query Parser]:\n"
-            f"   Công ty: {parsed_json.get('ten_cong_ty')}\n"
-            f"   Năm: {parsed_json.get('so_nam')}\n"
-            f"   Nội dung: {parsed_json.get('noi_dung')}\n"
-            f"   Thao tác: {parsed_json.get('thao_tac')}\n"
-            f"   Tiêu chí phụ: {parsed_json.get('tieu_chi_phu')}\n"
+            f"   📊 [Kết quả Fallback]:\n"
+            f"      Công ty: {parsed_json.get('ten_cong_ty')} | Năm: {parsed_json.get('so_nam')} | Chỉ tiêu: '{parsed_json.get('noi_dung')}' | Thao tác: {parsed_json.get('thao_tac')}"
         )
 
         return {
             **state,
+            "query_start_time": query_start_time,
             "parsed_query": parsed_json,
             "status": "pending",
             "node_latencies": node_latencies,

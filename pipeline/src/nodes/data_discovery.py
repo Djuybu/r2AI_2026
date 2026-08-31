@@ -270,6 +270,8 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     user_query = state.get("user_query", "")
     parsed_query = state.get("parsed_query", {})
 
+    print(f"\n🔍 [Node 2: Data Discovery] Bắt đầu tìm kiếm bảng dữ liệu...")
+
     # Extract fields from parsed_query
     ten_cong_ty = parsed_query.get("ten_cong_ty", "")
     so_nam = parsed_query.get("so_nam", [])
@@ -288,12 +290,6 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
 
     # Làm sạch noi_dung trước khi truyền vào Search Engine
     noi_dung = clean_query_content(noi_dung_raw, ten_cong_ty, so_nam)
-
-    # Suppressed verbose logs
-    
-    
-    
-    
 
     # Determine report type: mặc định None để tìm kiếm trên CẢ 2 loại báo cáo (consolidated & separate)
     report_type = None
@@ -348,9 +344,6 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                         }
                         if not any(t["csv_path"] == str(csv_path) for t in all_discovered_tables):
                             all_discovered_tables.append(table_entry)
-                if all_discovered_tables:
-                    best = all_discovered_tables[0]
-                    # print(f"   🏆 Bảng khớp CAO NHẤT: {Path(best['csv_path']).name} — {best['Ten_Bang']} (RRF: {best['rrf_score']:.6f})")
         else:
             for year in so_nam:
                 print(f"   - Tra cứu bảng cho năm {year}...")
@@ -387,9 +380,6 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                             }
                             if not any(t["csv_path"] == str(csv_path) for t in all_discovered_tables):
                                 all_discovered_tables.append(table_entry)
-                    if all_discovered_tables:
-                        best = all_discovered_tables[0]
-                        # print(f"   🏆 Năm {year} - Bảng khớp CAO NHẤT: {Path(best['csv_path']).name} — {best['Ten_Bang']} (RRF: {best['rrf_score']:.6f})")
 
     except Exception as e:
         print(f"⚠️ [Data Discovery] Lỗi/Không dùng được Search Engine: {e}. Thử quét thư mục offline...")
@@ -435,7 +425,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     node_latencies["data_discovery"] = round(latency, 3)
 
     if not all_discovered_tables:
-        print(f"\n❌ [Data Discovery] Không tìm thấy bảng dữ liệu nào phù hợp.")
+        print(f"❌ [Node 2: Data Discovery] Hoàn thành trong {node_latencies['data_discovery']}s (Không tìm thấy bảng dữ liệu phù hợp)")
         return {
             **state,
             "status": "error",
@@ -458,7 +448,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     first_schema = all_discovered_tables[0].get("table_schema", [])
     first_row_val = all_discovered_tables[0].get("first_row_values", {})
 
-    pass
+    print(f"✅ [Node 2: Data Discovery] Hoàn thành trong {node_latencies['data_discovery']}s (Tìm thấy {len(all_discovered_tables)} bảng phù hợp)")
 
     return {
         **state,

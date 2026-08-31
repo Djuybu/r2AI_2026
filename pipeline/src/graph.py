@@ -25,18 +25,23 @@ def route_after_schema_mapper(state: AgentState) -> Literal["code_generator", "_
     return "code_generator"
 
 
+import time
+
 def route_after_execution(state: AgentState, cfg: Optional[Config] = None) -> Literal["code_generator", "__end__"]:
     """Conditional edge for Reflection Debugging Loop."""
     cfg = cfg or default_config
     status = state.get("status")
     retry_count = state.get("retry_count", 0)
+    query_start_time = state.get("query_start_time", 0)
+    total_elapsed = time.time() - query_start_time if query_start_time > 0 else 0
 
     if status == "success":
         return END
 
-    if status == "error" and retry_count < cfg.MAX_RETRIES:
-        print(f"🔄 Reflection Loop Activated! Retrying code generation ({retry_count}/{cfg.MAX_RETRIES})...")
-        return "code_generator"
+    if status == "error":
+        if retry_count < cfg.MAX_RETRIES and total_elapsed < 30.0:
+            print(f"🔄 Reflection Loop Activated! Retrying code generation ({retry_count}/{cfg.MAX_RETRIES})...")
+            return "code_generator"
 
     return END
 

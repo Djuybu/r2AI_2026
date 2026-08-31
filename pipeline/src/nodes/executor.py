@@ -388,7 +388,6 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
         if successful_candidates:
             aggregated = aggregate_top_k_results(multi_table_results, is_percentage=is_pct)
             formatted = format_result(aggregated["data"])
-            
 
             latency = time.time() - start_time
             node_latencies = state.get("node_latencies", {})
@@ -404,6 +403,68 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
                 "node_latencies": node_latencies,
             }
         else:
+            # Nếu LLM code thất bại và gần hết ngân sách thời gian 50s -> Thực thi Rule-based Fallback ngay lập tức
+            query_start_time = state.get("query_start_time", start_time)
+            total_elapsed = time.time() - query_start_time
+            if retry_count >= cfg.MAX_RETRIES or total_elapsed >= 25.0:
+                print(f"⚠️ [Executor] Mã LLM không trích xuất được kết quả -> Kích hoạt thực thi Rule-based Fallback...")
+                from pipeline.src.nodes.code_generator import generate_fallback_code
+                parsed_query = state.get("parsed_query", {})
+                schema_mapping = state.get("schema_mapping", {})
+                fallback_code = generate_fallback_code(
+                    muc_tieu=parsed_query.get("muc_tieu") or parsed_query.get("thao_tac", "trich_xuat"),
+                    noi_dung=parsed_query.get("noi_dung", ""),
+                    label_col=schema_mapping.get("label_column", "CHỈ TIÊU"),
+                    value_col=schema_mapping.get("value_column", "Giá trị"),
+                    so_nam=parsed_query.get("so_nam", []),
+                    discovered_tables=discovered_tables,
+                    person_name=parsed_query.get("ten_nhan_su"),
+                    tieu_chi_phu=parsed_query.get("tieu_chi_phu"),
+                    user_query=user_query,
+                    label_col_idx=schema_mapping.get("label_col_idx"),
+                    value_col_idx=schema_mapping.get("value_col_idx"),
+                )
+                fb_results = []
+                for idx, tbl in enumerate(top_candidates):
+                    c_path = tbl.get("csv_path", "")
+                    t_name = tbl.get("Ten_Bang", Path(c_path).stem if c_path else f"Table_{idx+1}")
+                    try:
+                        res_val = execute_code_on_table(fallback_code, c_path, all_tables=discovered_tables)
+                        fb_results.append({
+                            "table_idx": idx,
+                            "table_name": t_name,
+                            "csv_path": c_path,
+                            "value": res_val,
+                            "status": "success",
+                        })
+                    except Exception as fb_err:
+                        fb_results.append({
+                            "table_idx": idx,
+                            "table_name": t_name,
+                            "csv_path": c_path,
+                            "value": None,
+                            "status": "error",
+                            "error": str(fb_err),
+                        })
+                fb_success = [r for r in fb_results if r["status"] == "success"]
+                if fb_success:
+                    aggregated = aggregate_top_k_results(fb_results, is_percentage=is_pct)
+                    formatted = format_result(aggregated["data"])
+                    latency = time.time() - start_time
+                    node_latencies = state.get("node_latencies", {})
+                    node_latencies["executor"] = round(latency, 3)
+                    print(f"✅ [Executor Fallback]: Thành công trong {node_latencies['executor']}s -> Kết quả: {aggregated['data']}")
+                    return {
+                        **state,
+                        "generated_code": fallback_code,
+                        "execution_result": formatted,
+                        "aggregated_value": aggregated["data"],
+                        "multi_table_results": fb_results,
+                        "error_traceback": None,
+                        "status": "success",
+                        "node_latencies": node_latencies,
+                    }
+
             raise ValueError(f"Không tìm thấy chỉ tiêu trong toàn bộ Top {len(top_candidates)} bảng ứng viên.")
 
     except Exception as e:

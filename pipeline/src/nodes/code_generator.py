@@ -542,6 +542,36 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
         top_csv_escaped = top_csv.replace('\\', '\\\\')
         paths_str = f"file_path = '{top_csv_escaped}'\n"
 
+    # Kiểm tra ngân sách thời gian (50s): Nếu retry và thời gian đã trôi qua > 25s, dùng ngay Fallback
+    query_start_time = state.get("query_start_time", start_time)
+    total_elapsed = time.time() - query_start_time
+    if retry_count >= 1 and (total_elapsed >= 25.0 or retry_count >= cfg.MAX_RETRIES):
+        print(f"⏱️ [Code Generator] Thời gian câu hỏi đã trôi qua {total_elapsed:.1f}s (gần mức 50s) -> Kích hoạt ngay Rule-based Fallback Generator...")
+        fallback_code = generate_fallback_code(
+            muc_tieu=muc_tieu,
+            noi_dung=noi_dung,
+            label_col=label_col,
+            value_col=value_col,
+            so_nam=so_nam,
+            discovered_tables=discovered_tables,
+            person_name=person_name,
+            tieu_chi_phu=tieu_chi_phu,
+            user_query=user_query,
+            label_col_idx=label_col_idx,
+            value_col_idx=value_col_idx,
+        )
+        print(f"📊 [Mã Python Fallback]:\n```python\n{fallback_code}\n```\n")
+        latency = time.time() - start_time
+        node_latencies = state.get("node_latencies", {})
+        node_latencies["code_generator"] = round(latency, 3)
+        print(f"✅ [Node 4: Code Generator] Hoàn thành (Fallback) trong {node_latencies['code_generator']}s")
+        return {
+            **state,
+            "generated_code": fallback_code,
+            "status": "pending",
+            "node_latencies": node_latencies,
+        }
+
     try:
         if retry_count == 0:
             prompt_data = load_yaml_prompt(cfg, "code_generator.yaml")
