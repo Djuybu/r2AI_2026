@@ -75,11 +75,12 @@ for d in _possible_kaggle_dirs:
         break
 
 if _KAGGLE_DATA_DIR:
-    if (_KAGGLE_DATA_DIR / "qdrant_local_db").exists():
+    # Only use Kaggle input directory if local writable DB does not exist
+    if not _DEFAULT_QDRANT.exists() and (_KAGGLE_DATA_DIR / "qdrant_local_db").exists():
         QDRANT_DB_PATH = _KAGGLE_DATA_DIR / "qdrant_local_db"
-    if (_KAGGLE_DATA_DIR / "bm25_index.pkl").exists():
+    if not _DEFAULT_BM25.exists() and (_KAGGLE_DATA_DIR / "bm25_index.pkl").exists():
         BM25_PATH = _KAGGLE_DATA_DIR / "bm25_index.pkl"
-    if (_KAGGLE_DATA_DIR / "code_stock.csv").exists():
+    if not _DEFAULT_CSV.exists() and not (_HERE / "code_stock.csv").exists() and (_KAGGLE_DATA_DIR / "code_stock.csv").exists():
         CODE_STOCK_CSV = _KAGGLE_DATA_DIR / "code_stock.csv"
 
 COLLECTION_NAME      = "financial_tables"

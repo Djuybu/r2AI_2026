@@ -40,7 +40,7 @@ class Config:
     # Agent Execution Settings
     MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "1"))
     EXECUTION_TIMEOUT: int = int(os.getenv("EXECUTION_TIMEOUT", "50"))
-    LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "3"))
+    LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "50"))
     USE_FAST_PATH: bool = False
 
     def __post_init__(self):
