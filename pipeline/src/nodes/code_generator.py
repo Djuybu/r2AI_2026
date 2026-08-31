@@ -444,6 +444,34 @@ def _build_files_context(
     return "\n".join(lines)
 
 
+def ensure_code_variables(code: str, file_path: str, label_col: str, value_col: str, label_col_idx: Optional[int], value_col_idx: Optional[int]) -> str:
+    """Prepend variable definitions to LLM generated code if referenced but undefined."""
+    if not code:
+        return ""
+
+    import ast
+    header_lines = []
+    if "file_path" in code and not ("file_path =" in code or "file_path=" in code):
+        header_lines.append(f"file_path = '{file_path}'")
+    if "label_col" in code and not ("label_col =" in code or "label_col=" in code):
+        header_lines.append(f"label_col = '{label_col}'")
+    if "value_col" in code and not ("value_col =" in code or "value_col=" in code):
+        header_lines.append(f"value_col = '{value_col}'")
+    if label_col_idx is not None and "label_col_idx" in code and not ("label_col_idx =" in code or "label_col_idx=" in code):
+        header_lines.append(f"label_col_idx = {label_col_idx}")
+    if value_col_idx is not None and "value_col_idx" in code and not ("value_col_idx =" in code or "value_col_idx=" in code):
+        header_lines.append(f"value_col_idx = {value_col_idx}")
+
+    if header_lines:
+        code = "\n".join(header_lines) + "\n" + code
+
+    try:
+        ast.parse(code)
+    except Exception:
+        pass
+    return code
+
+
 def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
     """LangGraph Node 4: Sinh code Pandas hoặc sửa code lỗi (Reflection Loop)."""
     cfg = cfg or default_config

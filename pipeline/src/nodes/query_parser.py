@@ -572,18 +572,18 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         raw_content = response.content if isinstance(response.content, str) else str(response.content)
 
         # Extract and print agent thoughts
-        print(f"\n🔍 [Query Parser] Đang phân tích câu hỏi: '{user_query}'")
+        # print(f"\n🔍 [Query Parser] Đang phân tích câu hỏi: '{user_query}'")
         think_match = re.search(r"<think>(.*?)</think>", raw_content, re.DOTALL)
         if think_match:
             thought = think_match.group(1).strip()
             indented_thought = thought.replace("\n", "\n  ")
-            print(f"💭 [Tư duy - Query Parser]:\n  {indented_thought}")
+            # print(f"💭 [Tư duy - Query Parser]:\n  {indented_thought}")
         else:
             json_start = raw_content.find("{")
             if json_start > 10:
                 thought = raw_content[:json_start].strip()
                 indented_thought = thought.replace("\n", "\n  ")
-                print(f"💭 [Tư duy - Query Parser]:\n  {indented_thought}")
+                # print(f"💭 [Tư duy - Query Parser]:\n  {indented_thought}")
 
         # Parse output JSON
         parsed_json = safe_parse_json(raw_content)
@@ -638,15 +638,7 @@ def parse_query_node(state: AgentState, cfg: Optional[Config] = None) -> AgentSt
         person_name = parsed_json.get("ten_nhan_su") or extract_person_name(user_query)
         parsed_json["ten_nhan_su"] = person_name
 
-        print(
-            f"📊 [Kết quả - Query Parser]:\n"
-            f"   Công ty: {parsed_json.get('ten_cong_ty')}\n"
-            f"   Năm: {parsed_json.get('so_nam')}\n"
-            f"   Nội dung: {parsed_json.get('noi_dung')}\n"
-            f"   Thao tác: {parsed_json.get('thao_tac')}\n"
-            f"   Tiêu chí phụ: {parsed_json.get('tieu_chi_phu')}\n"
-            f"   Nhân sự: {parsed_json.get('ten_nhan_su')}\n"
-        )
+        pass
 
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})

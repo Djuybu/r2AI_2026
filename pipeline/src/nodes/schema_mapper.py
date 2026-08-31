@@ -634,9 +634,9 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
     top_candidates = state.get("top_k_candidates", discovered_tables[:5])
     tieu_chi_phu = parsed_query.get("tieu_chi_phu")
 
-    print(f"\n" + "=" * 65)
-    print(f"🔍 [Node 3: SCHEMA MAPPER] Bắt đầu phân tích Schema theo dữ liệu thực tế...")
-    print(f"=" * 65)
+    # pass
+    # pass
+    # pass
 
     column_mapping: Dict[str, Any] = {}
     schema: Dict[str, Any] = {"useful_columns": [], "sub_sections": []}
@@ -728,7 +728,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         }
 
         print(f"\n" + "-" * 65)
-        print(json.dumps(output_json, indent=2, ensure_ascii=False))
+        # pass
         print("-" * 65)
 
     except Exception as e:
@@ -740,7 +740,7 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
     node_latencies = state.get("node_latencies", {})
     node_latencies["schema_mapper"] = round(latency, 3)
 
-    print(f"\n   ⏱️ [Schema Mapper] Hoàn thành trong {latency:.3f}s")
+    print(f"✅ [Node 3: Schema Mapper] Hoàn thành trong {node_latencies['schema_mapper']}s")
     print(f"=" * 65 + "\n")
 
     return {

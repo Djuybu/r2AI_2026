@@ -183,7 +183,7 @@ def _find_offline_candidate_tables(
 def _log_candidates(results: List[Dict[str, Any]], year_label: str = "") -> None:
     """In log chi tiết các ứng viên top-K tìm được từ Search Engine kèm minh chứng khớp cột."""
     prefix = f" (Năm {year_label})" if year_label else ""
-    print(f"   📋 Danh sách {len(results)} bảng ứng viên Top-K từ Search Engine{prefix}:")
+    # print(f"   📋 Danh sách {len(results)} bảng ứng viên Top-K từ Search Engine{prefix}:")
     for idx, item in enumerate(results, 1):
         p_str = item.get("csv_path", "")
         file_name = Path(p_str).name if p_str else "N/A"
@@ -197,9 +197,9 @@ def _log_candidates(results: List[Dict[str, Any]], year_label: str = "") -> None
 
         col_tag = f"Cột '{matched_col}'" if matched_col else "Cột đầu tiên có nghĩa"
         matched_str = f" ✅ [Matched {col_tag}]" if matched else ""
-        print(f"      #{idx} RRF: {rrf:.6f} | DenseRank: {dense_r} | SparseRank: {sparse_r}{matched_str}")
-        print(f"         File: {file_name}")
-        print(f"         Tên bảng: {ten_bang}")
+        # print(f"      #{idx} RRF: {rrf:.6f} | DenseRank: {dense_r} | SparseRank: {sparse_r}{matched_str}")
+        # print(f"         File: {file_name}")
+        # print(f"         Tên bảng: {ten_bang}")
         if matched and matched_sample:
             print(f"         🔍 Minh chứng dòng khớp trong {col_tag}: \"{matched_sample}\"")
 
@@ -350,7 +350,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                             all_discovered_tables.append(table_entry)
                 if all_discovered_tables:
                     best = all_discovered_tables[0]
-                    print(f"   🏆 Bảng khớp CAO NHẤT: {Path(best['csv_path']).name} — {best['Ten_Bang']} (RRF: {best['rrf_score']:.6f})")
+                    # print(f"   🏆 Bảng khớp CAO NHẤT: {Path(best['csv_path']).name} — {best['Ten_Bang']} (RRF: {best['rrf_score']:.6f})")
         else:
             for year in so_nam:
                 print(f"   - Tra cứu bảng cho năm {year}...")
@@ -389,7 +389,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                                 all_discovered_tables.append(table_entry)
                     if all_discovered_tables:
                         best = all_discovered_tables[0]
-                        print(f"   🏆 Năm {year} - Bảng khớp CAO NHẤT: {Path(best['csv_path']).name} — {best['Ten_Bang']} (RRF: {best['rrf_score']:.6f})")
+                        # print(f"   🏆 Năm {year} - Bảng khớp CAO NHẤT: {Path(best['csv_path']).name} — {best['Ten_Bang']} (RRF: {best['rrf_score']:.6f})")
 
     except Exception as e:
         print(f"⚠️ [Data Discovery] Lỗi/Không dùng được Search Engine: {e}. Thử quét thư mục offline...")
@@ -458,11 +458,7 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     first_schema = all_discovered_tables[0].get("table_schema", [])
     first_row_val = all_discovered_tables[0].get("first_row_values", {})
 
-    print(f"\n📊 [Kết quả - Data Discovery]: Đã chọn {len(all_discovered_tables)} bảng có độ khớp cao nhất (Top-K candidates: {min(5, len(all_discovered_tables))}).")
-    print(f"   📋 Schema bảng Top 1: {first_schema}")
-    if first_row_val:
-        print(f"   📋 Giá trị hàng đầu tiên (cột số): {first_row_val}")
-    print()
+    pass
 
     return {
         **state,
