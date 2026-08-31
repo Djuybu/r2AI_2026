@@ -18,12 +18,12 @@ class Config:
     """System configuration parameters."""
 
     # LLM Settings
-    MODEL_NAME: str = os.getenv("MODEL_NAME", "Qwen/Qwen3.5-9B")
+    MODEL_NAME: str = os.getenv("MODEL_NAME", "qwen3.5:9b")
     LLM_API_BASE: str = os.getenv(
         "LLM_API_BASE",
-        "http://localhost:8000/v1" if is_kaggle_environment() else "http://localhost:8000/v1",
+        "http://localhost:11434/v1" if is_kaggle_environment() else "http://localhost:11434/v1",
     )
-    LLM_API_KEY: str = os.getenv("LLM_API_KEY", "EMPTY")
+    LLM_API_KEY: str = os.getenv("LLM_API_KEY", "ollama")
     TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.0"))
     MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "1024"))
 
