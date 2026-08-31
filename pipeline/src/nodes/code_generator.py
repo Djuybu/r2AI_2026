@@ -445,17 +445,7 @@ def _build_files_context(
 
 
 def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState:
-    """LangGraph Node 4: Sinh code Pandas hoặc sửa code lỗi (Reflection Loop).
-
-    Nạp prompt và hướng dẫn từ YAML, hỗ trợ các mục tiêu (trich_xuat, tinh_tong, so_sanh).
-
-    Args:
-        state: Current AgentState
-        cfg: Config instance
-
-    Returns:
-        Updated AgentState with 'generated_code'
-    """
+    """LangGraph Node 4: Sinh code Pandas hoặc sửa code lỗi (Reflection Loop)."""
     cfg = cfg or default_config
     start_time = time.time()
 
@@ -466,6 +456,7 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     table_schema = state.get("table_schema", [])
     first_row_values = state.get("first_row_values", {})
     schema = state.get("schema", {})
+
     if (not column_mapping or not schema) and discovered_tables:
         from pipeline.src.nodes.schema_mapper import schema_mapper_node
         try:
@@ -475,23 +466,21 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             state["column_mapping"] = column_mapping
             state["schema"] = schema
         except Exception as e:
-            print(f"⚠️ Inline schema mapping failed: {e}")
+            pass
+
     error_traceback = state.get("error_traceback")
     retry_count = state.get("retry_count", 0)
 
-    # Extract parsed query fields
     muc_tieu = parsed_query.get("muc_tieu", "trich_xuat")
     noi_dung = parsed_query.get("noi_dung", "")
     ten_cong_ty = parsed_query.get("ten_cong_ty", "")
     so_nam = parsed_query.get("so_nam", [])
     tieu_chi_phu = parsed_query.get("tieu_chi_phu")
 
-    # Detect person name if query involves remuneration / salary / executive personnel (Q15)
     person_name = parsed_query.get("ten_nhan_su") or parsed_query.get("person_name")
     if not person_name and isinstance(user_query, str):
         person_name = extract_person_name(user_query)
 
-    # Get column names from mapping, sử dụng schema thực tế nếu có
     label_col = _resolve_label_column(table_schema, first_row_values, column_mapping, schema=schema)
     value_col = _resolve_value_column(table_schema, first_row_values, parsed_query, column_mapping, label_col, schema=schema)
 
@@ -503,45 +492,33 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     if value_col_idx is None and value_col in table_schema:
         value_col_idx = table_schema.index(value_col)
 
-    print(f"   📋 [Code Generator] Schema: {table_schema}")
-    print(f"   📋 [Code Generator] Label col: '{label_col}' (idx={label_col_idx}), Value col: '{value_col}' (idx={value_col_idx})")
-    if person_name:
-        print(f"   👤 [Code Generator] Nhận diện nhân sự/lãnh đạo: '{person_name}'")
-    if first_row_values:
-        print(f"   📋 [Code Generator] First row values: {first_row_values}")
+    top_csv = discovered_tables[0]["csv_path"] if discovered_tables else "None"
+    top_csv_basename = Path(top_csv).name
 
-    # Build files context (bao gồm schema và first_row info)
+    print(f"\n🔍 [Node 4: Code Generator] Bắt đầu sinh mã Python...")
+    print(f"   📋 Chỉ tiêu: '{noi_dung}' | Cột nhãn: '{label_col}' (idx={label_col_idx}) | Cột giá trị: '{value_col}' (idx={value_col_idx})")
+    print(f"   📄 File nguồn: {top_csv_basename}")
+    if person_name:
+        print(f"   👤 Thực thể nhân sự: '{person_name}'")
+
     files_context = _build_files_context(discovered_tables, column_mapping, table_schema, first_row_values, schema=schema)
     if person_name:
-        files_context += f"\n\n👤 THỰC THỂ NHÂN SỰ/LÃNH ĐẠO: '{person_name}'. ƯU TIÊN LỌC THEO TÊN NÀY TRÊN CỘT NHÃN '{label_col}'."
+        files_context += f"\n\n👤 THỰC THỂ NHÂN SỰ: '{person_name}'. ƯU TIÊN LỌC THEO TÊN NÀY TRÊN CỘT NHÃN '{label_col}'."
 
     core_tokens = [t for t in re.findall(r"\w+", noi_dung) if len(t) > 2 and t.lower() not in ["tổng", "tổng_số", "số_dư", "chi_phí", "giá_trị", "chỉ_tiêu", "năm", "báo", "cáo"]]
     if core_tokens:
-        files_context += f"\n🔑 TỪ KHÓA CỐT LÕI (DÙNG CHO MULTI-STAGE QUERY NẾU CẤP 1 RỖNG): {core_tokens}"
+        files_context += f"\n🔑 TỪ KHÓA CỐT LÕI: {core_tokens}"
 
-    # Build file path variables for code
     paths_str = ""
     if discovered_tables:
-        top_csv = discovered_tables[0]["csv_path"].replace('\\', '\\\\')
-        paths_str = f"file_path = '{top_csv}'\n"
-
-        year_paths = {}
-        for tbl in discovered_tables:
-            nam = str(tbl.get("Nam_Tai_Chinh", "")).strip()
-            csv_p = tbl.get("csv_path", "").replace('\\', '\\\\')
-            if nam and nam not in year_paths:
-                year_paths[nam] = csv_p
-        if len(year_paths) > 1:
-            for nam, csv_p in year_paths.items():
-                paths_str += f"file_path_{nam} = '{csv_p}'\n"
-    paths_str = paths_str.strip()
+        top_csv_escaped = top_csv.replace('\\', '\\\\')
+        paths_str = f"file_path = '{top_csv_escaped}'\n"
 
     try:
-        # Scenario A: Initial Code Generation
-        if not error_traceback or retry_count == 0:
+        if retry_count == 0:
             prompt_data = load_yaml_prompt(cfg, "code_generator.yaml")
-            system_prompt = prompt_data["system_prompt"]
-            few_shots = prompt_data.get("few_shot_examples", [])
+            system_prompt = prompt_data.get("system_prompt", "")
+            few_shots = prompt_data.get("few_shots", [])
             goal_descs = prompt_data.get("goal_descriptions", {})
             goal_instructions = prompt_data.get("goal_instructions", {})
 
@@ -549,21 +526,31 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             for ex in few_shots:
                 messages.append(
                     HumanMessage(
-                        content=f"Yêu cầu: {ex['user_query']}\n"
-                                f"File Path: {ex['file_path']}\n"
-                                f"Column Mapping: {ex['column_mapping']}"
+                        content=f"Yêu cầu: {ex['user_query']}\nFile Path: {ex['file_path']}\nColumn Mapping: {ex['column_mapping']}"
                     )
                 )
                 messages.append(AIMessage(content=ex["generated_code"]))
 
-            # Retrieve goal description and goal instruction from YAML
             goal_desc = goal_descs.get(muc_tieu, muc_tieu)
             goal_inst_template = goal_instructions.get(muc_tieu, "")
             goal_inst = goal_inst_template.format(
                 noi_dung=noi_dung, label_col=label_col, value_col=value_col
             ) if goal_inst_template else ""
 
-            # Format user prompt from YAML template
+            sample_labels = []
+            if discovered_tables:
+                for tbl in discovered_tables[:2]:
+                    c_path = tbl.get("csv_path")
+                    if c_path and Path(c_path).exists():
+                        try:
+                            sub_df = pd.read_csv(c_path)
+                            if label_col in sub_df.columns:
+                                labels = sub_df[label_col].dropna().astype(str).head(5).tolist()
+                                sample_labels.append(f"Mẫu chỉ tiêu trong '{Path(c_path).name}': {labels}")
+                        except Exception:
+                            pass
+            sample_labels_str = "\n".join(sample_labels) if sample_labels else ""
+
             user_template = prompt_data.get("user_prompt_template", "")
             human_content = user_template.format(
                 user_query=user_query,
@@ -576,69 +563,18 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 label_col=label_col,
                 value_col=value_col,
                 paths_str=paths_str,
+                sample_labels_str=sample_labels_str,
                 goal_instruction=goal_inst,
             )
-
             messages.append(HumanMessage(content=human_content))
 
-        # Scenario B: Reflection Debugging Loop (retry_count > 0)
         else:
             prompt_data = load_yaml_prompt(cfg, "reflection.yaml")
-            system_prompt = prompt_data["system_prompt"]
-
-            if len(discovered_tables) > 1:
-                # Multi-table fallback: rotate candidate tables on retry
-                shift = retry_count % len(discovered_tables)
-                discovered_tables = discovered_tables[shift:] + discovered_tables[:shift]
-                first_table_path = discovered_tables[0]["csv_path"]
-                schema_info = _extract_table_schema(first_table_path)
-                table_schema = schema_info["table_schema"]
-                first_row_values = schema_info["first_row_values"]
-                state["discovered_tables"] = discovered_tables
-                state["matched_table_path"] = first_table_path
-                state["table_schema"] = table_schema
-                state["first_row_values"] = first_row_values
-                from pipeline.src.nodes.schema_mapper import schema_mapper_node
-                try:
-                    temp_state = schema_mapper_node(state, cfg)
-                    column_mapping = temp_state.get("column_mapping", {})
-                    schema = temp_state.get("schema", {})
-                    state["column_mapping"] = column_mapping
-                    state["schema"] = schema
-                    label_col = _resolve_label_column(table_schema, first_row_values, column_mapping, schema=schema)
-                    value_col = _resolve_value_column(table_schema, first_row_values, parsed_query, column_mapping, label_col, schema=schema)
-                    files_context = _build_files_context(discovered_tables, column_mapping, table_schema, first_row_values, schema=schema)
-                except Exception as e:
-                    print(f"⚠️ Multi-table fallback schema mapping failed: {e}")
-
-            print(f"🔄 [Reflection Loop] Đang sửa lỗi mã nguồn (Lần {retry_count})...")
-            print(f"   - Bảng được chọn: {discovered_tables[0].get('Ten_Bang')} ({discovered_tables[0].get('csv_path')})")
-            print(f"   - Traceback Lỗi:\n{error_traceback.strip()}")
-
-            retry_forcing_msg = (
-                f"Execution failed with error: {error_traceback.strip()}\n"
-                "CRITICAL: The string you used in `str.contains()` was NOT found in the table. "
-                "DO NOT output the exact same code again! "
-                "You MUST change your search strategy: shorten the search string in `str.contains(..., regex=False)` to a single core keyword from the metric, or inspect the sample row labels below."
-            )
-
-            sample_labels = []
-            if discovered_tables:
-                from pathlib import Path
-                import pandas as pd
-                for tbl in discovered_tables:
-                    c_path = tbl.get("csv_path")
-                    if c_path and Path(c_path).exists():
-                        try:
-                            sub_df = pd.read_csv(c_path)
-                            if label_col in sub_df.columns:
-                                labels = sub_df[label_col].dropna().astype(str).head(20).tolist()
-                                sample_labels.append(f"Mẫu chỉ tiêu thực tế trong file '{Path(c_path).name}':\n{labels}")
-                        except Exception:
-                            pass
-            sample_labels_str = "\n\n".join(sample_labels) if sample_labels else ""
-
+            system_prompt = prompt_data.get("system_prompt", "")
             user_template = prompt_data.get("user_prompt_template", "")
+
+            sample_labels_str = ""
+            retry_forcing_msg = "SỬA LỖI: Rút ngắn từ khóa lọc str.contains() sang từ khóa ngắn nhất."
             human_content = user_template.format(
                 user_query=user_query,
                 muc_tieu=muc_tieu,
@@ -648,40 +584,28 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 value_col=value_col,
                 paths_str=paths_str,
                 sample_labels_str=sample_labels_str,
-                previous_code=state.get('generated_code', ''),
-                error_traceback=f"{error_traceback.strip()}\n\n{retry_forcing_msg}",
+                previous_code=state.get("generated_code", ""),
+                error_traceback=f"{str(error_traceback).strip()}\n\n{retry_forcing_msg}",
             )
-
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=human_content)
             ]
 
-        # Call LLM
+        # Call LLM safely
         llm = get_llm(cfg=cfg, temperature=0.0)
         response = llm.invoke(messages)
         raw_text = response.content if isinstance(response.content, str) else str(response.content)
 
-        # Extract and print thoughts
         think_match = re.search(r"<think>(.*?)</think>", raw_text, re.DOTALL)
         if think_match:
             thought = think_match.group(1).strip()
             indented_thought = thought.replace('\n', '\n  ')
             print(f"💭 [Tư duy - Code Generator]:\n  {indented_thought}")
-        else:
-            code_start = raw_text.find("```")
-            if code_start > 10:
-                thought = raw_text[:code_start].strip()
-                indented_thought = thought.replace('\n', '\n  ')
-                print(f"💭 [Tư duy - Code Generator]:\n  {indented_thought}")
+
+        print(f"📄 [LLM Raw Response]:\n{raw_text.strip()}\n")
 
         code = clean_python_code(raw_text)
-
-        if code:
-            try:
-                ast.parse(code)
-            except Exception:
-                code = ""
 
         if not code:
             print("⚠️ [Code Generator] LLM không sinh code hợp lệ -> Kích hoạt Rule-based Fallback Generator...")
@@ -699,11 +623,12 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
                 value_col_idx=value_col_idx,
             )
 
-        print(f"📊 [Kết quả - Code Generator] Mã Python sinh ra:\n```python\n{code}\n```\n")
+        print(f"📊 [Mã Python Sinh Ra]:\n```python\n{code}\n```\n")
 
         latency = time.time() - start_time
         node_latencies = state.get("node_latencies", {})
         node_latencies["code_generator"] = round(latency, 3)
+        print(f"✅ [Node 4: Code Generator] Hoàn thành trong {node_latencies['code_generator']}s")
 
         return {
             **state,
@@ -717,7 +642,7 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
         node_latencies = state.get("node_latencies", {})
         node_latencies["code_generator"] = round(latency, 3)
 
-        print(f"⚠️ [Code Generator] LLM không phản hồi ({e}). Đang sử dụng Rule-based Fallback Generator...")
+        print(f"⚠️ [Code Generator] Lỗi gọi LLM ({e}) -> Kích hoạt Rule-based Fallback Generator...")
         fallback_code = generate_fallback_code(
             muc_tieu=muc_tieu,
             noi_dung=noi_dung,
@@ -731,7 +656,9 @@ def code_generator_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
             label_col_idx=label_col_idx,
             value_col_idx=value_col_idx,
         )
-        print(f"📊 [Kết quả Fallback - Code Generator] Mã Python sinh ra:\n```python\n{fallback_code}\n```\n")
+
+        print(f"📊 [Mã Python Fallback]:\n```python\n{fallback_code}\n```\n")
+        print(f"✅ [Node 4: Code Generator] Hoàn thành trong {node_latencies['code_generator']}s")
 
         return {
             **state,

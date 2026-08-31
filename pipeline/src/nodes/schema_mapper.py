@@ -199,7 +199,6 @@ def _get_columns_from_table(table: Dict[str, Any]) -> List[str]:
 
 
 # ─────────────────────────────────────────────────────────────
-# Workflow Steps: Useful Columns & Dynamic Mapping
 # ─────────────────────────────────────────────────────────────
 
 def _is_code_or_index_column(series: pd.Series, col_name: str = "") -> bool:
@@ -251,11 +250,7 @@ def _extract_useful_columns(
     total_rows = len(df)
     candidate_cols = [c for c in df.columns if c not in metadata_set]
 
-    print(f"   📊 [Workflow Step 1: Truy vấn các cột]")
-    print(f"      • Tổng số hàng trong bảng: {total_rows}")
-    print(f"      • Các cột dữ liệu cần duyệt ({len(candidate_cols)} cột): {candidate_cols}")
 
-    print(f"\n   🔍 [Workflow Step 2: Xác nhận số hàng có dữ liệu > số hàng không có dữ liệu]")
     for col in candidate_cols:
         series = df[col]
         data_rows = 0
@@ -280,7 +275,6 @@ def _extract_useful_columns(
         is_useful = data_rows > empty_rows
 
         if is_useful:
-            print(f"      ✅ Cột '{col}': Có dữ liệu = {data_rows}/{total_rows} > Trống = {empty_rows}/{total_rows} -> HỢP LỆ (Useful)")
 
             # Step 4: Tìm tên cột thực tế
             resolved_name = _resolve_column_header(df, col)
@@ -319,7 +313,7 @@ def _extract_useful_columns(
                 "column_description": "",
             })
         else:
-            print(f"      ❌ Cột '{col}': Có dữ liệu = {data_rows}/{total_rows} <= Trống = {empty_rows}/{total_rows} -> BỎ QUA (Không đủ dữ liệu)")
+            pass
 
     return useful
 
@@ -643,7 +637,6 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
     print(f"\n" + "=" * 65)
     print(f"🔍 [Node 3: SCHEMA MAPPER] Bắt đầu phân tích Schema theo dữ liệu thực tế...")
     print(f"=" * 65)
-    print(f"   - Tiêu chí phụ cần tìm: '{tieu_chi_phu or '(không có)'}'")
 
     column_mapping: Dict[str, Any] = {}
     schema: Dict[str, Any] = {"useful_columns": [], "sub_sections": []}
@@ -670,7 +663,6 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
     try:
         df_full = pd.read_csv(csv_path)
         raw_columns = list(df_full.columns)
-        print(f"   📋 Đọc bảng '{table_name}' từ: {csv_path}")
 
         # Trích xuất đơn vị tính từ metadata nếu có
         don_vi_tinh = None
@@ -712,9 +704,6 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
             "all_useful_columns": [c["raw_column"] for c in useful_columns],
         }
 
-        print(f"\n   🎯 [Workflow Step 6: Xác định Cột Nhãn & Cột Giá Trị]")
-        print(f"      • Cột nhãn (label_column): '{label_col}'")
-        print(f"      • Cột giá trị (value_column): '{value_col}'")
 
         # ── 6. Phân tích Sub-sections ──
         sub_sections = _extract_sub_sections(df_full, label_col, metadata_set)
@@ -739,7 +728,6 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         }
 
         print(f"\n" + "-" * 65)
-        print(f"📄 [SCHEMA MAPPER OUTPUT JSON - DÙNG CHO KIỂM THỬ]:")
         print(json.dumps(output_json, indent=2, ensure_ascii=False))
         print("-" * 65)
 
@@ -763,4 +751,3 @@ def schema_mapper_node(state: AgentState, cfg: Optional[Config] = None) -> Agent
         "status": "pending",
         "node_latencies": node_latencies,
     }
-

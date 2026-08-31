@@ -351,7 +351,6 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
         # Step 1: Validate AST
         validate_ast(code_str)
 
-        print(f"⚙️ [Executor] Đang thực thi mã Pandas trên Top {len(top_candidates)} bảng ứng viên...")
 
         multi_table_results = []
         last_error_tb = None
@@ -369,7 +368,6 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
                     "value": res_val,
                     "status": "success",
                 })
-                print(f"   ✅ Bảng #{idx+1} ({t_name}): Trích xuất thành công -> {res_val}")
             except Exception as e:
                 last_error_tb = traceback.format_exc()
                 multi_table_results.append({
@@ -380,7 +378,6 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
                     "status": "error",
                     "error": str(e),
                 })
-                print(f"   ⚠️ Bảng #{idx+1} ({t_name}): {e}")
 
         # Step 2: Aggregate results and select Max Value
         successful_candidates = [r for r in multi_table_results if r["status"] == "success"]
@@ -392,9 +389,6 @@ def executor_node(state: AgentState, cfg: Optional[Config] = None) -> AgentState
             aggregated = aggregate_top_k_results(multi_table_results, is_percentage=is_pct)
             formatted = format_result(aggregated["data"])
             
-            print(f"\n🏆 [Executor] Top-5 Max Aggregator THÀNH CÔNG!")
-            print(f"   • Giá trị lớn nhất: {aggregated['data']} (Từ bảng: {aggregated['source_table']})")
-            print(f"   • Số bảng ứng viên hợp lệ: {aggregated['candidate_count']}/{len(top_candidates)}")
 
             latency = time.time() - start_time
             node_latencies = state.get("node_latencies", {})

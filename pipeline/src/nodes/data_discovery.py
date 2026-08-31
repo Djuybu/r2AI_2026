@@ -289,11 +289,11 @@ def data_discovery_node(state: AgentState, cfg: Optional[Config] = None) -> Agen
     # Làm sạch noi_dung trước khi truyền vào Search Engine
     noi_dung = clean_query_content(noi_dung_raw, ten_cong_ty, so_nam)
 
-    print(f"\n🔍 [Data Discovery] Bắt đầu tìm kiếm dữ liệu...")
-    print(f"   - Công ty: '{ten_cong_ty}'")
-    print(f"   - Số năm: {so_nam}")
-    print(f"   - Nội dung cần tìm (đã làm sạch): '{noi_dung}' (gốc: '{noi_dung_raw}')")
-    print(f"   - Thao tác: {thao_tac}")
+    # Suppressed verbose logs
+    
+    
+    
+    
 
     # Determine report type: mặc định None để tìm kiếm trên CẢ 2 loại báo cáo (consolidated & separate)
     report_type = None
